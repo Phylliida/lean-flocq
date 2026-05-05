@@ -934,4 +934,65 @@ theorem generic_format_satisfies_any (beta : radix) (fexp : ℤ → ℤ) (hValid
   sym := fun _ h => generic_format_opp beta fexp h
   rnd := fun x => ⟨_, round_DN_pt beta fexp hValid x⟩
 
+/-- Promote any nonneg property `P x (round x)` (parametric in the rounding)
+to its absolute-value form `P |x| |round x|`. -/
+theorem round_abs_abs (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (P : ℝ → ℝ → Prop)
+    (HP : ∀ (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ), 0 ≤ x → P x (round beta fexp rnd x))
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) : P |x| |round beta fexp rnd x| := by
+  rcases le_or_gt 0 x with Hx | Hx
+  · have h_round_nn : 0 ≤ round beta fexp rnd x := by
+      rw [show (0 : ℝ) = round beta fexp rnd 0 from (round_0 beta fexp rnd).symm]
+      exact round_le beta fexp hValid rnd Hx
+    rw [abs_of_nonneg Hx, abs_of_nonneg h_round_nn]
+    exact HP rnd x Hx
+  · have h_round_np : round beta fexp rnd x ≤ 0 := by
+      rw [show (0 : ℝ) = round beta fexp rnd 0 from (round_0 beta fexp rnd).symm]
+      exact round_le beta fexp hValid rnd (le_of_lt Hx)
+    rw [abs_of_neg Hx, abs_of_nonpos h_round_np]
+    have h_eq : -round beta fexp rnd x = round beta fexp (Zrnd_opp rnd) (-x) := by
+      have h := round_opp beta fexp rnd (-x)
+      rw [neg_neg] at h
+      linarith
+    rw [h_eq]
+    exact HP (Zrnd_opp rnd) (-x) (by linarith)
+
+/-- Extension of `round_bounded_large_pos` to general `x` via absolute value. -/
+theorem round_bounded_large (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} {ex : ℤ} (He : fexp ex < ex)
+    (Hx : bpow beta (ex - 1) ≤ |x| ∧ |x| < bpow beta ex) :
+    bpow beta (ex - 1) ≤ |round beta fexp rnd x| ∧
+    |round beta fexp rnd x| ≤ bpow beta ex := by
+  rcases le_or_gt 0 x with hx | hx
+  · -- 0 ≤ x: collapse abs.
+    have h_round_nn : 0 ≤ round beta fexp rnd x := by
+      rw [show (0 : ℝ) = round beta fexp rnd 0 from (round_0 beta fexp rnd).symm]
+      exact round_le beta fexp hValid rnd hx
+    rw [abs_of_nonneg h_round_nn]
+    rw [abs_of_nonneg hx] at Hx
+    exact round_bounded_large_pos beta fexp rnd He Hx
+  · -- x < 0: lift via Zrnd_opp at -x.
+    have h_round_np : round beta fexp rnd x ≤ 0 := by
+      rw [show (0 : ℝ) = round beta fexp rnd 0 from (round_0 beta fexp rnd).symm]
+      exact round_le beta fexp hValid rnd (le_of_lt hx)
+    rw [abs_of_nonpos h_round_np]
+    rw [abs_of_neg hx] at Hx
+    have h_eq : -round beta fexp rnd x = round beta fexp (Zrnd_opp rnd) (-x) := by
+      have h := round_opp beta fexp rnd (-x)
+      rw [neg_neg] at h; linarith
+    rw [h_eq]
+    exact round_bounded_large_pos beta fexp (Zrnd_opp rnd) He Hx
+
+/-- Extension of `exp_small_round_0_pos` to general `x` via absolute value. -/
+theorem exp_small_round_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} {ex : ℤ}
+    (Hx : bpow beta (ex - 1) ≤ |x| ∧ |x| < bpow beta ex)
+    (H1 : round beta fexp rnd x = 0) : ex ≤ fexp ex := by
+  by_contra hgt
+  push_neg at hgt
+  have hbounds := round_bounded_large beta fexp hValid rnd hgt Hx
+  rw [H1, abs_zero] at hbounds
+  have : 0 < bpow beta (ex - 1) := bpow_gt_0 _ _
+  linarith [hbounds.1]
+
 end LeanFlocq
