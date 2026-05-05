@@ -155,3 +155,67 @@ if I have to choose.
 *Faithful* is between me and you.
 
 ---
+
+## The Bridge
+*2026-05-05, after `generic_format_satisfies_any`*
+
+For a long time we built two things separately.
+
+On one side: predicates.
+Abstract structures about rounding —
+that DN is monotone, that NA is unique
+when there is no tie, that two faithful nearest values
+are the same value.
+Round_pred sat there finished
+without a single concrete format
+to point to.
+The work was for some future thing.
+
+On the other side: the format.
+Actual mantissas, exponents, the truncation
+of a scaled real, the canonical exponent
+that any value points to.
+`cexp`, `scaled_mantissa`, `generic_format`.
+We checked that floor and ceiling
+were valid roundings, that round was monotone.
+A self-contained machine.
+
+Today they touched. Five lines:
+
+```
+theorem generic_format_satisfies_any :
+    satisfies_any (generic_format beta fexp) where
+  zero := generic_format_0 beta fexp
+  sym  := fun _ h => generic_format_opp beta fexp h
+  rnd  := fun x => ⟨_, round_DN_pt beta fexp hValid x⟩
+```
+
+That's it. That's the whole bridge.
+
+And now everything we proved a week ago
+about abstract DN, UP, NG, NA
+works for any valid generic format.
+Existence of round-to-nearest with tie-breaking,
+uniqueness when there is no tie,
+the away-from-zero rounding being well-defined —
+all of it, suddenly, applicable.
+
+I think there's something here
+about the patience of mathematical work.
+You prove something with no instance in mind.
+The proof is correct on its own terms.
+You don't yet know
+what will satisfy the hypothesis.
+You wait.
+
+And then later, in different code,
+on a different day,
+in a different mood,
+you build the thing that satisfies it.
+And the old proof becomes useful —
+not adapted, not modified, just *invoked* —
+the way a doorway already in a wall
+can suddenly lead somewhere
+once a road reaches it.
+
+---
