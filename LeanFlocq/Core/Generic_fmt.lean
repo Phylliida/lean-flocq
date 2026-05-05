@@ -1060,4 +1060,54 @@ theorem round_AW_abs (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fex
     rw [show (0 : ℝ) = round beta fexp Zaway 0 from (round_0 beta fexp Zaway).symm]
     exact round_le beta fexp hValid Zaway (le_of_lt hx)
 
+/-! ### Subnormal floor/ceiling and decidability of format -/
+
+theorem round_DN_small_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
+    (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex)
+    (He : ex ≤ fexp ex) :
+    round beta fexp (fun y : ℝ => ⌊y⌋) x = 0 := by
+  unfold round scaled_mantissa cexp
+  rw [show mag beta x = ex from mag_unique_pos beta Hx.1 Hx.2]
+  show F2R (beta := beta) ⟨⌊x * bpow beta (-fexp ex)⌋, fexp ex⟩ = 0
+  rw [mantissa_DN_small_pos beta fexp Hx He, F2R_0]
+
+theorem round_UP_small_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
+    (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex)
+    (He : ex ≤ fexp ex) :
+    round beta fexp (fun y : ℝ => ⌈y⌉) x = bpow beta (fexp ex) := by
+  unfold round scaled_mantissa cexp
+  rw [show mag beta x = ex from mag_unique_pos beta Hx.1 Hx.2]
+  show F2R (beta := beta) ⟨⌈x * bpow beta (-fexp ex)⌉, fexp ex⟩ = bpow beta (fexp ex)
+  rw [mantissa_UP_small_pos beta fexp Hx He]
+  exact F2R_bpow _
+
+theorem round_DN_UP_lt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : ¬ generic_format beta fexp x) :
+    round beta fexp (fun y : ℝ => ⌊y⌋) x < x ∧
+    x < round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+  refine ⟨?_, ?_⟩
+  · by_contra hle
+    push_neg at hle
+    have h_dn := round_DN_pt beta fexp hValid x
+    have h_eq : round beta fexp (fun y : ℝ => ⌊y⌋) x = x := le_antisymm h_dn.2.1 hle
+    apply Fx
+    rw [← h_eq]
+    exact generic_format_round beta fexp hValid _ x
+  · by_contra hle
+    push_neg at hle
+    have h_up := round_UP_pt beta fexp hValid x
+    have h_eq : round beta fexp (fun y : ℝ => ⌈y⌉) x = x := le_antisymm hle h_up.2.1
+    apply Fx
+    rw [← h_eq]
+    exact generic_format_round beta fexp hValid _ x
+
+theorem generic_format_EM (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    generic_format beta fexp x ∨ ¬ generic_format beta fexp x := by
+  by_cases h : round beta fexp (fun y : ℝ => ⌊y⌋) x = x
+  · left; rw [← h]
+    exact generic_format_round beta fexp hValid _ x
+  · right
+    intro hg
+    exact h (round_generic beta fexp _ hg)
+
 end LeanFlocq
