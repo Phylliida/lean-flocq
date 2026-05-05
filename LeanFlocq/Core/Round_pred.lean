@@ -295,4 +295,164 @@ theorem Rnd_N_pt_abs (F : ℝ → Prop) (HF0 : F 0) (HF : ∀ x, F x → F (-x))
     rw [neg_neg, neg_neg]
     exact Hxf
 
+/-! ### Round-toward-zero -/
+
+/-- Round-toward-zero never increases magnitude. -/
+theorem Rnd_ZR_abs (F : ℝ → Prop) (rnd : ℝ → ℝ) (H : Rnd_ZR F rnd) (x : ℝ) :
+    |rnd x| ≤ |x| := by
+  -- First show F 0 by sandwiching rnd 0 between 0 and 0.
+  have hF0 : F 0 := by
+    have h0 := H 0
+    have hdn : Rnd_DN_pt F 0 (rnd 0) := h0.1 (le_refl 0)
+    have hup : Rnd_UP_pt F 0 (rnd 0) := h0.2 (le_refl 0)
+    have heq : rnd 0 = 0 := le_antisymm hdn.2.1 hup.2.1
+    rw [← heq]; exact hdn.1
+  rcases le_or_gt 0 x with hx | hx
+  · -- 0 ≤ x: 0 ≤ rnd x ≤ x
+    have hdn : Rnd_DN_pt F x (rnd x) := (H x).1 hx
+    have h_low : 0 ≤ rnd x := hdn.2.2 0 hF0 hx
+    rw [abs_of_nonneg hx, abs_of_nonneg h_low]
+    exact hdn.2.1
+  · -- x < 0: x ≤ rnd x ≤ 0
+    have hup : Rnd_UP_pt F x (rnd x) := (H x).2 (le_of_lt hx)
+    have h_high : rnd x ≤ 0 := hup.2.2 0 hF0 (le_of_lt hx)
+    rw [abs_of_neg hx, abs_of_nonpos h_high]
+    linarith [hup.2.1]
+
+/-- Forward direction of opp symmetry: nearest is preserved under negation. -/
+theorem Rnd_N_pt_opp (F : ℝ → Prop) (HF : ∀ x, F x → F (-x))
+    {x f : ℝ} (h : Rnd_N_pt F x f) : Rnd_N_pt F (-x) (-f) := by
+  refine ⟨HF f h.1, ?_⟩
+  intro g hg
+  have h' := h.2 (-g) (HF g hg)
+  have e1 : -f - -x = -(f - x) := by ring
+  have e2 : g - -x = -(-g - x) := by ring
+  rw [e1, e2, abs_neg, abs_neg]
+  exact h'
+
+/-! ### Sufficient conditions for round-to-nearest -/
+
+/-- A value `f ∈ F` whose distance to `x` is bounded by the distance to both
+the round-down `d` and round-up `u` is itself a round-to-nearest of `x`. -/
+theorem Rnd_N_pt_DN_UP (F : ℝ → Prop) {x d u f : ℝ} (Hf : F f)
+    (Hxd : Rnd_DN_pt F x d) (Hxu : Rnd_UP_pt F x u)
+    (Hd : |f - x| ≤ x - d) (Hu : |f - x| ≤ u - x) : Rnd_N_pt F x f := by
+  refine ⟨Hf, ?_⟩
+  intro g Hg
+  rcases Rnd_DN_UP_pt_split F Hxd Hxu Hg with hgd | hug
+  · -- g ≤ d ≤ x
+    have hgx : g ≤ x := le_trans hgd Hxd.2.1
+    rw [abs_of_nonpos (by linarith : g - x ≤ 0)]
+    linarith
+  · -- x ≤ u ≤ g
+    have hxg : x ≤ g := le_trans Hxu.2.1 hug
+    rw [abs_of_nonneg (by linarith : 0 ≤ g - x)]
+    linarith
+
+/-- The round-down is a round-to-nearest when it is no farther than the round-up. -/
+theorem Rnd_N_pt_DN (F : ℝ → Prop) {x d u : ℝ}
+    (Hd : Rnd_DN_pt F x d) (Hu : Rnd_UP_pt F x u) (Hx : x - d ≤ u - x) :
+    Rnd_N_pt F x d := by
+  have hdx : |d - x| = x - d := by
+    rw [abs_of_nonpos (by linarith [Hd.2.1] : d - x ≤ 0)]; linarith
+  apply Rnd_N_pt_DN_UP F Hd.1 Hd Hu
+  · rw [hdx]
+  · rw [hdx]; exact Hx
+
+/-- The round-up is a round-to-nearest when it is no farther than the round-down. -/
+theorem Rnd_N_pt_UP (F : ℝ → Prop) {x d u : ℝ}
+    (Hd : Rnd_DN_pt F x d) (Hu : Rnd_UP_pt F x u) (Hx : u - x ≤ x - d) :
+    Rnd_N_pt F x u := by
+  have hux : |u - x| = u - x :=
+    abs_of_nonneg (by linarith [Hu.2.1] : 0 ≤ u - x)
+  apply Rnd_N_pt_DN_UP F Hu.1 Hd Hu
+  · rw [hux]; exact Hx
+  · rw [hux]
+
+/-! ### Round-to-nearest with general tie-breaking (`NG`) -/
+
+/-- The tie-breaking predicate `P` selects a unique nearest from any
+DN-and-N versus UP-and-N pair. -/
+def Rnd_NG_pt_unique_prop (F : ℝ → Prop) (P : ℝ → ℝ → Prop) : Prop :=
+  ∀ x d u, Rnd_DN_pt F x d → Rnd_N_pt F x d →
+           Rnd_UP_pt F x u → Rnd_N_pt F x u →
+           P x d → P x u → d = u
+
+theorem Rnd_NG_pt_unique (F : ℝ → Prop) (P : ℝ → ℝ → Prop)
+    (HP : Rnd_NG_pt_unique_prop F P)
+    {x f1 f2 : ℝ} (H1 : Rnd_NG_pt F P x f1) (H2 : Rnd_NG_pt F P x f2) :
+    f1 = f2 := by
+  obtain ⟨H1a, H1b⟩ := H1
+  obtain ⟨H2a, H2b⟩ := H2
+  rcases H1b with hP1 | hU1
+  · rcases H2b with hP2 | hU2
+    · rcases Rnd_N_pt_DN_or_UP F H1a with H1c | H1c
+      · rcases Rnd_N_pt_DN_or_UP F H2a with H2c | H2c
+        · exact Rnd_DN_pt_unique F H1c H2c
+        · exact HP x f1 f2 H1c H1a H2c H2a hP1 hP2
+      · rcases Rnd_N_pt_DN_or_UP F H2a with H2c | H2c
+        · exact (HP x f2 f1 H2c H2a H1c H1a hP2 hP1).symm
+        · exact Rnd_UP_pt_unique F H1c H2c
+    · exact hU2 f1 H1a
+  · exact (hU1 f2 H2a).symm
+
+theorem Rnd_NG_pt_monotone (F : ℝ → Prop) (P : ℝ → ℝ → Prop)
+    (HP : Rnd_NG_pt_unique_prop F P) :
+    round_pred_monotone (Rnd_NG_pt F P) := by
+  intro x y f g Hf Hg hxy
+  rcases hxy.lt_or_eq with hlt | heq
+  · exact Rnd_N_pt_monotone F Hf.1 Hg.1 hlt
+  · have Hg' : Rnd_NG_pt F P x g := by rw [heq]; exact Hg
+    have : f = g := Rnd_NG_pt_unique F P HP Hf Hg'
+    linarith
+
+theorem Rnd_NG_pt_refl (F : ℝ → Prop) (P : ℝ → ℝ → Prop)
+    {x : ℝ} (hx : F x) : Rnd_NG_pt F P x x := by
+  refine ⟨Rnd_N_pt_refl F hx, ?_⟩
+  right
+  intro f2 hf2
+  exact Rnd_N_pt_idempotent F hf2 hx
+
+theorem Rnd_NG_pt_opp_inv (F : ℝ → Prop) (P : ℝ → ℝ → Prop)
+    (HF : ∀ x, F x → F (-x)) (HP : ∀ x f, P x f → P (-x) (-f))
+    {x f : ℝ} (h : Rnd_NG_pt F P (-x) (-f)) : Rnd_NG_pt F P x f := by
+  refine ⟨Rnd_N_pt_opp_inv F HF h.1, ?_⟩
+  rcases h.2 with hP | hU
+  · left
+    have := HP (-x) (-f) hP
+    rwa [neg_neg, neg_neg] at this
+  · right
+    intro f2 hf2
+    have hf2_neg : Rnd_N_pt F (-x) (-f2) := Rnd_N_pt_opp F HF hf2
+    have := hU (-f2) hf2_neg
+    linarith
+
+theorem Rnd_NG_unique (F : ℝ → Prop) (P : ℝ → ℝ → Prop)
+    (HP : Rnd_NG_pt_unique_prop F P)
+    {rnd1 rnd2 : ℝ → ℝ} (h1 : Rnd_NG F P rnd1) (h2 : Rnd_NG F P rnd2)
+    (x : ℝ) : rnd1 x = rnd2 x :=
+  Rnd_NG_pt_unique F P HP (h1 x) (h2 x)
+
+/-- Round-toward-zero is monotone, given `F 0`. -/
+theorem Rnd_ZR_pt_monotone (F : ℝ → Prop) (F0 : F 0) :
+    round_pred_monotone (Rnd_ZR_pt F) := by
+  intro x y f g hx hy hxy
+  rcases le_or_gt 0 x with hX | hX
+  · -- 0 ≤ x ≤ y: both DN
+    have hY : 0 ≤ y := le_trans hX hxy
+    have hfdn : Rnd_DN_pt F x f := hx.1 hX
+    have hgdn : Rnd_DN_pt F y g := hy.1 hY
+    exact hgdn.2.2 f hfdn.1 (le_trans hfdn.2.1 hxy)
+  · rcases le_or_gt 0 y with hY | hY
+    · -- x < 0 ≤ y: f ≤ 0 ≤ g
+      have hfup : Rnd_UP_pt F x f := hx.2 (le_of_lt hX)
+      have hgdn : Rnd_DN_pt F y g := hy.1 hY
+      have hf0 : f ≤ 0 := hfup.2.2 0 F0 (le_of_lt hX)
+      have h0g : 0 ≤ g := hgdn.2.2 0 F0 hY
+      linarith
+    · -- x ≤ y < 0: both UP
+      have hfup : Rnd_UP_pt F x f := hx.2 (le_of_lt hX)
+      have hgup : Rnd_UP_pt F y g := hy.2 (le_of_lt hY)
+      exact hfup.2.2 g hgup.1 (le_trans hxy hgup.2.1)
+
 end LeanFlocq
