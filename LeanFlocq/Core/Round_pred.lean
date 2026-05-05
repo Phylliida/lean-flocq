@@ -333,6 +333,25 @@ theorem Rnd_ZR_abs (F : ℝ → Prop) (rnd : ℝ → ℝ) (H : Rnd_ZR F rnd) (x 
     rw [abs_of_neg hx, abs_of_nonpos h_high]
     linarith [hup.2.1]
 
+/-- Round-toward-zero is monotone, given `F 0`. -/
+theorem Rnd_ZR_pt_monotone (F : ℝ → Prop) (F0 : F 0) :
+    round_pred_monotone (Rnd_ZR_pt F) := by
+  intro x y f g hx hy hxy
+  rcases le_or_gt 0 x with hX | hX
+  · have hY : 0 ≤ y := le_trans hX hxy
+    have hfdn : Rnd_DN_pt F x f := hx.1 hX
+    have hgdn : Rnd_DN_pt F y g := hy.1 hY
+    exact hgdn.2.2 f hfdn.1 (le_trans hfdn.2.1 hxy)
+  · rcases le_or_gt 0 y with hY | hY
+    · have hfup : Rnd_UP_pt F x f := hx.2 (le_of_lt hX)
+      have hgdn : Rnd_DN_pt F y g := hy.1 hY
+      have hf0 : f ≤ 0 := hfup.2.2 0 F0 (le_of_lt hX)
+      have h0g : 0 ≤ g := hgdn.2.2 0 F0 hY
+      linarith
+    · have hfup : Rnd_UP_pt F x f := hx.2 (le_of_lt hX)
+      have hgup : Rnd_UP_pt F y g := hy.2 (le_of_lt hY)
+      exact hfup.2.2 g hgup.1 (le_trans hxy hgup.2.1)
+
 /-- Forward direction of opp symmetry: nearest is preserved under negation. -/
 theorem Rnd_N_pt_opp (F : ℝ → Prop) (HF : ∀ x, F x → F (-x))
     {x f : ℝ} (h : Rnd_N_pt F x f) : Rnd_N_pt F (-x) (-f) := by
@@ -553,6 +572,22 @@ theorem Rnd_NA_pt_unique (F : ℝ → Prop) (HF : F 0)
   Rnd_NG_pt_unique F _ (Rnd_NA_pt_unique_prop F HF)
     ((Rnd_NA_NG_pt F HF x f1).mp h1) ((Rnd_NA_NG_pt F HF x f2).mp h2)
 
+/-- NA is monotone, given `F 0`. -/
+theorem Rnd_NA_pt_monotone (F : ℝ → Prop) (HF : F 0) :
+    round_pred_monotone (Rnd_NA_pt F) := by
+  intro x y f g Hxf Hyg Hxy
+  exact Rnd_NG_pt_monotone F _ (Rnd_NA_pt_unique_prop F HF) x y f g
+    ((Rnd_NA_NG_pt F HF x f).mp Hxf) ((Rnd_NA_NG_pt F HF y g).mp Hyg) Hxy
+
+theorem Rnd_NA_pt_refl (F : ℝ → Prop) {x : ℝ} (hx : F x) : Rnd_NA_pt F x x := by
+  refine ⟨Rnd_N_pt_refl F hx, ?_⟩
+  intro f Hxf
+  rw [Rnd_N_pt_idempotent F Hxf hx]
+
+theorem Rnd_NA_pt_idempotent (F : ℝ → Prop) {x f : ℝ}
+    (h : Rnd_NA_pt F x f) (hx : F x) : f = x :=
+  Rnd_N_pt_idempotent F h.1 hx
+
 /-- A nearest with `|x| ≤ |f|` is the away-from-zero nearest. -/
 theorem Rnd_NA_pt_N (F : ℝ → Prop) (HF : F 0)
     {x f : ℝ} (Rxf : Rnd_N_pt F x f) (Hxf : |x| ≤ |f|) :
@@ -587,6 +622,21 @@ theorem Rnd_NA_unique (F : ℝ → Prop) (HF : F 0)
 
 /-! ### Misc -/
 
+theorem round_pred_ge_0 (P : ℝ → ℝ → Prop) (HP : round_pred_monotone P)
+    (HP0 : P 0 0) {x f : ℝ} (Hxf : P x f) (hx : 0 ≤ x) : 0 ≤ f :=
+  HP 0 x 0 f HP0 Hxf hx
+
+theorem round_pred_gt_0 (P : ℝ → ℝ → Prop) (HP : round_pred_monotone P)
+    (HP0 : P 0 0) {x f : ℝ} (Hxf : P x f) (Hf : 0 < f) : 0 < x := by
+  by_contra hx
+  push_neg at hx
+  have : f ≤ 0 := HP x 0 f 0 Hxf HP0 hx
+  linarith
+
+theorem round_pred_le_0 (P : ℝ → ℝ → Prop) (HP : round_pred_monotone P)
+    (HP0 : P 0 0) {x f : ℝ} (Hxf : P x f) (hx : x ≤ 0) : f ≤ 0 :=
+  HP x 0 f 0 Hxf HP0 hx
+
 /-- A monotone rounding predicate fixing 0 cannot send a non-negative input
 to a negative output. -/
 theorem round_pred_lt_0 (P : ℝ → ℝ → Prop) (HP : round_pred_monotone P)
@@ -611,6 +661,145 @@ theorem Rnd_DN_pt_equiv_format (F1 F2 : ℝ → Prop) (a b : ℝ) (Ha : F1 a)
     exact H3 k ((HF k H hkb).mpr Hk) Hkx
   · linarith
 
+/-! ### Format closure: `satisfies_any` -/
+
+/-- A format that contains 0, is closed under negation, and admits a
+round-down for every real. -/
+structure satisfies_any (F : ℝ → Prop) : Prop where
+  zero : F 0
+  sym : ∀ x, F x → F (-x)
+  rnd : round_pred_total (Rnd_DN_pt F)
+
+theorem satisfies_any_eq {F1 F2 : ℝ → Prop}
+    (Heq : ∀ x, F1 x ↔ F2 x) (h : satisfies_any F1) : satisfies_any F2 where
+  zero := (Heq 0).mp h.zero
+  sym := fun x hx => (Heq (-x)).mp (h.sym x ((Heq x).mpr hx))
+  rnd := fun x => by
+    obtain ⟨f, H1, H2, H3⟩ := h.rnd x
+    refine ⟨f, (Heq f).mp H1, H2, ?_⟩
+    intro g Hg Hgx
+    exact H3 g ((Heq g).mpr Hg) Hgx
+
+theorem satisfies_any_imp_DN (F : ℝ → Prop) (h : satisfies_any F) :
+    round_pred (Rnd_DN_pt F) :=
+  ⟨h.rnd, Rnd_DN_pt_monotone F⟩
+
+theorem satisfies_any_imp_UP (F : ℝ → Prop) (h : satisfies_any F) :
+    round_pred (Rnd_UP_pt F) := by
+  refine ⟨?_, Rnd_UP_pt_monotone F⟩
+  intro x
+  obtain ⟨f, Hf⟩ := h.rnd (-x)
+  refine ⟨-f, ?_⟩
+  have := Rnd_UP_pt_opp F h.sym Hf
+  rwa [neg_neg] at this
+
+theorem satisfies_any_imp_ZR (F : ℝ → Prop) (h : satisfies_any F) :
+    round_pred (Rnd_ZR_pt F) := by
+  refine ⟨?_, Rnd_ZR_pt_monotone F h.zero⟩
+  intro x
+  rcases le_or_gt 0 x with Hx | Hx
+  · obtain ⟨f, Hf⟩ := h.rnd x
+    refine ⟨f, ?_, ?_⟩
+    · intro _; exact Hf
+    · intro Hx'
+      have hx_eq : x = 0 := le_antisymm Hx' Hx
+      rw [hx_eq] at Hf ⊢
+      have : f = 0 := Rnd_DN_pt_idempotent F Hf h.zero
+      rw [this]
+      exact Rnd_UP_pt_refl F h.zero
+  · obtain ⟨f, Hf⟩ := (satisfies_any_imp_UP F h).1 x
+    refine ⟨f, ?_, fun _ => Hf⟩
+    intro Hx'
+    linarith
+
+/-- Tie-breaker existence schema for `NG`: at any non-representable `x`,
+the predicate `P` selects between the round-down and round-up. -/
+def NG_existence_prop (F : ℝ → Prop) (P : ℝ → ℝ → Prop) : Prop :=
+  ∀ x d u, ¬F x → Rnd_DN_pt F x d → Rnd_UP_pt F x u → P x u ∨ P x d
+
+/-- Given `satisfies_any F` and a tie-breaker `NG_existence_prop`, every real
+admits a round-to-nearest. -/
+theorem satisfies_any_imp_NG (F : ℝ → Prop) (P : ℝ → ℝ → Prop)
+    (Hany : satisfies_any F) (HP : NG_existence_prop F P) :
+    round_pred_total (Rnd_NG_pt F P) := by
+  intro x
+  obtain ⟨d, Hd⟩ := Hany.rnd x
+  obtain ⟨u, Hu⟩ := (satisfies_any_imp_UP F Hany).1 x
+  have hdx : |d - x| = x - d := by
+    rw [abs_of_nonpos (by linarith [Hd.2.1] : d - x ≤ 0)]; ring
+  have hux : |u - x| = u - x :=
+    abs_of_nonneg (by linarith [Hu.2.1] : 0 ≤ u - x)
+  rcases lt_trichotomy (u - x) (x - d) with H | H | H
+  · -- |u - x| < |d - x|: u is the unique nearest
+    refine ⟨u, ?_, ?_⟩
+    · apply Rnd_N_pt_DN_UP F Hu.1 Hd Hu
+      · rw [hux]; linarith
+      · rw [hux]
+    · right
+      intro f Hf
+      rcases Rnd_N_pt_DN_or_UP_eq F Hd Hu Hf with K | K
+      · rw [K] at Hf
+        have h := Hf.2 u Hu.1
+        rw [hdx, hux] at h
+        linarith
+      · exact K
+  · -- |u - x| = |d - x|: split on whether x is in F
+    by_cases hxd : x = d
+    · -- x = d, so x ∈ F
+      have hxF : F x := hxd ▸ Hd.1
+      refine ⟨x, Rnd_N_pt_refl F hxF, ?_⟩
+      right
+      intro f2 hf2
+      exact Rnd_N_pt_idempotent F hf2 hxF
+    · -- x ∉ F: use the tie-breaker
+      have hxnF : ¬F x := fun hxF =>
+        hxd (Rnd_DN_pt_idempotent F Hd hxF).symm
+      rcases HP x d u hxnF Hd Hu with hPu | hPd
+      · refine ⟨u, ?_, Or.inl hPu⟩
+        apply Rnd_N_pt_DN_UP F Hu.1 Hd Hu
+        · rw [hux]; linarith
+        · rw [hux]
+      · refine ⟨d, ?_, Or.inl hPd⟩
+        apply Rnd_N_pt_DN_UP F Hd.1 Hd Hu
+        · rw [hdx]
+        · rw [hdx]; linarith
+  · -- |u - x| > |d - x|: d is the unique nearest
+    refine ⟨d, ?_, ?_⟩
+    · apply Rnd_N_pt_DN_UP F Hd.1 Hd Hu
+      · rw [hdx]
+      · rw [hdx]; linarith
+    · right
+      intro f Hf
+      rcases Rnd_N_pt_DN_or_UP_eq F Hd Hu Hf with K | K
+      · exact K
+      · rw [K] at Hf
+        have h := Hf.2 d Hd.1
+        rw [hdx, hux] at h
+        linarith
+
+/-- NA admits a total monotone rounding given `satisfies_any`. -/
+theorem satisfies_any_imp_NA (F : ℝ → Prop) (Hany : satisfies_any F) :
+    round_pred (Rnd_NA_pt F) := by
+  refine ⟨?_, Rnd_NA_pt_monotone F Hany.zero⟩
+  -- Use NG with predicate |x| ≤ |f|; verify NG_existence_prop, then bridge to NA.
+  have HNG : NG_existence_prop F (fun a b => |a| ≤ |b|) := by
+    intro y d u _Hy Hd Hu
+    rcases le_or_gt 0 y with Hy_ge | Hy_lt
+    · left
+      show |y| ≤ |u|
+      have huy : 0 ≤ u := le_trans Hy_ge Hu.2.1
+      rw [abs_of_nonneg Hy_ge, abs_of_nonneg huy]
+      exact Hu.2.1
+    · right
+      show |y| ≤ |d|
+      have hdy : d ≤ 0 := le_trans Hd.2.1 (le_of_lt Hy_lt)
+      rw [abs_of_neg Hy_lt, abs_of_nonpos hdy]
+      linarith [Hd.2.1]
+  have HtotalNG := satisfies_any_imp_NG F _ Hany HNG
+  intro x
+  obtain ⟨f, Hf⟩ := HtotalNG x
+  exact ⟨f, (Rnd_NA_NG_pt F Hany.zero x f).mpr Hf⟩
+
 /-- Rounding-up depends only on which formats agree on `[a, b]`. -/
 theorem Rnd_UP_pt_equiv_format (F1 F2 : ℝ → Prop) (a b : ℝ) (Hb : F1 b)
     (HF : ∀ y, a ≤ y → y ≤ b → (F1 y ↔ F2 y))
@@ -625,27 +814,5 @@ theorem Rnd_UP_pt_equiv_format (F1 F2 : ℝ → Prop) (a b : ℝ) (Hb : F1 b)
   · have hak : a ≤ k := le_trans Hxa Hkx
     exact H3 k ((HF k hak H).mpr Hk) Hkx
   · linarith
-
-/-- Round-toward-zero is monotone, given `F 0`. -/
-theorem Rnd_ZR_pt_monotone (F : ℝ → Prop) (F0 : F 0) :
-    round_pred_monotone (Rnd_ZR_pt F) := by
-  intro x y f g hx hy hxy
-  rcases le_or_gt 0 x with hX | hX
-  · -- 0 ≤ x ≤ y: both DN
-    have hY : 0 ≤ y := le_trans hX hxy
-    have hfdn : Rnd_DN_pt F x f := hx.1 hX
-    have hgdn : Rnd_DN_pt F y g := hy.1 hY
-    exact hgdn.2.2 f hfdn.1 (le_trans hfdn.2.1 hxy)
-  · rcases le_or_gt 0 y with hY | hY
-    · -- x < 0 ≤ y: f ≤ 0 ≤ g
-      have hfup : Rnd_UP_pt F x f := hx.2 (le_of_lt hX)
-      have hgdn : Rnd_DN_pt F y g := hy.1 hY
-      have hf0 : f ≤ 0 := hfup.2.2 0 F0 (le_of_lt hX)
-      have h0g : 0 ≤ g := hgdn.2.2 0 F0 hY
-      linarith
-    · -- x ≤ y < 0: both UP
-      have hfup : Rnd_UP_pt F x f := hx.2 (le_of_lt hX)
-      have hgup : Rnd_UP_pt F y g := hy.2 (le_of_lt hY)
-      exact hfup.2.2 g hgup.1 (le_trans hxy hgup.2.1)
 
 end LeanFlocq
