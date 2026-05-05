@@ -204,4 +204,95 @@ theorem Rnd_N_pt_0 (F : ℝ → Prop) (HF : F 0) : Rnd_N_pt F 0 0 := by
   rw [sub_zero, sub_zero, abs_zero]
   exact abs_nonneg _
 
+/-! ### Round-to-nearest is monotone -/
+
+/-- If `f` is the nearest in `F` to `x` and `g` is the nearest to `y`, then
+`x < y` implies `f ≤ g`. -/
+theorem Rnd_N_pt_monotone (F : ℝ → Prop) {x y f g : ℝ}
+    (hf : Rnd_N_pt F x f) (hg : Rnd_N_pt F y g) (hxy : x < y) : f ≤ g := by
+  by_contra hgf
+  push_neg at hgf
+  have Hfgx : |f - x| ≤ |g - x| := hf.2 g hg.1
+  have Hgfy : |g - y| ≤ |f - y| := hg.2 f hf.1
+  rcases le_or_gt x g with hxg | hgx
+  · -- x ≤ g < f
+    rw [abs_of_nonneg (by linarith : (0 : ℝ) ≤ f - x),
+        abs_of_nonneg (by linarith : (0 : ℝ) ≤ g - x)] at Hfgx
+    linarith
+  · rcases le_or_gt f y with hfy | hyf
+    · -- g < x < y and f ≤ y
+      rw [abs_of_nonpos (by linarith : g - y ≤ 0),
+          abs_of_nonpos (by linarith : f - y ≤ 0)] at Hgfy
+      linarith
+    · -- g < x < y < f
+      rw [abs_of_nonneg (by linarith : (0 : ℝ) ≤ f - x),
+          abs_of_nonpos (by linarith : g - x ≤ 0)] at Hfgx
+      rw [abs_of_nonpos (by linarith : g - y ≤ 0),
+          abs_of_nonneg (by linarith : (0 : ℝ) ≤ f - y)] at Hgfy
+      linarith
+
+/-- Round-to-nearest is unique when there is no tie. -/
+theorem Rnd_N_pt_unique (F : ℝ → Prop) {x d u f1 f2 : ℝ}
+    (Hd : Rnd_DN_pt F x d) (Hu : Rnd_UP_pt F x u) (Hdu : x - d ≠ u - x)
+    (Hf1 : Rnd_N_pt F x f1) (Hf2 : Rnd_N_pt F x f2) : f1 = f2 := by
+  -- A strict < between two N-rounded values leads to contradiction.
+  have strict : ∀ a b : ℝ, Rnd_N_pt F x a → Rnd_N_pt F x b → a < b → False := by
+    intro a b Ha Hb hab
+    rcases Rnd_N_pt_DN_or_UP F Ha with Hda | Hua
+    · rcases Rnd_N_pt_DN_or_UP F Hb with Hdb | Hub
+      · -- both DN → equal, contradicts a < b
+        exact absurd (Rnd_DN_pt_unique F Hda Hdb) (ne_of_lt hab)
+      · -- a = d (DN), b = u (UP); equal distances would force the tie
+        have ha_eq_d : a = d := Rnd_DN_pt_unique F Hda Hd
+        have hb_eq_u : b = u := Rnd_UP_pt_unique F Hub Hu
+        have h1 : |a - x| ≤ |b - x| := Ha.2 b Hb.1
+        have h2 : |b - x| ≤ |a - x| := Hb.2 a Ha.1
+        have heq : |a - x| = |b - x| := le_antisymm h1 h2
+        have hax : a - x ≤ 0 := sub_nonpos.mpr Hda.2.1
+        have hbx : 0 ≤ b - x := sub_nonneg.mpr Hub.2.1
+        rw [abs_of_nonpos hax, abs_of_nonneg hbx] at heq
+        have heq2 : x - a = b - x := by linarith
+        rw [ha_eq_d, hb_eq_u] at heq2
+        exact Hdu heq2
+    · rcases Rnd_N_pt_DN_or_UP F Hb with Hdb | Hub
+      · -- a is UP (a ≥ x), b is DN (b ≤ x); but a < b would force x ≤ a ≤ b ≤ x then a < b impossible
+        exact absurd hab (not_lt.mpr (le_trans Hdb.2.1 Hua.2.1))
+      · -- both UP → equal, contradicts a < b
+        exact absurd (Rnd_UP_pt_unique F Hua Hub) (ne_of_lt hab)
+  rcases lt_trichotomy f1 f2 with h | h | h
+  · exact (strict f1 f2 Hf1 Hf2 h).elim
+  · exact h
+  · exact (strict f2 f1 Hf2 Hf1 h).elim
+
+/-! ### Sign preservation under nearest rounding -/
+
+theorem Rnd_N_pt_ge_0 (F : ℝ → Prop) (HF : F 0)
+    {x f : ℝ} (hx : 0 ≤ x) (h : Rnd_N_pt F x f) : 0 ≤ f := by
+  rcases hx.lt_or_eq with hlt | heq
+  · exact Rnd_N_pt_monotone F (Rnd_N_pt_0 F HF) h hlt
+  · have hx_eq : x = 0 := heq.symm
+    have hF_x : F x := hx_eq ▸ HF
+    have hf_eq : f = x := Rnd_N_pt_idempotent F h hF_x
+    linarith
+
+theorem Rnd_N_pt_le_0 (F : ℝ → Prop) (HF : F 0)
+    {x f : ℝ} (hx : x ≤ 0) (h : Rnd_N_pt F x f) : f ≤ 0 := by
+  rcases hx.lt_or_eq with hlt | heq
+  · exact Rnd_N_pt_monotone F h (Rnd_N_pt_0 F HF) hlt
+  · have hx_eq : x = 0 := heq
+    have hF_x : F x := hx_eq ▸ HF
+    have hf_eq : f = x := Rnd_N_pt_idempotent F h hF_x
+    linarith
+
+theorem Rnd_N_pt_abs (F : ℝ → Prop) (HF0 : F 0) (HF : ∀ x, F x → F (-x))
+    {x f : ℝ} (Hxf : Rnd_N_pt F x f) : Rnd_N_pt F |x| |f| := by
+  rcases le_or_gt 0 x with hx | hx
+  · rw [abs_of_nonneg hx, abs_of_nonneg (Rnd_N_pt_ge_0 F HF0 hx Hxf)]
+    exact Hxf
+  · rw [abs_of_neg hx,
+        abs_of_nonpos (Rnd_N_pt_le_0 F HF0 (le_of_lt hx) Hxf)]
+    apply Rnd_N_pt_opp_inv F HF
+    rw [neg_neg, neg_neg]
+    exact Hxf
+
 end LeanFlocq
