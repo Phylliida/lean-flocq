@@ -386,6 +386,50 @@ theorem generic_format_canonical (beta : radix) (fexp : ℤ → ℤ) {f : float 
   rw [mul_assoc, ← bpow_plus, show (e + -e) = 0 from by ring, bpow_zero, mul_one]
   rw [Ztrunc_intCast]
 
+/-- For `fexp` close to identity (`e - prec ≤ fexp e` for some `prec`),
+`|x| < β^(prec + cexp x)`. -/
+theorem abs_lt_bpow_prec (beta : radix) (fexp : ℤ → ℤ)
+    (prec : ℤ) (Hp : ∀ e : ℤ, e - prec ≤ fexp e) (x : ℝ) :
+    |x| < bpow beta (prec + cexp beta fexp x) := by
+  by_cases hx : x = 0
+  · rw [hx, abs_zero]; exact bpow_gt_0 beta _
+  unfold cexp
+  set ex := mag beta x
+  have h_high : |x| < bpow beta ex := bpow_mag_gt beta x
+  have h_le : bpow beta ex ≤ bpow beta (prec + fexp ex) :=
+    bpow_le beta (by have := Hp ex; omega)
+  linarith
+
+/-- If `β^e` is in the format, then `fexp (e+1) ≤ e`. -/
+theorem generic_format_bpow_inv' (beta : radix) (fexp : ℤ → ℤ) (e : ℤ)
+    (He : generic_format beta fexp (bpow beta e)) : fexp (e + 1) ≤ e := by
+  by_contra Hgt
+  push_neg at Hgt
+  unfold generic_format scaled_mantissa cexp at He
+  rw [mag_bpow] at He
+  have h_combine : bpow beta e * bpow beta (-fexp (e + 1))
+      = bpow beta (e - fexp (e + 1)) := by
+    rw [← bpow_plus]; rfl
+  have h_nonneg : 0 ≤ bpow beta (e - fexp (e + 1)) := bpow_ge_0 _ _
+  have h_lt_1 : bpow beta (e - fexp (e + 1)) < 1 := by
+    have : bpow beta (e - fexp (e + 1)) < bpow beta 0 := bpow_lt beta (by omega)
+    rwa [bpow_zero] at this
+  have h_ztrunc : Ztrunc (bpow beta e * bpow beta (-fexp (e + 1))) = 0 := by
+    rw [h_combine, Ztrunc_floor h_nonneg, Int.floor_eq_iff]
+    push_cast
+    exact ⟨h_nonneg, by linarith⟩
+  rw [h_ztrunc, F2R_0] at He
+  exact (ne_of_gt (bpow_gt_0 beta e)) He
+
+/-- If `β^e` is in the format, then `fexp e ≤ e`. -/
+theorem generic_format_bpow_inv (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (e : ℤ) (He : generic_format beta fexp (bpow beta e)) : fexp e ≤ e := by
+  have h := generic_format_bpow_inv' beta fexp e He
+  by_contra hgt
+  push_neg at hgt
+  have := valid_exp_large' hValid (k := e + 1) (l := e) (by omega) (by omega)
+  omega
+
 /-- A positive value in the format is at least `bpow emin` whenever `emin`
 is a uniform lower bound for `fexp`. -/
 theorem generic_format_ge_bpow (beta : radix) (fexp : ℤ → ℤ) (emin : ℤ)
