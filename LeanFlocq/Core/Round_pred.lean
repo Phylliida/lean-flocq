@@ -433,6 +433,117 @@ theorem Rnd_NG_unique (F : ℝ → Prop) (P : ℝ → ℝ → Prop)
     (x : ℝ) : rnd1 x = rnd2 x :=
   Rnd_NG_pt_unique F P HP (h1 x) (h2 x)
 
+/-! ### Round-to-nearest, ties away from zero (`NA`) -/
+
+/-- `NA` is exactly `NG` with the tie-breaker `|x| ≤ |f|`. -/
+theorem Rnd_NA_NG_pt (F : ℝ → Prop) (HF : F 0) (x f : ℝ) :
+    Rnd_NA_pt F x f ↔ Rnd_NG_pt F (fun x f => |x| ≤ |f|) x f := by
+  rcases le_or_gt 0 x with Hx | Hx
+  · -- x ≥ 0
+    constructor
+    · rintro ⟨H1, H2⟩
+      have Hf : 0 ≤ f := Rnd_N_pt_ge_0 F HF Hx H1
+      refine ⟨H1, ?_⟩
+      rcases Rnd_N_pt_DN_or_UP F H1 with H3 | H3
+      · right
+        intro f2 Hxf2
+        have Hf2 : 0 ≤ f2 := Rnd_N_pt_ge_0 F HF Hx Hxf2
+        have h_le : f2 ≤ f := by
+          have := H2 f2 Hxf2
+          rwa [abs_of_nonneg Hf, abs_of_nonneg Hf2] at this
+        rcases Rnd_N_pt_DN_or_UP F Hxf2 with H4 | H4
+        · exact Rnd_DN_pt_unique F H4 H3
+        · have hxf2 : x ≤ f2 := H4.2.1
+          have hfx : f ≤ x := H3.2.1
+          linarith
+      · left
+        show |x| ≤ |f|
+        rw [abs_of_nonneg Hx, abs_of_nonneg Hf]
+        exact H3.2.1
+    · rintro ⟨H1, H2⟩
+      refine ⟨H1, ?_⟩
+      intro f2 Hxf2
+      rcases H2 with H2 | H2
+      · have Hf : 0 ≤ f := Rnd_N_pt_ge_0 F HF Hx H1
+        have Hf2 : 0 ≤ f2 := Rnd_N_pt_ge_0 F HF Hx Hxf2
+        rw [abs_of_nonneg Hf, abs_of_nonneg Hf2]
+        rw [abs_of_nonneg Hx, abs_of_nonneg Hf] at H2
+        rcases Rnd_N_pt_DN_or_UP F Hxf2 with H3 | H3
+        · linarith [H3.2.1]
+        · exact H3.2.2 f H1.1 H2
+      · rw [H2 f2 Hxf2]
+  · -- x < 0
+    have Hxle : x ≤ 0 := le_of_lt Hx
+    constructor
+    · rintro ⟨H1, H2⟩
+      have Hf : f ≤ 0 := Rnd_N_pt_le_0 F HF Hxle H1
+      refine ⟨H1, ?_⟩
+      rcases Rnd_N_pt_DN_or_UP F H1 with H3 | H3
+      · left
+        show |x| ≤ |f|
+        rw [abs_of_nonpos Hxle, abs_of_nonpos Hf]
+        linarith [H3.2.1]
+      · right
+        intro f2 Hxf2
+        have Hf2 : f2 ≤ 0 := Rnd_N_pt_le_0 F HF Hxle Hxf2
+        have h_le : f ≤ f2 := by
+          have := H2 f2 Hxf2
+          rw [abs_of_nonpos Hf, abs_of_nonpos Hf2] at this
+          linarith
+        rcases Rnd_N_pt_DN_or_UP F Hxf2 with H4 | H4
+        · have hf2x : f2 ≤ x := H4.2.1
+          have hxf : x ≤ f := H3.2.1
+          linarith
+        · exact Rnd_UP_pt_unique F H4 H3
+    · rintro ⟨H1, H2⟩
+      refine ⟨H1, ?_⟩
+      intro f2 Hxf2
+      rcases H2 with H2 | H2
+      · have Hf : f ≤ 0 := Rnd_N_pt_le_0 F HF Hxle H1
+        have Hf2 : f2 ≤ 0 := Rnd_N_pt_le_0 F HF Hxle Hxf2
+        rw [abs_of_nonpos Hf, abs_of_nonpos Hf2]
+        rw [abs_of_nonpos Hxle, abs_of_nonpos Hf] at H2
+        have hfx : f ≤ x := by linarith
+        rcases Rnd_N_pt_DN_or_UP F Hxf2 with H3 | H3
+        · have : f ≤ f2 := H3.2.2 f H1.1 hfx
+          linarith
+        · have hxf2 : x ≤ f2 := H3.2.1
+          linarith
+      · rw [H2 f2 Hxf2]
+
+/-- The `NG` uniqueness schema is satisfied by the predicate `|x| ≤ |f|`. -/
+theorem Rnd_NA_pt_unique_prop (F : ℝ → Prop) (HF : F 0) :
+    Rnd_NG_pt_unique_prop F (fun a b => |a| ≤ |b|) := by
+  intro x d u Hxd1 _Hxd2 Hxu1 _Hxu2 Hd Hu
+  rcases le_or_gt 0 x with Hx | Hx
+  · -- x ≥ 0
+    apply le_antisymm
+    · exact le_trans Hxd1.2.1 Hxu1.2.1
+    · -- u ≤ d. Use 0 ≤ d (DN with g = 0), then |d| = d ≥ x → d = x → x ≤ d, apply UP's third.
+      have hd_ge_0 : 0 ≤ d := Hxd1.2.2 0 HF Hx
+      rw [abs_of_nonneg Hx, abs_of_nonneg hd_ge_0] at Hd
+      have hd_eq_x : d = x := le_antisymm Hxd1.2.1 Hd
+      apply Hxu1.2.2 d Hxd1.1
+      linarith
+  · -- x < 0
+    apply le_antisymm
+    · exact le_trans Hxd1.2.1 Hxu1.2.1
+    · -- u ≤ d. u ≤ 0 (UP with g = 0), then |u| = -u ≥ -x → u ≤ x → u = x → apply DN's third.
+      have hu_le_0 : u ≤ 0 := Hxu1.2.2 0 HF (le_of_lt Hx)
+      rw [abs_of_neg Hx, abs_of_nonpos hu_le_0] at Hu
+      apply Hxd1.2.2 u Hxu1.1
+      linarith
+
+theorem Rnd_NA_pt_unique (F : ℝ → Prop) (HF : F 0)
+    {x f1 f2 : ℝ} (h1 : Rnd_NA_pt F x f1) (h2 : Rnd_NA_pt F x f2) : f1 = f2 :=
+  Rnd_NG_pt_unique F _ (Rnd_NA_pt_unique_prop F HF)
+    ((Rnd_NA_NG_pt F HF x f1).mp h1) ((Rnd_NA_NG_pt F HF x f2).mp h2)
+
+theorem Rnd_NA_unique (F : ℝ → Prop) (HF : F 0)
+    {rnd1 rnd2 : ℝ → ℝ} (h1 : Rnd_NA F rnd1) (h2 : Rnd_NA F rnd2) (x : ℝ) :
+    rnd1 x = rnd2 x :=
+  Rnd_NA_pt_unique F HF (h1 x) (h2 x)
+
 /-- Round-toward-zero is monotone, given `F 0`. -/
 theorem Rnd_ZR_pt_monotone (F : ℝ → Prop) (F0 : F 0) :
     round_pred_monotone (Rnd_ZR_pt F) := by
