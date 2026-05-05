@@ -76,4 +76,12 @@ theorem lt_bpow (beta : radix) {e1 e2 : ℤ}
   push_neg at hle
   exact absurd (bpow_le beta hle) (not_le.mpr h)
 
+/-- Bridge between integer power and `bpow` at non-negative exponents. -/
+theorem IZR_Zpower (beta : radix) {n : ℤ} (hn : 0 ≤ n) :
+    ((beta.val ^ n.toNat : ℤ) : ℝ) = bpow beta n := by
+  unfold bpow
+  push_cast
+  rw [show n = ((n.toNat : ℕ) : ℤ) from (Int.toNat_of_nonneg hn).symm, zpow_natCast,
+      Int.toNat_natCast]
+
 end LeanFlocq
