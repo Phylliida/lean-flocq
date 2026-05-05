@@ -636,6 +636,58 @@ theorem exp_small_round_0_pos (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ →
   have : 0 < bpow beta (ex - 1) := bpow_gt_0 _ _
   linarith [hbounds.1, H1]
 
+/-- `round` is monotone on positive arguments. -/
+theorem round_le_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [hv : Valid_rnd rnd] {x y : ℝ} (Hx : 0 < x) (Hxy : x ≤ y) :
+    round beta fexp rnd x ≤ round beta fexp rnd y := by
+  have Hy : 0 < y := lt_of_lt_of_le Hx Hxy
+  set ex := mag beta x with hex_def
+  set ey := mag beta y with hey_def
+  have h_x_low : bpow beta (ex - 1) ≤ x := by
+    have := bpow_mag_le beta (ne_of_gt Hx); rwa [abs_of_pos Hx] at this
+  have h_x_high : x < bpow beta ex := by
+    have := bpow_mag_gt beta x; rwa [abs_of_pos Hx] at this
+  have h_y_low : bpow beta (ey - 1) ≤ y := by
+    have := bpow_mag_le beta (ne_of_gt Hy); rwa [abs_of_pos Hy] at this
+  have h_y_high : y < bpow beta ey := by
+    have := bpow_mag_gt beta y; rwa [abs_of_pos Hy] at this
+  have h_ex_ey : ex ≤ ey := by
+    have h := lt_of_le_of_lt h_x_low (lt_of_le_of_lt Hxy h_y_high)
+    have := lt_bpow beta h
+    omega
+  -- Helper: same fexp on ex and ey ⇒ round monotone
+  have Heq : fexp ex = fexp ey →
+      round beta fexp rnd x ≤ round beta fexp rnd y := by
+    intro H
+    unfold round scaled_mantissa cexp
+    rw [show mag beta x = ex from rfl, show mag beta y = ey from rfl, H]
+    apply F2R_le
+    apply hv.Zrnd_le
+    exact mul_le_mul_of_nonneg_right Hxy (bpow_ge_0 _ _)
+  rcases le_or_gt ey (fexp ey) with Hy1 | Hy1
+  · -- Subnormal y: Valid_exp gives fexp ex = fexp ey
+    apply Heq
+    exact ((hValid ey).2 Hy1).2 ex (le_trans h_ex_ey Hy1)
+  · rcases lt_or_eq_of_le h_ex_ey with He | He
+    · -- ex < ey: round x ≤ β^(ey-1) ≤ round y
+      apply le_trans _ ((round_bounded_large_pos beta fexp rnd Hy1 ⟨h_y_low, h_y_high⟩).1)
+      rcases le_or_gt ex (fexp ex) with Hx1 | Hx1
+      · -- Subnormal x
+        rcases round_bounded_small_pos beta fexp rnd Hx1 ⟨h_x_low, h_x_high⟩ with Hr | Hr
+        · rw [Hr]; exact bpow_ge_0 _ _
+        · rw [Hr]
+          apply bpow_le beta
+          by_contra h
+          push_neg at h
+          have hey_le : ey ≤ fexp ex := by omega
+          have heq_fexp : fexp ey = fexp ex := ((hValid ex).2 Hx1).2 ey hey_le
+          omega
+      · -- Normal x: round x ≤ β^ex ≤ β^(ey-1)
+        have := round_bounded_large_pos beta fexp rnd Hx1 ⟨h_x_low, h_x_high⟩
+        apply le_trans this.2
+        apply bpow_le beta; omega
+    · apply Heq; rw [He]
+
 /-- The round of a positive value is in the format. -/
 theorem generic_format_round_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} (Hx0 : 0 < x) :

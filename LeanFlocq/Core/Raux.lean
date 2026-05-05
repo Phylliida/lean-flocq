@@ -218,6 +218,15 @@ theorem bpow_mag_le (beta : radix) {x : ℝ} (hx : x ≠ 0) :
   rw [heq]
   exact h
 
+/-- `mag` from a bound on positive `x`. -/
+theorem mag_unique_pos (beta : radix) {x : ℝ} {e : ℤ}
+    (h_low : bpow beta (e - 1) ≤ x) (h_high : x < bpow beta e) :
+    mag beta x = e := by
+  have hxpos : 0 < x := lt_of_lt_of_le (bpow_gt_0 _ _) h_low
+  apply mag_unique
+  · rw [abs_of_pos hxpos]; exact h_low
+  · rw [abs_of_pos hxpos]; exact h_high
+
 /-- `mag β (β^e) = e + 1`. -/
 theorem mag_bpow (beta : radix) (e : ℤ) : mag beta (bpow beta e) = e + 1 := by
   apply mag_unique
