@@ -236,6 +236,25 @@ theorem generic_format_abs (beta : radix) (fexp : ℤ → ℤ) {x : ℝ}
   show |x| = |F2R (beta := beta) ⟨Ztrunc (scaled_mantissa beta fexp x), cexp beta fexp x⟩|
   rw [← Hx]
 
+theorem generic_format_abs_inv (beta : radix) (fexp : ℤ → ℤ) {x : ℝ}
+    (h : generic_format beta fexp |x|) : generic_format beta fexp x := by
+  rcases le_or_gt 0 x with hx | hx
+  · rwa [abs_of_nonneg hx] at h
+  · rw [abs_of_neg hx] at h
+    have := generic_format_opp beta fexp h
+    rwa [neg_neg] at this
+
+/-- Variant of `generic_format_F2R` for an arbitrary float `f` with the
+real value extracted as `x`. -/
+theorem generic_format_F2R' (beta : radix) (fexp : ℤ → ℤ) {x : ℝ}
+    (f : float beta) (h1 : F2R f = x)
+    (h2 : x ≠ 0 → cexp beta fexp x ≤ f.Fexp) : generic_format beta fexp x := by
+  subst h1
+  obtain ⟨m, e⟩ := f
+  apply generic_format_F2R beta fexp m e
+  intro hm
+  exact h2 (F2R_neq_0 ⟨m, e⟩ hm)
+
 /-! ### Canonical exponent equals fexp on tight bounds -/
 
 theorem cexp_fexp (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
