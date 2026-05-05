@@ -130,4 +130,29 @@ theorem Fnum_le_0 (f : float beta) (h : F2R f ≤ 0) : f.Fnum ≤ 0 := by
 theorem F2R_bpow (e : ℤ) : F2R (beta := beta) ⟨1, e⟩ = bpow beta e := by
   unfold F2R; simp
 
+theorem bpow_le_F2R {m e : ℤ} (h : 0 < m) :
+    bpow beta e ≤ F2R (beta := beta) ⟨m, e⟩ := by
+  rw [← F2R_bpow]
+  exact F2R_le (by omega)
+
+/-- Changing the exponent of a float, scaling the mantissa to compensate. -/
+theorem F2R_change_exp (e' m e : ℤ) (h : e' ≤ e) :
+    F2R (beta := beta) ⟨m, e⟩
+      = F2R (beta := beta) ⟨m * (beta.val : ℤ) ^ (e - e').toNat, e'⟩ := by
+  unfold F2R
+  have hd : 0 ≤ e - e' := by omega
+  have htn : ((e - e').toNat : ℤ) = e - e' := Int.toNat_of_nonneg hd
+  have hbpow : bpow beta e = (beta.val : ℝ) ^ (e - e').toNat * bpow beta e' := by
+    have hsplit : bpow beta e = bpow beta (e - e') * bpow beta e' := by
+      rw [← bpow_plus]; congr 1; ring
+    rw [hsplit]
+    congr 1
+    unfold bpow
+    rw [show (e - e' : ℤ) = ((e - e').toNat : ℤ) from htn.symm]
+    norm_cast
+  show (m : ℝ) * bpow beta e
+      = ((m * beta.val ^ (e - e').toNat : ℤ) : ℝ) * bpow beta e'
+  rw [hbpow, Int.cast_mul, Int.cast_pow]
+  ring
+
 end LeanFlocq
