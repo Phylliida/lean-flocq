@@ -1110,4 +1110,15 @@ theorem generic_format_EM (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_ex
     intro hg
     exact h (round_generic beta fexp _ hg)
 
+/-- Any nearest in the format equals either the floor-round or the ceiling-round. -/
+theorem generic_N_pt_DN_or_UP (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x f : ℝ} (Hxf : Rnd_N_pt (generic_format beta fexp) x f) :
+    f = round beta fexp (fun y : ℝ => ⌊y⌋) x ∨
+    f = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+  rcases Rnd_N_pt_DN_or_UP _ Hxf with H | H
+  · left
+    exact Rnd_DN_pt_unique _ H (round_DN_pt beta fexp hValid x)
+  · right
+    exact Rnd_UP_pt_unique _ H (round_UP_pt beta fexp hValid x)
+
 end LeanFlocq
