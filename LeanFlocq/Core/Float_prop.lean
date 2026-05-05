@@ -211,9 +211,15 @@ theorem bpow_le_F2R_m1 {m e1 e2 : ℤ} (hm : 1 < m)
 
 /-- If `|m| < β^(e' - e)`, then `|F2R ⟨m, e⟩| < β^e'`.
 
-The hypothesis is given over `(e' - e).toNat`; when `e' < e` this evaluates
-to `(beta.val : ℤ)^0 = 1`, so the hypothesis forces `m = 0` and the
-conclusion is immediate. -/
+The hypothesis uses `(e' - e).toNat`; when `e' < e` this evaluates to
+`(beta.val : ℤ)^0 = 1`, so the hypothesis forces `m = 0` and the
+conclusion is immediate.
+
+**Deviation from Coq:** Coq's `Zpower beta (e' - Fexp f)` returns `0` for
+negative argument, making Coq's hypothesis vacuous when `e' < Fexp f`.
+The Lean version (using `.toNat`) is therefore strictly *stronger*: it
+admits the additional case `m = 0` ∧ `e' < Fexp f` and still concludes
+`|F2R| < bpow e'`. -/
 theorem F2R_lt_bpow (f : float beta) (e' : ℤ)
     (h : |f.Fnum| < (beta.val : ℤ) ^ (e' - f.Fexp).toNat) :
     |F2R f| < bpow beta e' := by

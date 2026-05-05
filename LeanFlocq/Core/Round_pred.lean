@@ -4,8 +4,9 @@ Port of `flocq/src/Core/Round_pred.v` (Sylvie Boldo, Guillaume Melquiond, LGPL).
 Properties of rounding predicates: monotonicity, uniqueness, reflexivity,
 idempotence, behaviour under negation, and characterizations of round-to-nearest.
 
-Skipped here (require real-number completeness machinery):
-`round_val_of_pred`, `round_fun_of_pred`.
+This file ports every theorem from `Round_pred.v`. Coq's
+`round_val_of_pred` / `round_fun_of_pred` proofs use real-number
+completeness; in Lean, classical choice suffices for the same statement.
 -/
 
 import Mathlib.Data.Real.Basic
