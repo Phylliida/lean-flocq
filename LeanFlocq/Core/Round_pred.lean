@@ -10,6 +10,7 @@ Skipped here (require real-number completeness machinery):
 
 import Mathlib.Data.Real.Basic
 import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.Ring
 import LeanFlocq.Core.Defs
 
 namespace LeanFlocq
@@ -167,5 +168,40 @@ theorem Rnd_N_pt_DN_or_UP_eq (F : ℝ → Prop) {x fd fu f : ℝ}
   rcases Rnd_N_pt_DN_or_UP F Hf with h | h
   · exact Or.inl (Rnd_DN_pt_unique F h Hd)
   · exact Or.inr (Rnd_UP_pt_unique F h Hu)
+
+/-! ### Round-to-nearest: symmetry and reflexivity -/
+
+theorem Rnd_N_pt_opp_inv (F : ℝ → Prop) (HF : ∀ x, F x → F (-x))
+    {x f : ℝ} (h : Rnd_N_pt F (-x) (-f)) : Rnd_N_pt F x f := by
+  refine ⟨?_, ?_⟩
+  · have : F (-(-f)) := HF (-f) h.1
+    rwa [neg_neg] at this
+  · intro g Hg
+    have hopp : F (-g) := HF g Hg
+    have := h.2 (-g) hopp
+    have e1 : -f - -x = -(f - x) := by ring
+    have e2 : -g - -x = -(g - x) := by ring
+    rw [e1, e2, abs_neg, abs_neg] at this
+    exact this
+
+theorem Rnd_N_pt_refl (F : ℝ → Prop) {x : ℝ} (hx : F x) : Rnd_N_pt F x x := by
+  refine ⟨hx, ?_⟩
+  intro g _
+  rw [sub_self, abs_zero]
+  exact abs_nonneg _
+
+theorem Rnd_N_pt_idempotent (F : ℝ → Prop) {x f : ℝ}
+    (h : Rnd_N_pt F x f) (hx : F x) : f = x := by
+  have hbound : |f - x| ≤ |x - x| := h.2 x hx
+  rw [sub_self, abs_zero] at hbound
+  have habs : |f - x| ≤ 0 := hbound
+  have : f - x = 0 := abs_nonpos_iff.mp habs
+  linarith
+
+theorem Rnd_N_pt_0 (F : ℝ → Prop) (HF : F 0) : Rnd_N_pt F 0 0 := by
+  refine ⟨HF, ?_⟩
+  intro g _
+  rw [sub_zero, sub_zero, abs_zero]
+  exact abs_nonneg _
 
 end LeanFlocq
