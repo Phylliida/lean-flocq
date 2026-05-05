@@ -1186,6 +1186,39 @@ theorem cexp_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
   unfold cexp
   rw [mag_DN beta fexp hValid Hd]
 
+/-- For any valid rounding, either `mag` is preserved or `|round x| = β^(max(mag x, fexp(mag x)))`. -/
+theorem mag_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} (Zr : round beta fexp rnd x ≠ 0) :
+    mag beta (round beta fexp rnd x) = mag beta x ∨
+    |round beta fexp rnd x| = bpow beta (max (mag beta x) (fexp (mag beta x))) := by
+  rcases round_ZR_or_AW beta fexp rnd x with Hr | Hr
+  · rw [Hr]; left
+    apply mag_round_ZR beta fexp hValid
+    rwa [Hr] at Zr
+  · rw [Hr]
+    by_cases Zx : x = 0
+    · rw [Zx, round_0] at Zr; exact absurd rfl Zr
+    set ex := mag beta x
+    have h_low : bpow beta (ex - 1) ≤ |x| := bpow_mag_le beta Zx
+    have h_high : |x| < bpow beta ex := bpow_mag_gt beta x
+    rcases le_or_gt ex (fexp ex) with He | He
+    · -- subnormal: right disjunct, max = fexp ex
+      right
+      rw [show max ex (fexp ex) = fexp ex from max_eq_right He]
+      rw [← round_AW_abs beta fexp hValid, round_AW_UP beta fexp (abs_nonneg _)]
+      exact round_UP_small_pos beta fexp ⟨h_low, h_high⟩ He
+    · have hbounds := round_bounded_large_pos beta fexp Zaway He ⟨h_low, h_high⟩
+      have h_abs_eq : |round beta fexp Zaway x| = round beta fexp Zaway |x| :=
+        (round_AW_abs beta fexp hValid x).symm
+      rcases lt_or_eq_of_le hbounds.2 with h_lt | h_eq
+      · left
+        apply mag_unique
+        · rw [h_abs_eq]; exact hbounds.1
+        · rw [h_abs_eq]; exact h_lt
+      · right
+        rw [show max ex (fexp ex) = ex from max_eq_left (le_of_lt He)]
+        rw [h_abs_eq, h_eq]
+
 /-- The scaled mantissa of a floor-round equals the integer floor of the scaled mantissa. -/
 theorem scaled_mantissa_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     {x : ℝ} (Hd : 0 < round beta fexp (fun y : ℝ => ⌊y⌋) x) :
