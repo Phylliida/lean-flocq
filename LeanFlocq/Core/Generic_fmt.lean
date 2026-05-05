@@ -745,4 +745,96 @@ theorem round_opp (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ) (x : �
   rw [scaled_mantissa_opp, cexp_opp, F2R_Zopp]
   ring
 
+/-! ### IEEE-754 rounding modes are valid -/
+
+instance valid_rnd_DN : Valid_rnd (fun x : ℝ => ⌊x⌋) where
+  Zrnd_le := fun _ _ h => Int.floor_le_floor h
+  Zrnd_intCast := Int.floor_intCast
+
+instance valid_rnd_UP : Valid_rnd (fun x : ℝ => ⌈x⌉) where
+  Zrnd_le := fun _ _ h => Int.ceil_le_ceil h
+  Zrnd_intCast := Int.ceil_intCast
+
+instance valid_rnd_ZR : Valid_rnd Ztrunc where
+  Zrnd_le := fun _ _ h => Ztrunc_le h
+  Zrnd_intCast := Ztrunc_intCast
+
+instance valid_rnd_AW : Valid_rnd Zaway where
+  Zrnd_le := fun _ _ h => Zaway_le h
+  Zrnd_intCast := Zaway_intCast
+
+/-! ### `round` factors through floor/ceil and trunc/away -/
+
+theorem round_DN_or_UP (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (x : ℝ) :
+    round beta fexp rnd x = round beta fexp (fun y : ℝ => ⌊y⌋) x ∨
+    round beta fexp rnd x = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+  unfold round
+  rcases Zrnd_DN_or_UP rnd (scaled_mantissa beta fexp x) with H | H
+  · left; rw [H]
+  · right; rw [H]
+
+theorem round_ZR_or_AW (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (x : ℝ) :
+    round beta fexp rnd x = round beta fexp Ztrunc x ∨
+    round beta fexp rnd x = round beta fexp Zaway x := by
+  unfold round
+  rcases Zrnd_ZR_or_AW rnd (scaled_mantissa beta fexp x) with H | H
+  · left; rw [H]
+  · right; rw [H]
+
+/-- `round` is monotone for any valid rounding. -/
+theorem round_le (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [hv : Valid_rnd rnd] {x y : ℝ} (Hxy : x ≤ y) :
+    round beta fexp rnd x ≤ round beta fexp rnd y := by
+  -- rnd 0 = 0 (used in mixed-sign cases)
+  have h_rnd_0 : rnd (0 : ℝ) = 0 := by
+    have h := hv.Zrnd_intCast 0; push_cast at h; exact h
+  -- Helper: x ≤ 0 → round x ≤ 0.
+  have round_nonpos : ∀ {z : ℝ}, z ≤ 0 → round beta fexp rnd z ≤ 0 := by
+    intro z hz
+    unfold round
+    apply F2R_le_0
+    show rnd (scaled_mantissa beta fexp z) ≤ 0
+    have h_sm : scaled_mantissa beta fexp z ≤ 0 :=
+      mul_nonpos_of_nonpos_of_nonneg hz (bpow_ge_0 _ _)
+    have h := hv.Zrnd_le _ _ h_sm
+    rw [h_rnd_0] at h
+    exact h
+  -- Helper: 0 ≤ z → 0 ≤ round z.
+  have round_nonneg : ∀ {z : ℝ}, 0 ≤ z → 0 ≤ round beta fexp rnd z := by
+    intro z hz
+    unfold round
+    apply F2R_ge_0
+    show 0 ≤ rnd (scaled_mantissa beta fexp z)
+    have h_sm : 0 ≤ scaled_mantissa beta fexp z :=
+      mul_nonneg hz (bpow_ge_0 _ _)
+    have h := hv.Zrnd_le _ _ h_sm
+    rw [h_rnd_0] at h
+    exact h
+  rcases lt_trichotomy x 0 with Hx | Hx | Hx
+  · rcases lt_or_ge y 0 with Hy | Hy
+    · -- x ≤ y < 0: lift to positives via round_opp + round_le_pos
+      have h_op : round beta fexp (Zrnd_opp rnd) (-y) ≤ round beta fexp (Zrnd_opp rnd) (-x) :=
+        round_le_pos beta fexp hValid (Zrnd_opp rnd) (by linarith) (by linarith)
+      have hx_eq : round beta fexp rnd x = -round beta fexp (Zrnd_opp rnd) (-x) := by
+        rw [show x = -(-x) from (neg_neg x).symm, round_opp, neg_neg]
+      have hy_eq : round beta fexp rnd y = -round beta fexp (Zrnd_opp rnd) (-y) := by
+        rw [show y = -(-y) from (neg_neg y).symm, round_opp, neg_neg]
+      linarith
+    · -- x < 0 ≤ y: round x ≤ 0 ≤ round y
+      linarith [round_nonpos (le_of_lt Hx), round_nonneg Hy]
+  · -- x = 0
+    rw [Hx, round_0 beta fexp rnd]
+    exact round_nonneg (by linarith)
+  · -- 0 < x ≤ y
+    exact round_le_pos beta fexp hValid rnd Hx Hxy
+
+theorem round_ge_generic (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x y : ℝ}
+    (Hx : generic_format beta fexp x) (Hxy : x ≤ y) :
+    x ≤ round beta fexp rnd y := by
+  rw [← round_generic beta fexp rnd Hx]
+  exact round_le beta fexp hValid rnd Hxy
+
 end LeanFlocq
