@@ -153,4 +153,105 @@ theorem generic_format_F2R (beta : radix) (fexp : ℤ → ℤ) (m e : ℤ)
     rw [h1, Ztrunc_intCast]
     exact F2R_change_exp e' m e He
 
+/-! ### Canonical floats: behaviour under negation and absolute value -/
+
+theorem canonical_opp (beta : radix) (fexp : ℤ → ℤ) (m e : ℤ)
+    (h : canonical beta fexp ⟨m, e⟩) : canonical beta fexp ⟨-m, e⟩ := by
+  unfold canonical at h ⊢
+  show e = cexp beta fexp (F2R (beta := beta) ⟨-m, e⟩)
+  rw [F2R_Zopp, cexp_opp]; exact h
+
+theorem canonical_abs (beta : radix) (fexp : ℤ → ℤ) (m e : ℤ)
+    (h : canonical beta fexp ⟨m, e⟩) : canonical beta fexp ⟨|m|, e⟩ := by
+  unfold canonical at h ⊢
+  show e = cexp beta fexp (F2R (beta := beta) ⟨|m|, e⟩)
+  rw [F2R_Zabs, cexp_abs]; exact h
+
+theorem canonical_0 (beta : radix) (fexp : ℤ → ℤ) :
+    canonical beta fexp ⟨0, fexp (mag beta 0)⟩ := by
+  unfold canonical cexp
+  show fexp (mag beta 0) = fexp (mag beta (F2R (beta := beta) ⟨0, fexp (mag beta 0)⟩))
+  rw [F2R_0]
+
+theorem canonical_unique (beta : radix) (fexp : ℤ → ℤ) (f1 f2 : float beta)
+    (h1 : canonical beta fexp f1) (h2 : canonical beta fexp f2)
+    (h : F2R f1 = F2R f2) : f1 = f2 := by
+  obtain ⟨m1, e1⟩ := f1
+  obtain ⟨m2, e2⟩ := f2
+  unfold canonical at h1 h2
+  simp only at h1 h2
+  have he : e1 = e2 := by rw [h1, h2, h]
+  subst he
+  have hm : m1 = m2 := eq_F2R (beta := beta) (e := e1) h
+  subst hm
+  rfl
+
+/-! ### Scaled mantissa -/
+
+theorem scaled_mantissa_generic (beta : radix) (fexp : ℤ → ℤ) {x : ℝ}
+    (Hx : generic_format beta fexp x) :
+    scaled_mantissa beta fexp x = ((Ztrunc (scaled_mantissa beta fexp x) : ℤ) : ℝ) := by
+  set m := Ztrunc (scaled_mantissa beta fexp x)
+  set c := cexp beta fexp x
+  have Hx2 : x = (m : ℝ) * bpow beta c := by
+    have := Hx; unfold generic_format F2R at this; exact this
+  unfold scaled_mantissa
+  show x * bpow beta (-c) = (m : ℝ)
+  rw [Hx2, mul_assoc, ← bpow_plus, show (c + -c) = 0 from by ring, bpow_zero, mul_one]
+
+theorem scaled_mantissa_mult_bpow (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    scaled_mantissa beta fexp x * bpow beta (cexp beta fexp x) = x := by
+  unfold scaled_mantissa
+  rw [mul_assoc, ← bpow_plus, show (-cexp beta fexp x + cexp beta fexp x) = 0 from by ring,
+      bpow_zero, mul_one]
+
+@[simp]
+theorem scaled_mantissa_0 (beta : radix) (fexp : ℤ → ℤ) :
+    scaled_mantissa beta fexp 0 = 0 := by
+  unfold scaled_mantissa; rw [zero_mul]
+
+theorem scaled_mantissa_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    scaled_mantissa beta fexp (-x) = -scaled_mantissa beta fexp x := by
+  unfold scaled_mantissa
+  rw [cexp_opp, neg_mul]
+
+theorem scaled_mantissa_abs (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    scaled_mantissa beta fexp |x| = |scaled_mantissa beta fexp x| := by
+  unfold scaled_mantissa
+  rw [cexp_abs, abs_mul, abs_of_nonneg (bpow_ge_0 beta _)]
+
+/-! ### Format under negation and absolute value -/
+
+theorem generic_format_opp (beta : radix) (fexp : ℤ → ℤ) {x : ℝ}
+    (Hx : generic_format beta fexp x) : generic_format beta fexp (-x) := by
+  unfold generic_format at Hx ⊢
+  rw [scaled_mantissa_opp, cexp_opp, Ztrunc_opp, F2R_Zopp]
+  show -x = -F2R (beta := beta) ⟨Ztrunc (scaled_mantissa beta fexp x), cexp beta fexp x⟩
+  rw [← Hx]
+
+theorem generic_format_abs (beta : radix) (fexp : ℤ → ℤ) {x : ℝ}
+    (Hx : generic_format beta fexp x) : generic_format beta fexp |x| := by
+  unfold generic_format at Hx ⊢
+  rw [scaled_mantissa_abs, cexp_abs, Ztrunc_abs, F2R_Zabs]
+  show |x| = |F2R (beta := beta) ⟨Ztrunc (scaled_mantissa beta fexp x), cexp beta fexp x⟩|
+  rw [← Hx]
+
+/-! ### Canonical exponent equals fexp on tight bounds -/
+
+theorem cexp_fexp (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
+    (Hx : bpow beta (ex - 1) ≤ |x| ∧ |x| < bpow beta ex) :
+    cexp beta fexp x = fexp ex := by
+  unfold cexp
+  rw [mag_unique beta Hx.1 Hx.2]
+
+theorem cexp_fexp_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
+    (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex) :
+    cexp beta fexp x = fexp ex := by
+  apply cexp_fexp
+  refine ⟨?_, ?_⟩
+  · rw [abs_of_nonneg]; exact Hx.1
+    exact le_trans (bpow_ge_0 beta _) Hx.1
+  · rw [abs_of_nonneg]; exact Hx.2
+    exact le_trans (bpow_ge_0 beta _) Hx.1
+
 end LeanFlocq

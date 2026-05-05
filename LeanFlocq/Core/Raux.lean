@@ -120,6 +120,19 @@ theorem Ztrunc_opp (x : ℝ) : Ztrunc (-x) = -Ztrunc x := by
     · have hpos : 0 < x := lt_of_le_of_ne (not_lt.mp h) (Ne.symm h0)
       rw [if_pos (by linarith : -x < 0), if_neg h, Int.ceil_neg]
 
+theorem Ztrunc_abs (x : ℝ) : Ztrunc |x| = |Ztrunc x| := by
+  rw [Ztrunc_floor (abs_nonneg x)]
+  by_cases h : x < 0
+  · unfold Ztrunc; rw [if_pos h, abs_of_neg h, Int.floor_neg]
+    have hcle : ⌈x⌉ ≤ 0 := by
+      have : ⌈x⌉ ≤ ⌈(0 : ℝ)⌉ := Int.ceil_le_ceil (le_of_lt h)
+      simpa using this
+    rw [abs_of_nonpos hcle]
+  · have hxnn : 0 ≤ x := not_lt.mp h
+    unfold Ztrunc; rw [if_neg h, abs_of_nonneg hxnn]
+    have hfnn : 0 ≤ ⌊x⌋ := Int.floor_nonneg.mpr hxnn
+    rw [abs_of_nonneg hfnn]
+
 /-! ### Magnitude (`mag`): integer e with `β^(e-1) ≤ |x| < β^e` for `x ≠ 0` -/
 
 /-- `mag beta x` returns the integer `e` such that `β^(e-1) ≤ |x| < β^e`
