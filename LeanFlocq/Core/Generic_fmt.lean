@@ -837,4 +837,101 @@ theorem round_ge_generic (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp
   rw [← round_generic beta fexp rnd Hx]
   exact round_le beta fexp hValid rnd Hxy
 
+theorem round_le_generic (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x y : ℝ}
+    (Hy : generic_format beta fexp y) (Hxy : x ≤ y) :
+    round beta fexp rnd x ≤ y := by
+  rw [← round_generic beta fexp rnd Hy]
+  exact round_le beta fexp hValid rnd Hxy
+
+/-! ### Round-floor and round-ceiling under negation -/
+
+theorem round_DN_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    round beta fexp (fun y : ℝ => ⌊y⌋) (-x) =
+      -(round beta fexp (fun y : ℝ => ⌈y⌉) x) := by
+  unfold round
+  rw [scaled_mantissa_opp, cexp_opp, ← F2R_Zopp]
+  apply F2R_eq
+  exact Int.floor_neg
+
+theorem round_UP_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    round beta fexp (fun y : ℝ => ⌈y⌉) (-x) =
+      -(round beta fexp (fun y : ℝ => ⌊y⌋) x) := by
+  unfold round
+  rw [scaled_mantissa_opp, cexp_opp, ← F2R_Zopp]
+  apply F2R_eq
+  exact Int.ceil_neg
+
+/-! ### Round of any real lies in the format -/
+
+theorem generic_format_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) :
+    generic_format beta fexp (round beta fexp rnd x) := by
+  rcases lt_trichotomy x 0 with Hx | Hx | Hx
+  · -- x < 0
+    have h_neg_pos : 0 < -x := by linarith
+    rcases round_DN_or_UP beta fexp rnd x with Hr | Hr
+    · rw [Hr, show x = -(-x) from (neg_neg x).symm, round_DN_opp]
+      apply generic_format_opp
+      exact generic_format_round_pos beta fexp hValid _ h_neg_pos
+    · rw [Hr, show x = -(-x) from (neg_neg x).symm, round_UP_opp]
+      apply generic_format_opp
+      exact generic_format_round_pos beta fexp hValid _ h_neg_pos
+  · rw [Hx, round_0]
+    exact generic_format_0 _ _
+  · exact generic_format_round_pos beta fexp hValid rnd Hx
+
+/-! ### Round-down/up/zero connect to abstract rounding predicates -/
+
+theorem round_DN_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    Rnd_DN_pt (generic_format beta fexp) x (round beta fexp (fun y : ℝ => ⌊y⌋) x) := by
+  refine ⟨?_, ?_, ?_⟩
+  · exact generic_format_round beta fexp hValid _ x
+  · -- round_DN x ≤ x: ⌊sm⌋ * bpow ≤ sm * bpow = x
+    show round beta fexp (fun y : ℝ => ⌊y⌋) x ≤ x
+    unfold round
+    set s := scaled_mantissa beta fexp x
+    set e := cexp beta fexp x
+    show ((⌊s⌋ : ℤ) : ℝ) * bpow beta e ≤ x
+    rw [show x = s * bpow beta e from (scaled_mantissa_mult_bpow beta fexp x).symm]
+    exact mul_le_mul_of_nonneg_right (Int.floor_le _) (bpow_ge_0 _ _)
+  · intro g Hg Hgx
+    exact round_ge_generic beta fexp hValid _ Hg Hgx
+
+theorem round_UP_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    Rnd_UP_pt (generic_format beta fexp) x (round beta fexp (fun y : ℝ => ⌈y⌉) x) := by
+  rw [show x = -(-x) from (neg_neg x).symm, round_UP_opp]
+  apply Rnd_UP_pt_opp _ (fun y h => generic_format_opp beta fexp h)
+  exact round_DN_pt beta fexp hValid (-x)
+
+theorem round_ZR_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    Rnd_ZR_pt (generic_format beta fexp) x (round beta fexp Ztrunc x) := by
+  refine ⟨?_, ?_⟩
+  · intro Hx
+    have h_sm_nn : 0 ≤ scaled_mantissa beta fexp x :=
+      mul_nonneg Hx (bpow_ge_0 _ _)
+    have heq : round beta fexp Ztrunc x = round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+      unfold round
+      rw [show Ztrunc (scaled_mantissa beta fexp x) = ⌊scaled_mantissa beta fexp x⌋ from
+          Ztrunc_floor h_sm_nn]
+    rw [heq]
+    exact round_DN_pt beta fexp hValid x
+  · intro Hx
+    have h_sm_np : scaled_mantissa beta fexp x ≤ 0 :=
+      mul_nonpos_of_nonpos_of_nonneg Hx (bpow_ge_0 _ _)
+    have heq : round beta fexp Ztrunc x = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+      unfold round
+      rw [show Ztrunc (scaled_mantissa beta fexp x) = ⌈scaled_mantissa beta fexp x⌉ from
+          Ztrunc_ceil h_sm_np]
+    rw [heq]
+    exact round_UP_pt beta fexp hValid x
+
+/-- The generic format with valid exponent satisfies the closure properties
+required by `Round_pred.satisfies_any`. -/
+theorem generic_format_satisfies_any (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) :
+    satisfies_any (generic_format beta fexp) where
+  zero := generic_format_0 beta fexp
+  sym := fun _ h => generic_format_opp beta fexp h
+  rnd := fun x => ⟨_, round_DN_pt beta fexp hValid x⟩
+
 end LeanFlocq
