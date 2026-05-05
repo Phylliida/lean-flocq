@@ -1121,4 +1121,82 @@ theorem generic_N_pt_DN_or_UP (beta : radix) (fexp : ℤ → ℤ) (hValid : Vali
   · right
     exact Rnd_UP_pt_unique _ H (round_UP_pt beta fexp hValid x)
 
+/-! ### Magnitude of rounded values -/
+
+/-- If `0 < round rnd x` and `β^e ≤ x`, then `β^e ≤ round rnd x`. -/
+theorem round_large_pos_ge_bpow (beta : radix) (fexp : ℤ → ℤ)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} {e : ℤ}
+    (Hd : 0 < round beta fexp rnd x) (Hex : bpow beta e ≤ x) :
+    bpow beta e ≤ round beta fexp rnd x := by
+  have Hx : 0 < x := lt_of_lt_of_le (bpow_gt_0 _ _) Hex
+  set ex := mag beta x
+  have h_low : bpow beta (ex - 1) ≤ x := by
+    have := bpow_mag_le beta (ne_of_gt Hx); rwa [abs_of_pos Hx] at this
+  have h_high : x < bpow beta ex := by
+    have := bpow_mag_gt beta x; rwa [abs_of_pos Hx] at this
+  have h_e_le : e ≤ ex - 1 := by
+    have h := lt_of_le_of_lt Hex h_high
+    have := lt_bpow beta h
+    omega
+  have h_step1 : bpow beta e ≤ bpow beta (ex - 1) := bpow_le beta h_e_le
+  rcases le_or_gt ex (fexp ex) with He | He
+  · rcases round_bounded_small_pos beta fexp rnd He ⟨h_low, h_high⟩ with Hr | Hr
+    · rw [Hr] at Hd; exact absurd Hd (lt_irrefl _)
+    · rw [Hr]
+      apply le_trans h_step1
+      apply bpow_le beta
+      omega
+  · linarith [(round_bounded_large_pos beta fexp rnd He ⟨h_low, h_high⟩).1]
+
+/-- The magnitude is preserved under round-toward-zero (when nonzero). -/
+theorem mag_round_ZR (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Zr : round beta fexp Ztrunc x ≠ 0) :
+    mag beta (round beta fexp Ztrunc x) = mag beta x := by
+  by_cases Zx : x = 0
+  · rw [Zx, round_0] at Zr
+    exact absurd rfl Zr
+  apply mag_unique
+  · rw [← round_ZR_abs beta fexp hValid]
+    apply round_large_pos_ge_bpow beta fexp Ztrunc
+    · rw [round_ZR_abs beta fexp hValid]
+      exact abs_pos.mpr Zr
+    · exact bpow_mag_le beta Zx
+  · rw [← round_ZR_abs beta fexp hValid]
+    apply lt_of_le_of_lt _ (bpow_mag_gt beta x)
+    rw [round_ZR_DN beta fexp (abs_nonneg _)]
+    exact (round_DN_pt beta fexp hValid |x|).2.1
+
+/-- The magnitude is preserved under floor-rounding (when positive). -/
+theorem mag_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Hd : 0 < round beta fexp (fun y : ℝ => ⌊y⌋) x) :
+    mag beta (round beta fexp (fun y : ℝ => ⌊y⌋) x) = mag beta x := by
+  have Hx_pos : 0 < x :=
+    lt_of_lt_of_le Hd (round_DN_pt beta fexp hValid x).2.1
+  have h_eq : round beta fexp Ztrunc x = round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+    round_ZR_DN beta fexp (le_of_lt Hx_pos)
+  rw [← h_eq]
+  apply mag_round_ZR beta fexp hValid
+  rw [h_eq]
+  exact ne_of_gt Hd
+
+/-- Canonical exponent is preserved under floor-rounding (when positive). -/
+theorem cexp_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Hd : 0 < round beta fexp (fun y : ℝ => ⌊y⌋) x) :
+    cexp beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x) = cexp beta fexp x := by
+  unfold cexp
+  rw [mag_DN beta fexp hValid Hd]
+
+/-- The scaled mantissa of a floor-round equals the integer floor of the scaled mantissa. -/
+theorem scaled_mantissa_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Hd : 0 < round beta fexp (fun y : ℝ => ⌊y⌋) x) :
+    scaled_mantissa beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x)
+      = ((⌊scaled_mantissa beta fexp x⌋ : ℤ) : ℝ) := by
+  unfold scaled_mantissa
+  rw [cexp_DN beta fexp hValid Hd]
+  unfold round F2R
+  show ((⌊scaled_mantissa beta fexp x⌋ : ℤ) : ℝ) * bpow beta (cexp beta fexp x)
+      * bpow beta (-cexp beta fexp x) = ((⌊scaled_mantissa beta fexp x⌋ : ℤ) : ℝ)
+  rw [mul_assoc, ← bpow_plus, show (cexp beta fexp x + -cexp beta fexp x) = 0 from by ring,
+      bpow_zero, mul_one]
+
 end LeanFlocq
