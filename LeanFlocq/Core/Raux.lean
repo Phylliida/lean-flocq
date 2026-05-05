@@ -120,6 +120,10 @@ theorem Ztrunc_opp (x : ℝ) : Ztrunc (-x) = -Ztrunc x := by
     · have hpos : 0 < x := lt_of_le_of_ne (not_lt.mp h) (Ne.symm h0)
       rw [if_pos (by linarith : -x < 0), if_neg h, Int.ceil_neg]
 
+/-- `Zaway x` is `⌊x⌋` for `x < 0`, `⌈x⌉` otherwise (rounding away from 0). -/
+noncomputable def Zaway (x : ℝ) : ℤ :=
+  if x < 0 then ⌊x⌋ else ⌈x⌉
+
 theorem Ztrunc_abs (x : ℝ) : Ztrunc |x| = |Ztrunc x| := by
   rw [Ztrunc_floor (abs_nonneg x)]
   by_cases h : x < 0

@@ -464,4 +464,76 @@ theorem cexp_fexp_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
   · rw [abs_of_nonneg]; exact Hx.2
     exact le_trans (bpow_ge_0 beta _) Hx.1
 
+/-! ### Rounding to integer: `Valid_rnd` class -/
+
+/-- A valid integer-rounding function: monotone, fixes integers. -/
+class Valid_rnd (rnd : ℝ → ℤ) : Prop where
+  Zrnd_le : ∀ x y : ℝ, x ≤ y → rnd x ≤ rnd y
+  Zrnd_intCast : ∀ n : ℤ, rnd (n : ℝ) = n
+
+/-- Any valid rounding agrees with floor or ceiling at every point. -/
+theorem Zrnd_DN_or_UP (rnd : ℝ → ℤ) [hv : Valid_rnd rnd] (x : ℝ) :
+    rnd x = ⌊x⌋ ∨ rnd x = ⌈x⌉ := by
+  have h_lb : ⌊x⌋ ≤ rnd x := by
+    have := hv.Zrnd_le _ _ (Int.floor_le x)
+    rw [hv.Zrnd_intCast] at this
+    exact this
+  have h_ub : rnd x ≤ ⌈x⌉ := by
+    have := hv.Zrnd_le _ _ (Int.le_ceil x)
+    rw [hv.Zrnd_intCast] at this
+    exact this
+  rcases eq_or_ne (rnd x) ⌊x⌋ with h | h
+  · exact Or.inl h
+  · right
+    have h_lt : ⌊x⌋ < rnd x := lt_of_le_of_ne h_lb (Ne.symm h)
+    have h_ceil_floor : ⌈x⌉ ≤ ⌊x⌋ + 1 := Int.ceil_le_floor_add_one x
+    omega
+
+/-! ### `round`: combine `rnd` with `cexp` to define the rounded value -/
+
+/-- `round β fexp rnd x` rounds `x` by:
+1. scaling: `s := x · β^(-cexp x)`
+2. integer-rounding: `m := rnd s`
+3. unscaling: `m · β^(cexp x)`. -/
+noncomputable def round (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ) (x : ℝ) : ℝ :=
+  F2R (beta := beta) ⟨rnd (scaled_mantissa beta fexp x), cexp beta fexp x⟩
+
+@[simp]
+theorem round_0 (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ) [hv : Valid_rnd rnd] :
+    round beta fexp rnd 0 = 0 := by
+  unfold round scaled_mantissa
+  rw [zero_mul]
+  have hrz : rnd (0 : ℝ) = 0 := by
+    have h := hv.Zrnd_intCast 0
+    push_cast at h
+    exact h
+  rw [hrz, F2R_0]
+
+/-- Any valid rounding agrees with `Ztrunc` or `Zaway` at every point. -/
+theorem Zrnd_ZR_or_AW (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) :
+    rnd x = Ztrunc x ∨ rnd x = Zaway x := by
+  unfold Ztrunc Zaway
+  rcases Zrnd_DN_or_UP rnd x with H | H
+  · by_cases hxn : x < 0
+    · rw [if_pos hxn, if_pos hxn]; right; exact H
+    · rw [if_neg hxn, if_neg hxn]; left; exact H
+  · by_cases hxn : x < 0
+    · rw [if_pos hxn, if_pos hxn]; left; exact H
+    · rw [if_neg hxn, if_neg hxn]; right; exact H
+
+/-- Values already in the format are fixed by `round`. -/
+theorem round_generic (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ) [hv : Valid_rnd rnd]
+    {x : ℝ} (Hx : generic_format beta fexp x) :
+    round beta fexp rnd x = x := by
+  unfold round
+  rw [scaled_mantissa_generic beta fexp Hx, hv.Zrnd_intCast]
+  exact Hx.symm
+
+/-- `round` is determined by the rounding function pointwise. -/
+theorem round_ext (beta : radix) (fexp : ℤ → ℤ) {rnd1 rnd2 : ℝ → ℤ}
+    (Hext : ∀ x, rnd1 x = rnd2 x) (x : ℝ) :
+    round beta fexp rnd1 x = round beta fexp rnd2 x := by
+  unfold round
+  rw [Hext]
+
 end LeanFlocq
