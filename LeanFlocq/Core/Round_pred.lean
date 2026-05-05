@@ -539,6 +539,33 @@ theorem Rnd_NA_pt_unique (F : ℝ → Prop) (HF : F 0)
   Rnd_NG_pt_unique F _ (Rnd_NA_pt_unique_prop F HF)
     ((Rnd_NA_NG_pt F HF x f1).mp h1) ((Rnd_NA_NG_pt F HF x f2).mp h2)
 
+/-- A nearest with `|x| ≤ |f|` is the away-from-zero nearest. -/
+theorem Rnd_NA_pt_N (F : ℝ → Prop) (HF : F 0)
+    {x f : ℝ} (Rxf : Rnd_N_pt F x f) (Hxf : |x| ≤ |f|) :
+    Rnd_NA_pt F x f := by
+  refine ⟨Rxf, ?_⟩
+  intro g Rxg
+  have h1 : |f - x| ≤ |g - x| := Rxf.2 g Rxg.1
+  have h2 : |g - x| ≤ |f - x| := Rxg.2 f Rxf.1
+  have heq : |f - x| = |g - x| := le_antisymm h1 h2
+  rcases abs_eq_abs.mp heq with H | H
+  · -- f - x = g - x → g = f
+    have : g = f := by linarith
+    rw [this]
+  · -- f - x = -(g - x) → g = 2x - f
+    have hg : g = 2 * x - f := by linarith
+    rcases le_or_gt 0 x with Hx | Hx
+    · have Hf : 0 ≤ f := Rnd_N_pt_ge_0 F HF Hx Rxf
+      have Hg : 0 ≤ g := Rnd_N_pt_ge_0 F HF Hx Rxg
+      rw [abs_of_nonneg Hf, abs_of_nonneg Hg]
+      rw [abs_of_nonneg Hx, abs_of_nonneg Hf] at Hxf
+      linarith
+    · have Hf : f ≤ 0 := Rnd_N_pt_le_0 F HF (le_of_lt Hx) Rxf
+      have Hg : g ≤ 0 := Rnd_N_pt_le_0 F HF (le_of_lt Hx) Rxg
+      rw [abs_of_nonpos Hf, abs_of_nonpos Hg]
+      rw [abs_of_neg Hx, abs_of_nonpos Hf] at Hxf
+      linarith
+
 theorem Rnd_NA_unique (F : ℝ → Prop) (HF : F 0)
     {rnd1 rnd2 : ℝ → ℝ} (h1 : Rnd_NA F rnd1) (h2 : Rnd_NA F rnd2) (x : ℝ) :
     rnd1 x = rnd2 x :=
