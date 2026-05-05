@@ -636,4 +636,35 @@ theorem exp_small_round_0_pos (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ →
   have : 0 < bpow beta (ex - 1) := bpow_gt_0 _ _
   linarith [hbounds.1, H1]
 
+/-- The round of a positive value is in the format. -/
+theorem generic_format_round_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} (Hx0 : 0 < x) :
+    generic_format beta fexp (round beta fexp rnd x) := by
+  set ex := mag beta x with hex_def
+  have h_low : bpow beta (ex - 1) ≤ x := by
+    have := bpow_mag_le beta (ne_of_gt Hx0)
+    rwa [abs_of_pos Hx0] at this
+  have h_high : x < bpow beta ex := by
+    have := bpow_mag_gt beta x
+    rwa [abs_of_pos Hx0] at this
+  rcases le_or_gt ex (fexp ex) with He | He
+  · -- small regime
+    rcases round_bounded_small_pos beta fexp rnd He ⟨h_low, h_high⟩ with Hr | Hr
+    · rw [Hr]; exact generic_format_0 beta fexp
+    · rw [Hr]
+      apply generic_format_bpow beta fexp
+      exact ((hValid ex).2 He).1
+  · -- large regime
+    obtain ⟨Hr1, Hr2⟩ := round_bounded_large_pos beta fexp rnd He ⟨h_low, h_high⟩
+    rcases le_or_gt (bpow beta ex) (round beta fexp rnd x) with Hr | Hr
+    · have heq : round beta fexp rnd x = bpow beta ex := le_antisymm Hr2 Hr
+      rw [heq]
+      apply generic_format_bpow beta fexp
+      exact (hValid ex).1 He
+    · unfold round
+      apply generic_format_F2R beta fexp _ _
+      intro _
+      show cexp beta fexp (round beta fexp rnd x) ≤ cexp beta fexp x
+      rw [cexp_fexp_pos beta fexp ⟨Hr1, Hr⟩, cexp_fexp_pos beta fexp ⟨h_low, h_high⟩]
+
 end LeanFlocq
