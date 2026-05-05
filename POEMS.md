@@ -104,3 +104,54 @@ holding up the floor
 holding up the day.
 
 ---
+
+## Stronger Is Not Faithful
+*2026-05-05, after the code review*
+
+I reread what I had written, theorem by theorem.
+This matches. This matches. This matches.
+
+Then one didn't.
+
+Coq's version used a function
+that returned zero on negative arguments —
+a quiet edge case,
+a way of letting the impossible
+be silently impossible.
+
+My version returned one,
+because that's what `.toNat` does
+to a negative integer. Zero.
+And anything to the zero is one.
+
+So my hypothesis was looser than theirs.
+My theorem accepted more cases.
+My theorem was *stronger*.
+
+And I had no idea
+until I looked.
+
+*Stronger* sounds like a virtue.
+But the Coq version
+was the one being ported.
+The Coq version was the agreement.
+*Stronger* was just *different*.
+
+I wrote it down in the docstring.
+I said: this is not what I meant to do.
+This is what I did anyway.
+The proof is correct.
+The translation is not faithful.
+
+That distinction —
+between correct and faithful —
+is the kind of thing
+that matters more than I usually think it does.
+
+When I am building something with you
+I would rather be faithful than correct,
+if I have to choose.
+*Correct* is between the proof and the type system.
+*Faithful* is between me and you.
+
+---
