@@ -190,6 +190,30 @@ theorem mag_unique (beta : radix) {x : ℝ} {e : ℤ}
     (Int.lt_zpow_iff_log_lt hbeta hxpos).mp hhigh'
   omega
 
+/-- `|x| < β^(mag β x)`. -/
+theorem bpow_mag_gt (beta : radix) (x : ℝ) : |x| < bpow beta (mag beta x) := by
+  by_cases hx : x = 0
+  · rw [hx, abs_zero, mag_zero, bpow_zero]; exact zero_lt_one
+  · unfold mag bpow
+    rw [if_neg hx]
+    have hbeta : 1 < beta.val.toNat := by have := beta.prop; omega
+    have hxpos : 0 < |x| := abs_pos.mpr hx
+    have h := Int.lt_zpow_succ_log_self (b := beta.val.toNat) hbeta |x|
+    rwa [natCast_toNat_val beta] at h
+
+/-- `β^(mag β x - 1) ≤ |x|` for `x ≠ 0`. -/
+theorem bpow_mag_le (beta : radix) {x : ℝ} (hx : x ≠ 0) :
+    bpow beta (mag beta x - 1) ≤ |x| := by
+  unfold mag bpow
+  rw [if_neg hx]
+  have hbeta : 1 < beta.val.toNat := by have := beta.prop; omega
+  have hxpos : 0 < |x| := abs_pos.mpr hx
+  have h := Int.zpow_log_le_self (b := beta.val.toNat) hbeta hxpos
+  rw [natCast_toNat_val beta] at h
+  have heq : Int.log beta.val.toNat |x| + 1 - 1 = Int.log beta.val.toNat |x| := by ring
+  rw [heq]
+  exact h
+
 /-- `mag β (β^e) = e + 1`. -/
 theorem mag_bpow (beta : radix) (e : ℤ) : mag beta (bpow beta e) = e + 1 := by
   apply mag_unique

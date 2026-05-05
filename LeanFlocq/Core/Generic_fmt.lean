@@ -297,6 +297,59 @@ theorem mantissa_UP_small_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex 
   · push_cast; linarith [H.1]
   · push_cast; linarith [H.2]
 
+/-- When `|x| < β^ex` and `ex ≤ fexp ex`, the scaled mantissa is in `(-1, 1)`. -/
+theorem scaled_mantissa_lt_1 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} {ex : ℤ} (Ex : |x| < bpow beta ex) (He : ex ≤ fexp ex) :
+    |scaled_mantissa beta fexp x| < 1 := by
+  by_cases hx : x = 0
+  · rw [hx, scaled_mantissa_0, abs_zero]; exact zero_lt_one
+  rw [← scaled_mantissa_abs]
+  unfold scaled_mantissa
+  rw [cexp_abs]
+  unfold cexp
+  set ex' := mag beta x
+  have h_mag_low : bpow beta (ex' - 1) ≤ |x| := bpow_mag_le beta hx
+  have h_mag_high : |x| < bpow beta ex' := bpow_mag_gt beta x
+  have hex'_le_ex : ex' ≤ ex := by
+    have h := lt_of_le_of_lt h_mag_low Ex
+    have := lt_bpow beta h
+    omega
+  have hex'_le_fex : ex' ≤ fexp ex := le_trans hex'_le_ex He
+  have hfex_eq : fexp ex' = fexp ex := ((hValid ex).2 He).2 ex' hex'_le_fex
+  have hex'_le_fex' : ex' ≤ fexp ex' := by rw [hfex_eq]; exact hex'_le_fex
+  have H := mantissa_small_pos beta fexp ⟨h_mag_low, h_mag_high⟩ hex'_le_fex'
+  exact H.2
+
+/-- For values in the format, `cexp x < mag β x` (when `x ≠ 0`). -/
+theorem mag_generic_gt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Zx : x ≠ 0) (Gx : generic_format beta fexp x) :
+    cexp beta fexp x < mag beta x := by
+  by_contra H
+  push_neg at H
+  set ex := mag beta x with hex_def
+  have hH : ex ≤ fexp ex := H
+  have h_mag_high : |x| < bpow beta ex := bpow_mag_gt beta x
+  have h_sm_lt_1 : |scaled_mantissa beta fexp x| < 1 :=
+    scaled_mantissa_lt_1 beta fexp hValid h_mag_high hH
+  have h_z_zero : Ztrunc (scaled_mantissa beta fexp x) = 0 := by
+    set sm := scaled_mantissa beta fexp x
+    have habs : -1 < sm ∧ sm < 1 := abs_lt.mp h_sm_lt_1
+    unfold Ztrunc
+    by_cases hsm_neg : sm < 0
+    · rw [if_pos hsm_neg, Int.ceil_eq_iff]
+      push_cast
+      refine ⟨by linarith [habs.1], by linarith⟩
+    · rw [if_neg hsm_neg, Int.floor_eq_iff]
+      push_cast
+      refine ⟨by linarith [not_lt.mp hsm_neg], by linarith [habs.2]⟩
+  have hx_eq : x = F2R (beta := beta) ⟨0, cexp beta fexp x⟩ := by
+    have hG := Gx
+    unfold generic_format at hG
+    rw [h_z_zero] at hG
+    exact hG
+  rw [F2R_0] at hx_eq
+  exact Zx hx_eq
+
 /-! ### No representable values strictly between adjacent mantissas -/
 
 /-- If `x` lies strictly between `F2R ⟨m, cexp x⟩` and `F2R ⟨m+1, cexp x⟩`,
