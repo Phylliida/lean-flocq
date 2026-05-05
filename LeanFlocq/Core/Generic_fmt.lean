@@ -995,4 +995,69 @@ theorem exp_small_round_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_ex
   have : 0 < bpow beta (ex - 1) := bpow_gt_0 _ _
   linarith [hbounds.1]
 
+/-! ### `round_ZR` and `round_AW` under negation, abs, sign -/
+
+theorem round_ZR_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    round beta fexp Ztrunc (-x) = -round beta fexp Ztrunc x := by
+  unfold round
+  rw [scaled_mantissa_opp, cexp_opp, Ztrunc_opp]
+  exact F2R_Zopp _ _
+
+theorem round_AW_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    round beta fexp Zaway (-x) = -round beta fexp Zaway x := by
+  unfold round
+  rw [scaled_mantissa_opp, cexp_opp, Zaway_opp]
+  exact F2R_Zopp _ _
+
+theorem round_ZR_DN (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (Hx : 0 ≤ x) :
+    round beta fexp Ztrunc x = round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+  unfold round scaled_mantissa
+  rw [Ztrunc_floor (mul_nonneg Hx (bpow_ge_0 _ _))]
+
+theorem round_ZR_UP (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (Hx : x ≤ 0) :
+    round beta fexp Ztrunc x = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+  unfold round scaled_mantissa
+  rw [Ztrunc_ceil (mul_nonpos_of_nonpos_of_nonneg Hx (bpow_ge_0 _ _))]
+
+theorem round_AW_UP (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (Hx : 0 ≤ x) :
+    round beta fexp Zaway x = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+  unfold round Zaway
+  have h_sm_nn : 0 ≤ scaled_mantissa beta fexp x := mul_nonneg Hx (bpow_ge_0 _ _)
+  rw [if_neg (not_lt.mpr h_sm_nn)]
+
+theorem round_AW_DN (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (Hx : x ≤ 0) :
+    round beta fexp Zaway x = round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+  unfold round Zaway
+  by_cases h : scaled_mantissa beta fexp x < 0
+  · rw [if_pos h]
+  · have h_sm_np : scaled_mantissa beta fexp x ≤ 0 :=
+      mul_nonpos_of_nonpos_of_nonneg Hx (bpow_ge_0 _ _)
+    have h_sm_eq : scaled_mantissa beta fexp x = 0 := le_antisymm h_sm_np (not_lt.mp h)
+    rw [if_neg h, h_sm_eq]
+    show F2R (beta := beta) ⟨⌈(0 : ℝ)⌉, cexp beta fexp x⟩
+        = F2R (beta := beta) ⟨⌊(0 : ℝ)⌋, cexp beta fexp x⟩
+    simp
+
+theorem round_ZR_abs (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    round beta fexp Ztrunc |x| = |round beta fexp Ztrunc x| := by
+  rcases le_or_gt 0 x with hx | hx
+  · rw [abs_of_nonneg hx, abs_of_nonneg]
+    rw [show (0 : ℝ) = round beta fexp Ztrunc 0 from (round_0 beta fexp Ztrunc).symm]
+    exact round_le beta fexp hValid Ztrunc hx
+  · rw [abs_of_neg hx, round_ZR_opp]
+    rw [abs_of_nonpos]
+    rw [show (0 : ℝ) = round beta fexp Ztrunc 0 from (round_0 beta fexp Ztrunc).symm]
+    exact round_le beta fexp hValid Ztrunc (le_of_lt hx)
+
+theorem round_AW_abs (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    round beta fexp Zaway |x| = |round beta fexp Zaway x| := by
+  rcases le_or_gt 0 x with hx | hx
+  · rw [abs_of_nonneg hx, abs_of_nonneg]
+    rw [show (0 : ℝ) = round beta fexp Zaway 0 from (round_0 beta fexp Zaway).symm]
+    exact round_le beta fexp hValid Zaway hx
+  · rw [abs_of_neg hx, round_AW_opp]
+    rw [abs_of_nonpos]
+    rw [show (0 : ℝ) = round beta fexp Zaway 0 from (round_0 beta fexp Zaway).symm]
+    exact round_le beta fexp hValid Zaway (le_of_lt hx)
+
 end LeanFlocq

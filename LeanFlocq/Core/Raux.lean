@@ -161,6 +161,15 @@ theorem Zaway_intCast (n : ℤ) : Zaway (n : ℝ) = n := by
   · rw [if_pos h, Int.floor_intCast]
   · rw [if_neg h, Int.ceil_intCast]
 
+theorem Zaway_opp (x : ℝ) : Zaway (-x) = -Zaway x := by
+  unfold Zaway
+  by_cases h : x < 0
+  · rw [if_pos h, if_neg (by linarith : ¬(-x) < 0), Int.ceil_neg]
+  · by_cases h0 : x = 0
+    · rw [h0]; simp
+    · have hpos : 0 < x := lt_of_le_of_ne (not_lt.mp h) (Ne.symm h0)
+      rw [if_pos (by linarith : -x < 0), if_neg h, Int.floor_neg]
+
 theorem Ztrunc_abs (x : ℝ) : Ztrunc |x| = |Ztrunc x| := by
   rw [Ztrunc_floor (abs_nonneg x)]
   by_cases h : x < 0
