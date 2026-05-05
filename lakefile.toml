@@ -1,0 +1,10 @@
+name = "LeanFlocq"
+defaultTargets = ["LeanFlocq"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+version = "git#v4.25.0"
+
+[[lean_lib]]
+name = "LeanFlocq"
