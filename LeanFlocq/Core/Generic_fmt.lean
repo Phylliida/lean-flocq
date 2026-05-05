@@ -255,6 +255,65 @@ theorem generic_format_F2R' (beta : radix) (fexp : ℤ → ℤ) {x : ℝ}
   intro hm
   exact h2 (F2R_neq_0 ⟨m, e⟩ hm)
 
+/-! ### Subnormal regime: mantissa is small -/
+
+/-- For a positive `x` in `[β^(ex-1), β^ex)` and `ex ≤ fexp ex` (subnormal
+regime), the scaled value `x · β^(-fexp ex)` lies strictly in `(0, 1)`. -/
+theorem mantissa_small_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
+    (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex)
+    (He : ex ≤ fexp ex) :
+    0 < x * bpow beta (-fexp ex) ∧ x * bpow beta (-fexp ex) < 1 := by
+  have hxpos : 0 < x := lt_of_lt_of_le (bpow_gt_0 beta (ex - 1)) Hx.1
+  refine ⟨mul_pos hxpos (bpow_gt_0 beta _), ?_⟩
+  have h_bp : bpow beta ex ≤ bpow beta (fexp ex) := bpow_le beta He
+  have eq1 : bpow beta (fexp ex) * bpow beta (-fexp ex) = 1 := by
+    rw [← bpow_plus, show (fexp ex + -fexp ex) = 0 from by ring, bpow_zero]
+  have step1 : x * bpow beta (-fexp ex) < bpow beta ex * bpow beta (-fexp ex) :=
+    mul_lt_mul_of_pos_right Hx.2 (bpow_gt_0 beta _)
+  have step2 : bpow beta ex * bpow beta (-fexp ex)
+      ≤ bpow beta (fexp ex) * bpow beta (-fexp ex) :=
+    mul_le_mul_of_nonneg_right h_bp (bpow_ge_0 beta _)
+  linarith
+
+/-- In the subnormal regime, the floor of the scaled mantissa is 0. -/
+theorem mantissa_DN_small_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
+    (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex)
+    (He : ex ≤ fexp ex) :
+    ⌊x * bpow beta (-fexp ex)⌋ = 0 := by
+  have H := mantissa_small_pos beta fexp Hx He
+  rw [Int.floor_eq_iff]
+  refine ⟨?_, ?_⟩
+  · push_cast; linarith [H.1]
+  · push_cast; linarith [H.2]
+
+/-- In the subnormal regime, the ceiling of the scaled mantissa is 1. -/
+theorem mantissa_UP_small_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
+    (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex)
+    (He : ex ≤ fexp ex) :
+    ⌈x * bpow beta (-fexp ex)⌉ = 1 := by
+  have H := mantissa_small_pos beta fexp Hx He
+  rw [Int.ceil_eq_iff]
+  refine ⟨?_, ?_⟩
+  · push_cast; linarith [H.1]
+  · push_cast; linarith [H.2]
+
+/-! ### Canonical floats are in the format -/
+
+theorem generic_format_canonical (beta : radix) (fexp : ℤ → ℤ) {f : float beta}
+    (Hf : canonical beta fexp f) : generic_format beta fexp (F2R f) := by
+  obtain ⟨m, e⟩ := f
+  unfold canonical at Hf
+  simp only at Hf
+  unfold generic_format scaled_mantissa
+  -- F2R ⟨m, e⟩ * bpow (-cexp (F2R ⟨m, e⟩)) — but cexp = e via Hf
+  rw [← Hf]
+  -- Goal: F2R ⟨m, e⟩ = F2R ⟨Ztrunc (F2R ⟨m, e⟩ * bpow (-e)), e⟩
+  apply F2R_eq
+  -- Need: m = Ztrunc (F2R ⟨m, e⟩ * bpow (-e))
+  show m = Ztrunc (((m : ℝ) * bpow beta e) * bpow beta (-e))
+  rw [mul_assoc, ← bpow_plus, show (e + -e) = 0 from by ring, bpow_zero, mul_one]
+  rw [Ztrunc_intCast]
+
 /-! ### Canonical exponent equals fexp on tight bounds -/
 
 theorem cexp_fexp (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex : ℤ}
