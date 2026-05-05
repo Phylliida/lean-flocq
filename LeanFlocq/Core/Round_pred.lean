@@ -43,7 +43,21 @@ def Rnd_NG (F : ℝ → Prop) (P : ℝ → ℝ → Prop) (rnd : ℝ → ℝ) : P
 def Rnd_NA (F : ℝ → Prop) (rnd : ℝ → ℝ) : Prop :=
   ∀ x, Rnd_NA_pt F x (rnd x)
 
-/-! ### Uniqueness from monotonicity -/
+/-! ### Existence and uniqueness -/
+
+/-- Total + monotone gives a chosen value. (Coq's version constructs the
+sup of `{f | rnd x f}`; in Lean classical choice suffices.) -/
+noncomputable def round_val_of_pred
+    (rnd : ℝ → ℝ → Prop) (h : round_pred rnd) (x : ℝ) :
+    {f // rnd x f} :=
+  ⟨Classical.choose (h.1 x), Classical.choose_spec (h.1 x)⟩
+
+/-- A rounding function exists for any total + monotone predicate. -/
+noncomputable def round_fun_of_pred
+    (rnd : ℝ → ℝ → Prop) (h : round_pred rnd) :
+    {f : ℝ → ℝ // ∀ x, rnd x (f x)} :=
+  ⟨fun x => (round_val_of_pred rnd h x).val,
+   fun x => (round_val_of_pred rnd h x).property⟩
 
 theorem round_unique (rnd : ℝ → ℝ → Prop) (Hr : round_pred_monotone rnd)
     {x f1 f2 : ℝ} (h1 : rnd x f1) (h2 : rnd x f2) : f1 = f2 :=
