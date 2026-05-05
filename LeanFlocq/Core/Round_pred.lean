@@ -544,6 +544,47 @@ theorem Rnd_NA_unique (F : ℝ → Prop) (HF : F 0)
     rnd1 x = rnd2 x :=
   Rnd_NA_pt_unique F HF (h1 x) (h2 x)
 
+/-! ### Misc -/
+
+/-- A monotone rounding predicate fixing 0 cannot send a non-negative input
+to a negative output. -/
+theorem round_pred_lt_0 (P : ℝ → ℝ → Prop) (HP : round_pred_monotone P)
+    (HP0 : P 0 0) {x f : ℝ} (Hxf : P x f) (Hf : f < 0) : x < 0 := by
+  by_contra hx
+  push_neg at hx
+  have : 0 ≤ f := HP 0 x 0 f HP0 Hxf hx
+  linarith
+
+/-- Rounding-down depends only on which formats agree on `[a, b]`. -/
+theorem Rnd_DN_pt_equiv_format (F1 F2 : ℝ → Prop) (a b : ℝ) (Ha : F1 a)
+    (HF : ∀ y, a ≤ y → y ≤ b → (F1 y ↔ F2 y))
+    {x f : ℝ} (Hxa : a ≤ x) (Hxb : x ≤ b)
+    (h : Rnd_DN_pt F1 x f) : Rnd_DN_pt F2 x f := by
+  obtain ⟨H1, H2, H3⟩ := h
+  have haf : a ≤ f := H3 a Ha Hxa
+  have hfb : f ≤ b := le_trans H2 Hxb
+  refine ⟨(HF f haf hfb).mp H1, H2, ?_⟩
+  intro k Hk Hkx
+  rcases le_or_gt a k with H | H
+  · have hkb : k ≤ b := le_trans Hkx Hxb
+    exact H3 k ((HF k H hkb).mpr Hk) Hkx
+  · linarith
+
+/-- Rounding-up depends only on which formats agree on `[a, b]`. -/
+theorem Rnd_UP_pt_equiv_format (F1 F2 : ℝ → Prop) (a b : ℝ) (Hb : F1 b)
+    (HF : ∀ y, a ≤ y → y ≤ b → (F1 y ↔ F2 y))
+    {x f : ℝ} (Hxa : a ≤ x) (Hxb : x ≤ b)
+    (h : Rnd_UP_pt F1 x f) : Rnd_UP_pt F2 x f := by
+  obtain ⟨H1, H2, H3⟩ := h
+  have hfb : f ≤ b := H3 b Hb Hxb
+  have haf : a ≤ f := le_trans Hxa H2
+  refine ⟨(HF f haf hfb).mp H1, H2, ?_⟩
+  intro k Hk Hkx
+  rcases le_or_gt k b with H | H
+  · have hak : a ≤ k := le_trans Hxa Hkx
+    exact H3 k ((HF k hak H).mpr Hk) Hkx
+  · linarith
+
 /-- Round-toward-zero is monotone, given `F 0`. -/
 theorem Rnd_ZR_pt_monotone (F : ℝ → Prop) (F0 : F 0) :
     round_pred_monotone (Rnd_ZR_pt F) := by
