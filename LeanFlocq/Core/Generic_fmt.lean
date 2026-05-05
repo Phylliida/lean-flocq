@@ -1270,4 +1270,63 @@ theorem Znearest_le_ceil (choice : ℤ → Bool) (x : ℝ) :
     exact_mod_cast le_trans h1 h2
   · rw [H]
 
+instance valid_rnd_N (choice : ℤ → Bool) : Valid_rnd (Znearest choice) where
+  Zrnd_le := by
+    intro x y Hxy
+    rcases le_or_gt (⌈x⌉ : ℝ) y with H | H
+    · -- ⌈x⌉ ≤ y: chain through floor
+      calc Znearest choice x
+          ≤ ⌈x⌉ := Znearest_le_ceil choice x
+        _ ≤ ⌊y⌋ := Int.le_floor.mpr H
+        _ ≤ Znearest choice y := Znearest_ge_floor choice y
+    · -- y < ⌈x⌉: ⌊y⌋ = ⌊x⌋ and we case-split on x's fractional
+      have hf_eq : ⌊y⌋ = ⌊x⌋ := by
+        have hcf : (⌈x⌉ : ℝ) ≤ ⌊x⌋ + 1 := by
+          exact_mod_cast Int.ceil_le_floor_add_one x
+        have h_y_lt : y < ((⌊x⌋ + 1 : ℤ) : ℝ) := by push_cast; linarith
+        have h_le : ⌊y⌋ ≤ ⌊x⌋ :=
+          Int.lt_add_one_iff.mp (Int.floor_lt.mpr h_y_lt)
+        have h_ge : ⌊x⌋ ≤ ⌊y⌋ := Int.floor_le_floor Hxy
+        omega
+      have hfx_le_fy : x - ⌊x⌋ ≤ y - ⌊y⌋ := by rw [hf_eq]; linarith
+      unfold Znearest
+      rcases lt_trichotomy (x - (⌊x⌋ : ℝ)) (1/2) with hfx | hfx | hfx
+      · -- fx < 1/2
+        rw [if_pos hfx, show ⌊x⌋ = ⌊y⌋ from hf_eq.symm]
+        exact Znearest_ge_floor choice y
+      · -- fx = 1/2
+        rw [if_neg (by linarith : ¬ x - (⌊x⌋ : ℝ) < 1/2),
+            if_neg (by linarith : ¬ 1/2 < x - (⌊x⌋ : ℝ))]
+        have hfy_ge : (1/2 : ℝ) ≤ y - ⌊y⌋ := by linarith [hfx_le_fy]
+        rcases eq_or_lt_of_le hfy_ge with hfy_eq | hfy_gt
+        · -- fy = 1/2 → x = y; reduce RHS too
+          have hxy_eq : x = y := by
+            have h_eq : x - (⌊x⌋ : ℝ) = y - ⌊y⌋ := by linarith
+            rw [hf_eq] at h_eq; linarith
+          rw [if_neg (by linarith : ¬ y - (⌊y⌋ : ℝ) < 1/2),
+              if_neg (by linarith : ¬ 1/2 < y - (⌊y⌋ : ℝ))]
+          rw [hxy_eq]
+        · -- fy > 1/2: Znearest y = ⌈y⌉
+          rw [if_neg (by linarith : ¬ y - (⌊y⌋ : ℝ) < 1/2), if_pos hfy_gt]
+          have h_ceil_le : ⌈x⌉ ≤ ⌈y⌉ := Int.ceil_le_ceil Hxy
+          have h_floor_le_ceil : ⌊x⌋ ≤ ⌈x⌉ := by
+            have h1 : (⌊x⌋ : ℝ) ≤ x := Int.floor_le x
+            have h2 : x ≤ (⌈x⌉ : ℝ) := Int.le_ceil x
+            exact_mod_cast le_trans h1 h2
+          split_ifs
+          · exact h_ceil_le
+          · exact le_trans h_floor_le_ceil h_ceil_le
+      · -- fx > 1/2
+        rw [if_neg (by linarith : ¬ x - (⌊x⌋ : ℝ) < 1/2), if_pos hfx]
+        have hfy_gt : 1/2 < y - (⌊y⌋ : ℝ) := by linarith [hfx_le_fy]
+        rw [if_neg (by linarith : ¬ y - (⌊y⌋ : ℝ) < 1/2), if_pos hfy_gt]
+        exact Int.ceil_le_ceil Hxy
+  Zrnd_intCast := by
+    intro n
+    show Znearest choice (n : ℝ) = n
+    unfold Znearest
+    have h : (n : ℝ) - ⌊(n : ℝ)⌋ < 1/2 := by
+      rw [Int.floor_intCast]; norm_num
+    rw [if_pos h, Int.floor_intCast]
+
 end LeanFlocq
