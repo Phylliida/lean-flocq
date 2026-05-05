@@ -297,6 +297,25 @@ theorem mantissa_UP_small_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex 
   · push_cast; linarith [H.1]
   · push_cast; linarith [H.2]
 
+/-! ### No representable values strictly between adjacent mantissas -/
+
+/-- If `x` lies strictly between `F2R ⟨m, cexp x⟩` and `F2R ⟨m+1, cexp x⟩`,
+then `x` cannot be in the format. -/
+theorem generic_format_discrete (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (m : ℤ)
+    (Hx : F2R (beta := beta) ⟨m, cexp beta fexp x⟩ < x ∧
+          x < F2R (beta := beta) ⟨m + 1, cexp beta fexp x⟩) :
+    ¬ generic_format beta fexp x := by
+  intro Hf
+  set e := cexp beta fexp x
+  set z := Ztrunc (scaled_mantissa beta fexp x)
+  have h1 : F2R (beta := beta) ⟨m, e⟩ < F2R (beta := beta) ⟨z, e⟩ := by
+    rw [show F2R (beta := beta) ⟨z, e⟩ = x from Hf.symm]; exact Hx.1
+  have h2 : F2R (beta := beta) ⟨z, e⟩ < F2R (beta := beta) ⟨m + 1, e⟩ := by
+    rw [show F2R (beta := beta) ⟨z, e⟩ = x from Hf.symm]; exact Hx.2
+  have hmz : m < z := lt_F2R h1
+  have hzm : z < m + 1 := lt_F2R h2
+  omega
+
 /-! ### Canonical floats are in the format -/
 
 theorem generic_format_canonical (beta : radix) (fexp : ℤ → ℤ) {f : float beta}
@@ -313,6 +332,22 @@ theorem generic_format_canonical (beta : radix) (fexp : ℤ → ℤ) {f : float 
   show m = Ztrunc (((m : ℝ) * bpow beta e) * bpow beta (-e))
   rw [mul_assoc, ← bpow_plus, show (e + -e) = 0 from by ring, bpow_zero, mul_one]
   rw [Ztrunc_intCast]
+
+/-- A positive value in the format is at least `bpow emin` whenever `emin`
+is a uniform lower bound for `fexp`. -/
+theorem generic_format_ge_bpow (beta : radix) (fexp : ℤ → ℤ) (emin : ℤ)
+    (Emin : ∀ e : ℤ, emin ≤ fexp e) {x : ℝ}
+    (Hx : 0 < x) (Fx : generic_format beta fexp x) : bpow beta emin ≤ x := by
+  set z := Ztrunc (scaled_mantissa beta fexp x)
+  set e := cexp beta fexp x
+  have hz_pos : 0 < z := by
+    apply gt_0_F2R (beta := beta) (e := e)
+    rw [show F2R (beta := beta) ⟨z, e⟩ = x from Fx.symm]
+    exact Hx
+  rw [Fx]
+  calc bpow beta emin
+      ≤ bpow beta (fexp (mag beta x)) := bpow_le beta (Emin _)
+    _ ≤ F2R (beta := beta) ⟨z, e⟩ := bpow_le_F2R hz_pos
 
 /-! ### Canonical exponent equals fexp on tight bounds -/
 
