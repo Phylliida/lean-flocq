@@ -536,4 +536,104 @@ theorem round_ext (beta : radix) (fexp : ℤ → ℤ) {rnd1 rnd2 : ℝ → ℤ}
   unfold round
   rw [Hext]
 
+/-- In the "large" regime (`fexp ex < ex`), if `x ∈ [β^(ex-1), β^ex)`,
+then `round x ∈ [β^(ex-1), β^ex]`. -/
+theorem round_bounded_large_pos (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ)
+    [Valid_rnd rnd] {x : ℝ} {ex : ℤ} (He : fexp ex < ex)
+    (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex) :
+    bpow beta (ex - 1) ≤ round beta fexp rnd x ∧
+    round beta fexp rnd x ≤ bpow beta ex := by
+  unfold round scaled_mantissa
+  rw [cexp_fexp_pos beta fexp Hx]
+  set s := x * bpow beta (-fexp ex) with hs_def
+  have hd1 : 0 ≤ ex - 1 - fexp ex := by omega
+  have hd2 : 0 ≤ ex - fexp ex := by omega
+  have hβ_fexp : 0 < bpow beta (fexp ex) := bpow_gt_0 _ _
+  have hβ_neg : 0 < bpow beta (-fexp ex) := bpow_gt_0 _ _
+  have h_xs : s * bpow beta (fexp ex) = x := by
+    show x * bpow beta (-fexp ex) * bpow beta (fexp ex) = x
+    rw [mul_assoc, ← bpow_plus, show -fexp ex + fexp ex = 0 from by ring,
+        bpow_zero, mul_one]
+  have hs_low : bpow beta (ex - 1 - fexp ex) ≤ s := by
+    have h1 : bpow beta (ex - 1) * bpow beta (-fexp ex) ≤ s :=
+      mul_le_mul_of_nonneg_right Hx.1 (bpow_ge_0 _ _)
+    rwa [← bpow_plus, show ex - 1 + -fexp ex = ex - 1 - fexp ex from by ring] at h1
+  have hs_high : s < bpow beta (ex - fexp ex) := by
+    have h1 : s < bpow beta ex * bpow beta (-fexp ex) :=
+      mul_lt_mul_of_pos_right Hx.2 hβ_neg
+    rwa [← bpow_plus, show ex + -fexp ex = ex - fexp ex from by ring] at h1
+  have h_pow_low_eq : bpow beta (ex - 1 - fexp ex)
+      = ((beta.val ^ (ex - 1 - fexp ex).toNat : ℤ) : ℝ) := (IZR_Zpower beta hd1).symm
+  have h_pow_high_eq : bpow beta (ex - fexp ex)
+      = ((beta.val ^ (ex - fexp ex).toNat : ℤ) : ℝ) := (IZR_Zpower beta hd2).symm
+  rcases Zrnd_DN_or_UP rnd s with Hr | Hr
+  · -- DN case
+    rw [Hr]
+    refine ⟨?_, ?_⟩
+    · show bpow beta (ex - 1) ≤ ((⌊s⌋ : ℤ) : ℝ) * bpow beta (fexp ex)
+      have h_int : (beta.val ^ (ex - 1 - fexp ex).toNat : ℤ) ≤ ⌊s⌋ := by
+        apply Int.le_floor.mpr
+        rw [← h_pow_low_eq]; exact hs_low
+      have h_real : ((beta.val ^ (ex - 1 - fexp ex).toNat : ℤ) : ℝ) ≤ ((⌊s⌋ : ℤ) : ℝ) := by
+        exact_mod_cast h_int
+      rw [show bpow beta (ex - 1) = bpow beta (ex - 1 - fexp ex) * bpow beta (fexp ex) from by
+        rw [← bpow_plus]; congr 1; ring]
+      rw [h_pow_low_eq]
+      exact mul_le_mul_of_nonneg_right h_real hβ_fexp.le
+    · show ((⌊s⌋ : ℤ) : ℝ) * bpow beta (fexp ex) ≤ bpow beta ex
+      calc ((⌊s⌋ : ℤ) : ℝ) * bpow beta (fexp ex)
+          ≤ s * bpow beta (fexp ex) :=
+            mul_le_mul_of_nonneg_right (Int.floor_le s) hβ_fexp.le
+        _ = x := h_xs
+        _ ≤ bpow beta ex := Hx.2.le
+  · -- UP case
+    rw [Hr]
+    refine ⟨?_, ?_⟩
+    · show bpow beta (ex - 1) ≤ ((⌈s⌉ : ℤ) : ℝ) * bpow beta (fexp ex)
+      calc bpow beta (ex - 1)
+          ≤ x := Hx.1
+        _ = s * bpow beta (fexp ex) := h_xs.symm
+        _ ≤ ((⌈s⌉ : ℤ) : ℝ) * bpow beta (fexp ex) :=
+            mul_le_mul_of_nonneg_right (Int.le_ceil s) hβ_fexp.le
+    · show ((⌈s⌉ : ℤ) : ℝ) * bpow beta (fexp ex) ≤ bpow beta ex
+      have h_int : ⌈s⌉ ≤ (beta.val ^ (ex - fexp ex).toNat : ℤ) := by
+        apply Int.ceil_le.mpr
+        rw [← h_pow_high_eq]; exact hs_high.le
+      have h_real : ((⌈s⌉ : ℤ) : ℝ) ≤ ((beta.val ^ (ex - fexp ex).toNat : ℤ) : ℝ) := by
+        exact_mod_cast h_int
+      rw [show bpow beta ex = bpow beta (ex - fexp ex) * bpow beta (fexp ex) from by
+        rw [← bpow_plus]; congr 1; ring]
+      rw [h_pow_high_eq]
+      exact mul_le_mul_of_nonneg_right h_real hβ_fexp.le
+
+/-- In the "small" regime (`ex ≤ fexp ex`), `round x` is either `0` or `β^(fexp ex)`. -/
+theorem round_bounded_small_pos (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ)
+    [Valid_rnd rnd] {x : ℝ} {ex : ℤ} (He : ex ≤ fexp ex)
+    (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex) :
+    round beta fexp rnd x = 0 ∨ round beta fexp rnd x = bpow beta (fexp ex) := by
+  unfold round scaled_mantissa
+  rw [cexp_fexp_pos beta fexp Hx]
+  set s := x * bpow beta (-fexp ex)
+  rcases Zrnd_DN_or_UP rnd s with Hr | Hr
+  · left
+    rw [Hr]
+    have h_floor_zero : ⌊s⌋ = 0 := mantissa_DN_small_pos beta fexp Hx He
+    show ((⌊s⌋ : ℤ) : ℝ) * bpow beta (fexp ex) = 0
+    rw [h_floor_zero]; push_cast; ring
+  · right
+    rw [Hr]
+    have h_ceil_one : ⌈s⌉ = 1 := mantissa_UP_small_pos beta fexp Hx He
+    show ((⌈s⌉ : ℤ) : ℝ) * bpow beta (fexp ex) = bpow beta (fexp ex)
+    rw [h_ceil_one]; push_cast; ring
+
+/-- If `round x = 0` and `x ∈ [β^(ex-1), β^ex)`, then `ex ≤ fexp ex` (subnormal). -/
+theorem exp_small_round_0_pos (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x : ℝ} {ex : ℤ} (Hx : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex)
+    (H1 : round beta fexp rnd x = 0) : ex ≤ fexp ex := by
+  by_contra hgt
+  push_neg at hgt
+  have hbounds := round_bounded_large_pos beta fexp rnd hgt Hx
+  have : 0 < bpow beta (ex - 1) := bpow_gt_0 _ _
+  linarith [hbounds.1, H1]
+
 end LeanFlocq
