@@ -719,4 +719,30 @@ theorem generic_format_round_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : V
       show cexp beta fexp (round beta fexp rnd x) ≤ cexp beta fexp x
       rw [cexp_fexp_pos beta fexp ⟨Hr1, Hr⟩, cexp_fexp_pos beta fexp ⟨h_low, h_high⟩]
 
+/-! ### Negation: derived rounding via `-rnd(-x)` -/
+
+/-- The negation-derived rounding: `Zrnd_opp x = -(rnd (-x))`. -/
+noncomputable def Zrnd_opp (rnd : ℝ → ℤ) (x : ℝ) : ℤ := -(rnd (-x))
+
+/-- `Zrnd_opp` is valid when `rnd` is. -/
+instance valid_rnd_opp (rnd : ℝ → ℤ) [hv : Valid_rnd rnd] : Valid_rnd (Zrnd_opp rnd) where
+  Zrnd_le := by
+    intro x y Hxy
+    unfold Zrnd_opp
+    have := hv.Zrnd_le (-y) (-x) (by linarith)
+    omega
+  Zrnd_intCast := by
+    intro n
+    unfold Zrnd_opp
+    have h : ((-n : ℤ) : ℝ) = -(n : ℝ) := by push_cast; rfl
+    rw [show (-(n : ℝ)) = ((-n : ℤ) : ℝ) from h.symm, hv.Zrnd_intCast]
+    omega
+
+/-- `round rnd (-x) = -round (Zrnd_opp rnd) x`. -/
+theorem round_opp (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℤ) (x : ℝ) :
+    round beta fexp rnd (-x) = -round beta fexp (Zrnd_opp rnd) x := by
+  unfold round Zrnd_opp
+  rw [scaled_mantissa_opp, cexp_opp, F2R_Zopp]
+  ring
+
 end LeanFlocq

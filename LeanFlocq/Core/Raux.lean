@@ -124,6 +124,43 @@ theorem Ztrunc_opp (x : ℝ) : Ztrunc (-x) = -Ztrunc x := by
 noncomputable def Zaway (x : ℝ) : ℤ :=
   if x < 0 then ⌊x⌋ else ⌈x⌉
 
+theorem Ztrunc_le {x y : ℝ} (Hxy : x ≤ y) : Ztrunc x ≤ Ztrunc y := by
+  unfold Ztrunc
+  by_cases Hx : x < 0
+  · rw [if_pos Hx]
+    by_cases Hy : y < 0
+    · rw [if_pos Hy]; exact Int.ceil_le_ceil Hxy
+    · rw [if_neg Hy]
+      have h1 : ⌈x⌉ ≤ 0 := Int.ceil_le.mpr (by push_cast; linarith)
+      have h2 : (0 : ℤ) ≤ ⌊y⌋ := Int.floor_nonneg.mpr (not_lt.mp Hy)
+      linarith
+  · rw [if_neg Hx]
+    have Hy : ¬ y < 0 := fun h => Hx (lt_of_le_of_lt Hxy h)
+    rw [if_neg Hy]
+    exact Int.floor_le_floor Hxy
+
+theorem Zaway_le {x y : ℝ} (Hxy : x ≤ y) : Zaway x ≤ Zaway y := by
+  unfold Zaway
+  by_cases Hx : x < 0
+  · rw [if_pos Hx]
+    by_cases Hy : y < 0
+    · rw [if_pos Hy]; exact Int.floor_le_floor Hxy
+    · rw [if_neg Hy]
+      have h1 : ⌊x⌋ ≤ 0 := by
+        have := Int.floor_le_floor (le_of_lt Hx : x ≤ 0); simpa using this
+      have h2 : (0 : ℤ) ≤ ⌈y⌉ := Int.ceil_nonneg (not_lt.mp Hy)
+      linarith
+  · rw [if_neg Hx]
+    have Hy : ¬ y < 0 := fun h => Hx (lt_of_le_of_lt Hxy h)
+    rw [if_neg Hy]
+    exact Int.ceil_le_ceil Hxy
+
+theorem Zaway_intCast (n : ℤ) : Zaway (n : ℝ) = n := by
+  unfold Zaway
+  by_cases h : (n : ℝ) < 0
+  · rw [if_pos h, Int.floor_intCast]
+  · rw [if_neg h, Int.ceil_intCast]
+
 theorem Ztrunc_abs (x : ℝ) : Ztrunc |x| = |Ztrunc x| := by
   rw [Ztrunc_floor (abs_nonneg x)]
   by_cases h : x < 0
