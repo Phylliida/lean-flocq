@@ -1232,4 +1232,42 @@ theorem scaled_mantissa_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_e
   rw [mul_assoc, ← bpow_plus, show (cexp beta fexp x + -cexp beta fexp x) = 0 from by ring,
       bpow_zero, mul_one]
 
+/-! ### Round to nearest with tie-breaking: `Znearest` -/
+
+/-- `Znearest choice x` rounds to nearest, breaking ties by `choice ⌊x⌋`:
+- if `x - ⌊x⌋ < 1/2`, return `⌊x⌋`;
+- if `x - ⌊x⌋ > 1/2`, return `⌈x⌉`;
+- otherwise (tie at `1/2`), return `⌈x⌉` if `choice ⌊x⌋ = true`, else `⌊x⌋`. -/
+noncomputable def Znearest (choice : ℤ → Bool) (x : ℝ) : ℤ :=
+  if x - ⌊x⌋ < 1/2 then ⌊x⌋
+  else if 1/2 < x - ⌊x⌋ then ⌈x⌉
+  else if choice ⌊x⌋ then ⌈x⌉ else ⌊x⌋
+
+theorem Znearest_DN_or_UP (choice : ℤ → Bool) (x : ℝ) :
+    Znearest choice x = ⌊x⌋ ∨ Znearest choice x = ⌈x⌉ := by
+  unfold Znearest
+  split_ifs
+  · left; rfl
+  · right; rfl
+  · right; rfl
+  · left; rfl
+
+theorem Znearest_ge_floor (choice : ℤ → Bool) (x : ℝ) :
+    ⌊x⌋ ≤ Znearest choice x := by
+  rcases Znearest_DN_or_UP choice x with H | H
+  · rw [H]
+  · rw [H]
+    have h1 : (⌊x⌋ : ℝ) ≤ x := Int.floor_le x
+    have h2 : x ≤ (⌈x⌉ : ℝ) := Int.le_ceil x
+    exact_mod_cast le_trans h1 h2
+
+theorem Znearest_le_ceil (choice : ℤ → Bool) (x : ℝ) :
+    Znearest choice x ≤ ⌈x⌉ := by
+  rcases Znearest_DN_or_UP choice x with H | H
+  · rw [H]
+    have h1 : (⌊x⌋ : ℝ) ≤ x := Int.floor_le x
+    have h2 : x ≤ (⌈x⌉ : ℝ) := Int.le_ceil x
+    exact_mod_cast le_trans h1 h2
+  · rw [H]
+
 end LeanFlocq
