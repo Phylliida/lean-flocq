@@ -1507,6 +1507,65 @@ theorem generic_inclusion_lt_ge (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
   apply He
   refine ⟨mag_gt_bpow beta Hx.1, mag_le_bpow beta hxn Hx.2⟩
 
+theorem generic_inclusion (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (hValid1 : Valid_exp fexp1) (hValid2 : Valid_exp fexp2)
+    (e : ℤ) (He : fexp2 e ≤ fexp1 e)
+    {x : ℝ} (Hx : bpow beta (e - 1) ≤ |x| ∧ |x| ≤ bpow beta e)
+    (Fx : generic_format beta fexp1 x) :
+    generic_format beta fexp2 x := by
+  rcases lt_or_eq_of_le Hx.2 with Hx2_lt | Hx2_eq
+  · apply generic_inclusion_mag beta fexp1 fexp2 _ Fx
+    intro _hxn
+    rw [mag_unique beta Hx.1 Hx2_lt]
+    exact He
+  · apply generic_format_abs_inv
+    rw [Hx2_eq]
+    apply generic_format_bpow' beta fexp2 hValid2
+    apply le_trans He
+    apply generic_format_bpow_inv beta fexp1 hValid1
+    rw [← Hx2_eq]
+    exact generic_format_abs beta fexp1 Fx
+
+theorem generic_inclusion_ge (beta : radix) (fexp1 fexp2 : ℤ → ℤ) (e1 : ℤ)
+    (He : ∀ e : ℤ, e1 < e → fexp2 e ≤ fexp1 e)
+    {x : ℝ} (Hx : bpow beta e1 ≤ |x|)
+    (Fx : generic_format beta fexp1 x) :
+    generic_format beta fexp2 x := by
+  apply generic_inclusion_mag beta fexp1 fexp2 _ Fx
+  intro _hxn
+  exact He _ (mag_gt_bpow beta Hx)
+
+theorem generic_inclusion_le (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (hValid1 : Valid_exp fexp1) (hValid2 : Valid_exp fexp2) (e2 : ℤ)
+    (He : ∀ e : ℤ, e ≤ e2 → fexp2 e ≤ fexp1 e)
+    {x : ℝ} (Hx : |x| ≤ bpow beta e2)
+    (Fx : generic_format beta fexp1 x) :
+    generic_format beta fexp2 x := by
+  rcases lt_or_eq_of_le Hx with Hx_lt | Hx_eq
+  · apply generic_inclusion_mag beta fexp1 fexp2 _ Fx
+    intro hxn
+    exact He _ (mag_le_bpow beta hxn Hx_lt)
+  · apply generic_inclusion beta fexp1 fexp2 hValid1 hValid2 e2 (He _ (le_refl _))
+      _ Fx
+    refine ⟨?_, Hx⟩
+    rw [Hx_eq]
+    exact bpow_le beta (by omega : e2 - 1 ≤ e2)
+
+theorem generic_inclusion_le_ge (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (hValid1 : Valid_exp fexp1) (hValid2 : Valid_exp fexp2) (e1 e2 : ℤ)
+    (He' : e1 < e2)
+    (He : ∀ e : ℤ, e1 < e ∧ e ≤ e2 → fexp2 e ≤ fexp1 e)
+    {x : ℝ} (Hx : bpow beta e1 ≤ |x| ∧ |x| ≤ bpow beta e2)
+    (Fx : generic_format beta fexp1 x) :
+    generic_format beta fexp2 x := by
+  rcases lt_or_eq_of_le Hx.2 with Hx2_lt | Hx2_eq
+  · exact generic_inclusion_lt_ge beta fexp1 fexp2 e1 e2 He ⟨Hx.1, Hx2_lt⟩ Fx
+  · apply generic_inclusion beta fexp1 fexp2 hValid1 hValid2 e2
+      (He _ ⟨He', le_refl _⟩) _ Fx
+    refine ⟨?_, Hx.2⟩
+    rw [Hx2_eq]
+    exact bpow_le beta (by omega : e2 - 1 ≤ e2)
+
 /-- The Znearest-rounded value is a Rnd_N_pt of the generic format. -/
 theorem round_N_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     (choice : ℤ → Bool) (x : ℝ) :
