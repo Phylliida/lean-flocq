@@ -1147,4 +1147,36 @@ theorem succ_le_lt_aux (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp f
       round_generic beta fexp _ Fy
     linarith [h1, h2]
 
+/-- For positive `x` in F and `0 < eps ≤ ulp x`, `round_UP (x + eps) = x + ulp x`.
+A small step up reaches the next representable value exactly. -/
+theorem round_UP_plus_eps_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_pos : 0 < eps) (heps_le : eps ≤ ulp beta fexp x) :
+    round beta fexp (fun y : ℝ => ⌈y⌉) (x + eps) = x + ulp beta fexp x := by
+  rcases lt_or_eq_of_le heps_le with heps_lt | heps_eq
+  · -- eps < ulp x: x + eps is strictly between x and x + ulp x, hence not in F.
+    have heps_nn : 0 ≤ eps := le_of_lt heps_pos
+    have hd : round beta fexp (fun y : ℝ => ⌊y⌋) (x + eps) = x :=
+      round_DN_plus_eps_pos beta fexp hValid (le_of_lt hx) Fx heps_nn heps_lt
+    have h_not_F : ¬ generic_format beta fexp (x + eps) := by
+      intro Fxe
+      have h_dn_eq : round beta fexp (fun y : ℝ => ⌊y⌋) (x + eps) = x + eps :=
+        round_generic beta fexp _ Fxe
+      linarith
+    rw [round_UP_DN_ulp beta fexp h_not_F, hd]
+    -- ulp (x + eps) = ulp x via mag_plus_eps.
+    have h_ulp_eq : ulp beta fexp (x + eps) = ulp beta fexp x := by
+      have h_xeps_pos : 0 < x + eps := by linarith
+      have h_xeps_ne : x + eps ≠ 0 := ne_of_gt h_xeps_pos
+      have h_x_ne : x ≠ 0 := ne_of_gt hx
+      rw [ulp_neq_0 beta fexp h_xeps_ne, ulp_neq_0 beta fexp h_x_ne]
+      show bpow beta (cexp beta fexp (x + eps)) = bpow beta (cexp beta fexp x)
+      have h_mag_eq : mag beta (x + eps) = mag beta x :=
+        mag_plus_eps beta fexp hx Fx heps_nn heps_lt
+      unfold cexp; rw [h_mag_eq]
+    rw [h_ulp_eq]
+  · -- eps = ulp x: x + eps = x + ulp x ∈ F (succ_aux1), so round_UP is identity.
+    rw [heps_eq]
+    exact round_generic beta fexp _ (generic_format_succ_aux1 beta fexp hValid hx Fx)
+
 end LeanFlocq
