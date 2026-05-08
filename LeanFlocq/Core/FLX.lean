@@ -171,4 +171,17 @@ theorem gt_0_round_gt_0_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     have := eq_0_round_0_FLX beta prec hp rnd h.symm
     linarith
 
+/-- The ulp at `1` in FLX is `β^(1 - prec)`. -/
+theorem ulp_FLX_1 (beta : radix) (prec : ℤ) :
+    ulp beta (FLX_exp prec) 1 = bpow beta (1 - prec) := by
+  rw [ulp_neq_0 beta (FLX_exp prec) one_ne_zero]
+  show bpow beta (cexp beta (FLX_exp prec) 1) = bpow beta (1 - prec)
+  unfold cexp FLX_exp
+  rw [mag_1]
+
+/-- The successor of `1` in FLX is `1 + β^(1 - prec)`. -/
+theorem succ_FLX_1 (beta : radix) (prec : ℤ) :
+    succ beta (FLX_exp prec) 1 = 1 + bpow beta (1 - prec) := by
+  rw [succ_eq_pos beta (FLX_exp prec) (zero_le_one), ulp_FLX_1]
+
 end LeanFlocq

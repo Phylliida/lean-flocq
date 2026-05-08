@@ -310,4 +310,9 @@ theorem mag_bpow (beta : radix) (e : ℤ) : mag beta (bpow beta e) = e + 1 := by
   · rw [abs_of_pos (bpow_gt_0 beta e)]
     exact bpow_lt beta (by omega : e < e + 1)
 
+/-- `mag β 1 = 1`. -/
+theorem mag_1 (beta : radix) : mag beta 1 = 1 := by
+  have := mag_bpow beta 0
+  rwa [bpow_zero] at this
+
 end LeanFlocq
