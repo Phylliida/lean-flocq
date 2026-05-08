@@ -4,10 +4,10 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `8f2a478`)
+## Status (as of commit `cdf1b67`)
 
-~3830 lines of Lean across 9 files. **0 `sorry`s.** All files build clean.
-Foundational + the four classical concrete formats:
+~4200 lines of Lean across 10 files. **0 `sorry`s.** All files build clean.
+Foundational + all four classical concrete formats:
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -20,6 +20,7 @@ Foundational + the four classical concrete formats:
 | `FIX.lean` | 66 | `Core/FIX.v` | **Complete** modulo `ulp_FIX` (needs `Ulp.v`). |
 | `FLX.lean` | 129 | `Core/FLX.v` | Core complete. Skipped: `FLXN_format`, `ulp_FLX_*`, `succ_FLX_*`, `Round_NE.v`-dependent. |
 | `FLT.lean` | 237 | `Core/FLT.v` | Core complete (13 thms). Skipped: `ulp_FLT_*`, `succ_FLT_exact_shift_*`, `Round_NE.v`-dependent. |
+| `FTZ.lean` | 367 | `Core/FTZ.v` | Core complete (9 thms): both format directions, `Zrnd_FTZ`, `round_FTZ_FLX`, `round_FTZ_small`. Skipped: `ulp_FTZ_0`, `FTZ_format_FLXN`. |
 
 ## Build setup
 
@@ -230,20 +231,20 @@ runtime computation.
 
 In rough order of usefulness:
 
-1. **`Core/FTZ.v`** — flush-to-zero format. The fourth classical format.
-   Like FLT but values below the threshold round to 0. Should be
-   tractable now that FIX/FLX/FLT are in place.
-
-2. **`Core/Ulp.v`** — unit in the last place. Unblocks all the `ulp_*`
+1. **`Core/Ulp.v`** — unit in the last place. Unblocks all the `ulp_*`
    theorems in FIX/FLX/FLT (currently skipped). Substantial — ulp depends
    on `negligible_exp` and the predecessor/successor functions.
 
-3. **`Core/Round_NE.v`** — round to nearest, ties to even. Builds on
+2. **`Core/Round_NE.v`** — round to nearest, ties to even. Builds on
    `Znearest` with a specific choice function. Now possible since
    `Znearest_opp`/`round_N_opp` are done.
 
-4. **`Core/IEEE754/Binary.v`** — the actual IEEE 754 binary formats.
+3. **`Core/IEEE754/Binary.v`** — the actual IEEE 754 binary formats.
    The destination of this whole port. Will need Ulp and Round_NE first.
+
+4. **`FLXN_format`** in `FLX.lean` — the normalized FLX variant. Small
+   but useful for some FTZ↔FLX bridges (`FTZ_format_FLXN`). Skipped to
+   keep FLX.lean trim.
 
 5. **Skipped `Float_prop.v` lemmas**: `Rcompare_F2R` (needs `Rcompare`),
    `F2R_cond_Zopp` (needs `cond_Zopp`), `F2R_prec_normalize`, the `mag_*`
