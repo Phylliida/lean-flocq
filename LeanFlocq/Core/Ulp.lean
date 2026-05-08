@@ -286,4 +286,61 @@ theorem id_m_ulp_ge_bpow (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {e : ℤ}
     rw [hx_eq, show m = 1 from hm_eq.symm]
     push_cast; ring
 
+/-! ### Format preservation under ulp steps -/
+
+/-- `ulp 0` is in the format. -/
+theorem generic_format_ulp_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) :
+    generic_format beta fexp (ulp beta fexp 0) := by
+  unfold ulp; rw [if_pos rfl]
+  cases h : negligible_exp fexp with
+  | none => exact generic_format_0 beta fexp
+  | some n =>
+    -- bpow (fexp n) is in the format because fexp (fexp n + 1) ≤ fexp n
+    -- (from Valid_exp's stabilization branch, since n ≤ fexp n).
+    apply generic_format_bpow beta fexp
+    have hn_le : n ≤ fexp n := negligible_exp_some h
+    exact ((hValid n).2 hn_le).1
+
+/-- For positive `x` in the format, `x + ulp x` is still in the format. -/
+theorem generic_format_succ_aux1 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x) :
+    generic_format beta fexp (x + ulp beta fexp x) := by
+  have hx_ne : x ≠ 0 := ne_of_gt hx
+  have h_low : bpow beta (mag beta x - 1) ≤ x := by
+    have := bpow_mag_le beta hx_ne
+    rwa [abs_of_pos hx] at this
+  have h_high : x < bpow beta (mag beta x) := by
+    have := bpow_mag_gt beta x
+    rwa [abs_of_pos hx] at this
+  -- id_p_ulp_le_bpow gives x + ulp x ≤ bpow (mag x).
+  have h_le := id_p_ulp_le_bpow beta fexp hx Fx h_high
+  rcases lt_or_eq_of_le h_le with h_lt | h_eq
+  · -- x + ulp x < bpow (mag x): same magnitude band, mantissa is m + 1.
+    set m := Ztrunc (scaled_mantissa beta fexp x)
+    set ce := cexp beta fexp x with hce_def
+    have hxe : x = F2R (beta := beta) ⟨m, ce⟩ := Fx
+    have h_sum_eq : x + ulp beta fexp x = F2R (beta := beta) ⟨m + 1, ce⟩ := by
+      rw [ulp_neq_0 beta fexp hx_ne]
+      show x + bpow beta ce = (↑(m + 1) : ℝ) * bpow beta ce
+      have hx_eq : x = (↑m : ℝ) * bpow beta ce := hxe
+      push_cast; linarith
+    rw [h_sum_eq]
+    apply generic_format_F2R beta fexp _ _
+    intro _
+    -- mag(x + ulp x) = mag x, so cexp(x + ulp x) = ce.
+    have h_mag_sum : mag beta (x + ulp beta fexp x) = mag beta x := by
+      apply mag_unique_pos beta
+      · linarith [ulp_ge_0 beta fexp x]
+      · exact h_lt
+    rw [show F2R (beta := beta) ⟨m + 1, ce⟩ = x + ulp beta fexp x from h_sum_eq.symm]
+    show cexp beta fexp (x + ulp beta fexp x) ≤ ce
+    have h_ce_unfold : ce = fexp (mag beta x) := hce_def
+    rw [h_ce_unfold]
+    unfold cexp
+    rw [h_mag_sum]
+  · -- x + ulp x = bpow (mag x): apply generic_format_bpow' (since fexp (mag x) < mag x).
+    rw [show x + ulp beta fexp x = bpow beta (mag beta x) from h_eq]
+    apply generic_format_bpow' beta fexp hValid
+    exact le_of_lt (mag_generic_gt beta fexp hValid hx_ne Fx)
+
 end LeanFlocq
