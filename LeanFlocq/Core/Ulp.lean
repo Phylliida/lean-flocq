@@ -1349,4 +1349,15 @@ theorem ulp_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
         exact (fexp_negligible_exp_eq hValid h_subnormal h_n_le).symm
   · rw [← hx_zero, round_0]
 
+/-- For `0 ≤ x ∉ F`, `succ(round_DN x) = round_UP x`. The successor of the
+down-rounded value is exactly the up-rounded value. -/
+theorem succ_DN_eq_UP_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 ≤ x) (Fx : ¬ generic_format beta fexp x) :
+    succ beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x)
+      = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+  have h_round_nn : 0 ≤ round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+    round_ge_generic beta fexp hValid _ (generic_format_0 beta fexp) hx
+  rw [succ_eq_pos beta fexp h_round_nn, ulp_DN beta fexp hValid hx]
+  exact (round_UP_DN_ulp beta fexp Fx).symm
+
 end LeanFlocq
