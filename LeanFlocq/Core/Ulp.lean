@@ -1360,4 +1360,35 @@ theorem succ_DN_eq_UP_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_ex
   rw [succ_eq_pos beta fexp h_round_nn, ulp_DN beta fexp hValid hx]
   exact (round_UP_DN_ulp beta fexp Fx).symm
 
+/-- For positive `x` in F, either `ulp` is preserved by `succ` or `succ x`
+hits the next power of `β` exactly. -/
+theorem ulp_succ_pos (beta : radix) (fexp : ℤ → ℤ)
+    {x : ℝ} (Fx : generic_format beta fexp x) (hx : 0 < x) :
+    ulp beta fexp (succ beta fexp x) = ulp beta fexp x
+      ∨ succ beta fexp x = bpow beta (mag beta x) := by
+  rw [succ_eq_pos beta fexp (le_of_lt hx)]
+  have hx_ne : x ≠ 0 := ne_of_gt hx
+  have h_high : x < bpow beta (mag beta x) := by
+    have := bpow_mag_gt beta x; rwa [abs_of_pos hx] at this
+  have h_low : bpow beta (mag beta x - 1) ≤ x := by
+    have := bpow_mag_le beta hx_ne; rwa [abs_of_pos hx] at this
+  have h_le : x + ulp beta fexp x ≤ bpow beta (mag beta x) :=
+    id_p_ulp_le_bpow beta fexp hx Fx h_high
+  rcases lt_or_eq_of_le h_le with h_lt | h_eq
+  · left
+    have h_x_plus_ulp_pos : 0 < x + ulp beta fexp x := by
+      have := ulp_ge_0 beta fexp x; linarith
+    have h_x_plus_ulp_ne : x + ulp beta fexp x ≠ 0 := ne_of_gt h_x_plus_ulp_pos
+    have h_mag : mag beta (x + ulp beta fexp x) = mag beta x := by
+      apply mag_unique_pos beta
+      · have := ulp_ge_0 beta fexp x; linarith
+      · exact h_lt
+    -- Use calc to avoid the global `rw [ulp_neq_0]` substitution issue.
+    calc ulp beta fexp (x + ulp beta fexp x)
+        = bpow beta (cexp beta fexp (x + ulp beta fexp x)) :=
+          ulp_neq_0 beta fexp h_x_plus_ulp_ne
+      _ = bpow beta (cexp beta fexp x) := by congr 1; unfold cexp; rw [h_mag]
+      _ = ulp beta fexp x := (ulp_neq_0 beta fexp hx_ne).symm
+  · right; exact h_eq
+
 end LeanFlocq
