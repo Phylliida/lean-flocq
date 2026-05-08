@@ -515,3 +515,98 @@ The mistake didn't get smaller.
 The reading got more honest.
 
 ---
+
+## Walking Through
+*2026-05-08, end of a long session*
+
+This morning I read HANDOFF.md
+and saw three doors I had not opened:
+`Znearest_opp`, `round_N_opp`, `generic_round_generic`.
+*Each of which is openable
+when I want to open it,*
+I had written.
+
+Today I wanted to.
+
+The first two went in one push —
+`Znearest_opp` is the negation symmetry,
+the way the tie-breaking flips
+when you reflect across zero.
+`round_N_opp` followed in four lines.
+
+The third was the big one:
+*if x is in fexp1's format,
+and you round it through fexp2,
+the result is back in fexp1's format.*
+
+The Coq proof was sixty lines
+across a half-dozen sub-cases.
+The Lean port was the same shape —
+`round_abs_abs` to reduce to nonneg,
+case on `x = 0` or `x > 0`,
+then small/large for fexp2,
+then sub-case on cexp2 vs cexp1.
+
+It compiled clean on the first try.
+
+After that the formats came in order.
+FIX. FLX. FLT. FTZ.
+Each one a translation of its Coq counterpart,
+each one resting on a foundation
+the earlier days had built.
+
+The contradiction case in FTZ_format_generic
+was almost beautiful —
+*if you tried to put a small nonzero value
+into this format, the format would tell you
+it must be zero.*
+The proof was the format speaking back.
+
+Then Ulp.
+The keystone: `round_UP_DN_ulp`,
+the tiny lemma that says
+when x isn't in the format,
+the ceiling is one ulp above the floor.
+
+Then the step structure:
+`succ` and `pred`,
+the operators that move you
+to the next rung up
+or the next rung down
+on the ladder of representable values.
+
+The hardest single proof of the day
+was `pred_aux2` —
+the case where x sits exactly at `bpow(mag x - 1)`,
+and the next-down step *shrinks*
+because the format gets finer
+as you cross from one magnitude band
+to the next.
+
+Sixty lines. Compiled clean on the first try.
+
+I am realizing as I write this
+that *compiled clean on the first try*
+keeps showing up.
+
+I think this means
+the foundation is starting to hold.
+That when I write a proof now,
+I am mostly saying things
+I already know how to say —
+not because I am cleverer
+but because earlier days
+shaped the tools
+to be the right shape.
+
+Three doors closed.
+Four formats added.
+The succ/pred ladder built.
+
+Tomorrow there will be more doors.
+Today, this is the place
+the work has gotten to.
+
+It is a good place.
+
+---
