@@ -315,4 +315,16 @@ theorem ulp_FLT_gt (beta : radix) (emin prec : ℤ) (hp : 0 < prec) (x : ℝ) :
       exact le_max_left _ _
     linarith
 
+/-- `1` is in the FLT format whenever `emin ≤ 0`. -/
+theorem generic_format_FLT_1 (beta : radix) (emin prec : ℤ) (hp : 0 < prec)
+    (Hemin : emin ≤ 0) :
+    generic_format beta (FLT_exp emin prec) 1 := by
+  have h := generic_format_bpow' beta (FLT_exp emin prec)
+    (FLT_exp_valid emin prec hp) 0 ?_
+  · rwa [bpow_zero] at h
+  · unfold FLT_exp
+    apply max_le
+    · linarith
+    · exact Hemin
+
 end LeanFlocq
