@@ -46,6 +46,20 @@ theorem negligible_exp_none {fexp : ℤ → ℤ}
     have := hex n
     omega
 
+/-- For any two indices in the small regime of `fexp` (i.e., `n ≤ fexp n` and
+`m ≤ fexp m`), `fexp n = fexp m`. The small regime stabilizes to a constant. -/
+theorem fexp_negligible_exp_eq {fexp : ℤ → ℤ} (hValid : Valid_exp fexp)
+    {n m : ℤ} (hn : n ≤ fexp n) (hm : m ≤ fexp m) : fexp n = fexp m := by
+  rcases le_or_gt n m with hle | hgt
+  · -- n ≤ m: use stabilization at m (applied to n ≤ fexp m).
+    have h_stab_m := (hValid m).2 hm
+    have h_n_le_fxm : n ≤ fexp m := le_trans hle hm
+    exact h_stab_m.2 n h_n_le_fxm
+  · -- m < n: use stabilization at n (applied to m ≤ fexp n).
+    have h_stab_n := (hValid n).2 hn
+    have h_m_le_fxn : m ≤ fexp n := le_trans (le_of_lt hgt) hn
+    exact (h_stab_n.2 m h_m_le_fxn).symm
+
 /-! ### Definition of `ulp` and basic properties -/
 
 /-- `ulp x = bpow (cexp x)` for nonzero `x`; for `x = 0`, it falls back to
@@ -634,5 +648,47 @@ theorem succ_gt_ge (beta : radix) (fexp : ℤ → ℤ) {x y : ℝ}
 theorem pred_lt_le (beta : radix) (fexp : ℤ → ℤ) {x y : ℝ}
     (hx : x ≠ 0) (hxy : x ≤ y) : pred beta fexp x < y :=
   lt_of_lt_of_le (pred_lt_id beta fexp hx) hxy
+
+/-- For positive `x` in the format *not* at the bpow boundary,
+`(x - ulp x) + ulp (x - ulp x) = x`. The key fact is that the predecessor
+shares its ulp with `x` (same magnitude band, same `cexp`). -/
+theorem pred_pos_plus_ulp_aux1 (beta : radix) (fexp : ℤ → ℤ)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x)
+    (hbnd : x ≠ bpow beta (mag beta x - 1)) :
+    (x - ulp beta fexp x) + ulp beta fexp (x - ulp beta fexp x) = x := by
+  have hx_ne : x ≠ 0 := ne_of_gt hx
+  have h_low : bpow beta (mag beta x - 1) ≤ x := by
+    have := bpow_mag_le beta hx_ne; rwa [abs_of_pos hx] at this
+  have h_high : x < bpow beta (mag beta x) := by
+    have := bpow_mag_gt beta x; rwa [abs_of_pos hx] at this
+  have h_low_strict : bpow beta (mag beta x - 1) < x := lt_of_le_of_ne h_low (Ne.symm hbnd)
+  have h_x_ne_ulp : x ≠ ulp beta fexp x := by
+    intro h_eq
+    rw [ulp_neq_0 beta fexp hx_ne] at h_eq
+    have h1 : bpow beta (mag beta x - 1) < bpow beta (cexp beta fexp x) := by
+      rw [← h_eq]; exact h_low_strict
+    have h2 : bpow beta (cexp beta fexp x) < bpow beta (mag beta x) := by
+      rw [← h_eq]; exact h_high
+    have hi1 : mag beta x - 1 < cexp beta fexp x := lt_bpow beta h1
+    have hi2 : cexp beta fexp x < mag beta x := lt_bpow beta h2
+    omega
+  have h_pred_lo : bpow beta (mag beta x - 1) ≤ x - ulp beta fexp x :=
+    id_m_ulp_ge_bpow beta fexp Fx h_x_ne_ulp h_low_strict
+  have h_pred_pos : 0 < x - ulp beta fexp x :=
+    lt_of_lt_of_le (bpow_gt_0 _ _) h_pred_lo
+  have h_pred_ne : x - ulp beta fexp x ≠ 0 := ne_of_gt h_pred_pos
+  have h_pred_hi : x - ulp beta fexp x < bpow beta (mag beta x) := by
+    have : 0 ≤ ulp beta fexp x := ulp_ge_0 beta fexp x
+    linarith
+  have h_mag : mag beta (x - ulp beta fexp x) = mag beta x :=
+    mag_unique_pos beta h_pred_lo h_pred_hi
+  have h_ulp_eq : ulp beta fexp (x - ulp beta fexp x) = ulp beta fexp x := by
+    calc ulp beta fexp (x - ulp beta fexp x)
+        = bpow beta (cexp beta fexp (x - ulp beta fexp x)) :=
+          ulp_neq_0 beta fexp h_pred_ne
+      _ = bpow beta (cexp beta fexp x) := by
+          congr 1; unfold cexp; rw [h_mag]
+      _ = ulp beta fexp x := (ulp_neq_0 beta fexp hx_ne).symm
+  rw [h_ulp_eq]; ring
 
 end LeanFlocq
