@@ -6,6 +6,7 @@ The simplest concrete instance of the generic-format machinery.
 -/
 
 import LeanFlocq.Core.Generic_fmt
+import LeanFlocq.Core.Ulp
 
 namespace LeanFlocq
 
@@ -62,5 +63,23 @@ theorem FIX_format_satisfies_any (beta : radix) (emin : ℤ) :
 /-- `FIX_exp` is monotone (trivially — it is constant). -/
 theorem FIX_exp_monotone (emin : ℤ) : Monotone_exp (FIX_exp emin) := by
   intro _ _ _; exact le_refl _
+
+/-- In the FIX format, `ulp x = bpow emin` everywhere — the spacing is constant. -/
+theorem ulp_FIX (beta : radix) (emin : ℤ) (x : ℝ) :
+    ulp beta (FIX_exp emin) x = bpow beta emin := by
+  by_cases hx : x = 0
+  · rw [hx]
+    unfold ulp; rw [if_pos rfl]
+    rcases h_neg : negligible_exp (FIX_exp emin) with _ | n
+    · -- `none` would mean fexp k < k for all k, but FIX_exp emin _ = emin
+      -- and emin ≤ emin, so the small regime is non-empty.
+      exfalso
+      have := negligible_exp_none h_neg emin
+      unfold FIX_exp at this; linarith
+    · show bpow beta (FIX_exp emin n) = bpow beta emin
+      rfl
+  · rw [ulp_neq_0 beta (FIX_exp emin) hx]
+    show bpow beta (cexp beta (FIX_exp emin) x) = bpow beta emin
+    rfl
 
 end LeanFlocq
