@@ -1776,4 +1776,71 @@ theorem round_NA_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp
         (round_UP_pt beta fexp hValid x) Hm Rxg Rxf
     rw [h_eq]
 
+/-! ### Negation symmetry of Znearest and round-to-nearest -/
+
+/-- Znearest under negation: `Znearest choice (-x)` equals the negation of
+`Znearest` applied to `x` with the *flipped* choice function `t ↦ ¬choice(-(t+1))`.
+The flipped choice mirrors how the tie-breaking integer changes under negation. -/
+theorem Znearest_opp (choice : ℤ → Bool) (x : ℝ) :
+    Znearest choice (-x) = -(Znearest (fun t => !choice (-(t+1))) x) := by
+  set choice' : ℤ → Bool := fun t => !choice (-(t+1)) with hchoice'
+  by_cases h_int : (⌊x⌋ : ℝ) = x
+  · -- x is an integer: both sides reduce via Zrnd_intCast.
+    -- Build local equalities for `x` and `-x` *without* a `rw [h_x]` that would
+    -- substitute globally — including inside `⌊x⌋`, producing `⌊((⌊x⌋ : ℝ))⌋`.
+    have h_x_eq : x = ((⌊x⌋ : ℤ) : ℝ) := h_int.symm
+    have h_negx : -x = ((-⌊x⌋ : ℤ) : ℝ) := by push_cast; linarith [h_int]
+    have h1 : Znearest choice (-x) = -⌊x⌋ := by
+      have := (valid_rnd_N choice).Zrnd_intCast (-⌊x⌋)
+      rwa [← h_negx] at this
+    have h2 : Znearest choice' x = ⌊x⌋ := by
+      have := (valid_rnd_N choice').Zrnd_intCast ⌊x⌋
+      rwa [← h_x_eq] at this
+    rw [h1, h2]
+  · -- x is not an integer: ⌈x⌉ = ⌊x⌋ + 1, and the f ↔ 1-f symmetry kicks in.
+    have h_floor_lt_x : (⌊x⌋ : ℝ) < x :=
+      lt_of_le_of_ne (Int.floor_le x) h_int
+    have h_floor_lt_ceil : ⌊x⌋ < ⌈x⌉ := Int.lt_ceil.mpr h_floor_lt_x
+    have h_ceil_le : ⌈x⌉ ≤ ⌊x⌋ + 1 := Int.ceil_le_floor_add_one x
+    have h_ceil_eq : ⌈x⌉ = ⌊x⌋ + 1 := by omega
+    have h_floor_negx : ⌊-x⌋ = -(⌊x⌋ + 1) := by
+      rw [Int.floor_neg, h_ceil_eq]
+    have h_ceil_negx : ⌈-x⌉ = -⌊x⌋ := Int.ceil_neg
+    -- The fractional part of -x is 1 minus the fractional part of x.
+    have h_fneg : -x - (⌊-x⌋ : ℝ) = 1 - (x - (⌊x⌋ : ℝ)) := by
+      rw [h_floor_negx]; push_cast; ring
+    unfold Znearest
+    rw [h_fneg]
+    rcases lt_trichotomy (x - (⌊x⌋ : ℝ)) (1/2) with hf | hf | hf
+    · -- x - ⌊x⌋ < 1/2: LHS hits ⌈-x⌉ branch, RHS hits ⌊x⌋ branch
+      have h1m : (1/2 : ℝ) < 1 - (x - (⌊x⌋ : ℝ)) := by linarith
+      rw [if_neg (by linarith : ¬ 1 - (x - (⌊x⌋ : ℝ)) < 1/2), if_pos h1m, if_pos hf]
+      rw [h_ceil_negx]
+    · -- tie f = 1/2: both sides hit choice branch
+      have h1 : ¬ 1 - (x - (⌊x⌋ : ℝ)) < 1/2 := by linarith
+      have h2 : ¬ (1/2 : ℝ) < 1 - (x - (⌊x⌋ : ℝ)) := by linarith
+      have h3 : ¬ x - (⌊x⌋ : ℝ) < 1/2 := by linarith
+      have h4 : ¬ (1/2 : ℝ) < x - (⌊x⌋ : ℝ) := by linarith
+      rw [if_neg h1, if_neg h2, if_neg h3, if_neg h4]
+      rw [h_floor_negx, h_ceil_negx, h_ceil_eq]
+      simp only [hchoice']
+      cases choice (-(⌊x⌋ + 1)) <;> simp
+    · -- x - ⌊x⌋ > 1/2: LHS hits ⌊-x⌋ branch, RHS hits ⌈x⌉ branch
+      have h1m : 1 - (x - (⌊x⌋ : ℝ)) < 1/2 := by linarith
+      rw [if_pos h1m, if_neg (by linarith : ¬ x - (⌊x⌋ : ℝ) < 1/2), if_pos hf]
+      rw [h_floor_negx, h_ceil_eq]
+
+/-- Rounding-to-nearest under negation, in the format. -/
+theorem round_N_opp (beta : radix) (fexp : ℤ → ℤ) (choice : ℤ → Bool) (x : ℝ) :
+    round beta fexp (Znearest choice) (-x)
+      = -(round beta fexp (Znearest (fun t => !choice (-(t+1)))) x) := by
+  unfold round
+  show ((Znearest choice (scaled_mantissa beta fexp (-x)) : ℤ) : ℝ)
+        * bpow beta (cexp beta fexp (-x))
+      = -(((Znearest (fun t => !choice (-(t+1))) (scaled_mantissa beta fexp x) : ℤ) : ℝ)
+        * bpow beta (cexp beta fexp x))
+  rw [scaled_mantissa_opp, cexp_opp, Znearest_opp]
+  push_cast
+  ring
+
 end LeanFlocq
