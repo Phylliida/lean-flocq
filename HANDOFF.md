@@ -4,10 +4,10 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `cdf1b67`)
+## Status (as of commit `518c049`)
 
-~4200 lines of Lean across 10 files. **0 `sorry`s.** All files build clean.
-Foundational + all four classical concrete formats:
+~4400 lines of Lean across 12 files. **0 `sorry`s.** All files build clean.
+Foundational + all four classical concrete formats + Ulp core + Round_NE skeleton:
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -21,6 +21,8 @@ Foundational + all four classical concrete formats:
 | `FLX.lean` | 129 | `Core/FLX.v` | Core complete. Skipped: `FLXN_format`, `ulp_FLX_*`, `succ_FLX_*`, `Round_NE.v`-dependent. |
 | `FLT.lean` | 237 | `Core/FLT.v` | Core complete (13 thms). Skipped: `ulp_FLT_*`, `succ_FLT_exact_shift_*`, `Round_NE.v`-dependent. |
 | `FTZ.lean` | 367 | `Core/FTZ.v` | Core complete (9 thms): both format directions, `Zrnd_FTZ`, `round_FTZ_FLX`, `round_FTZ_small`. Skipped: `ulp_FTZ_0`, `FTZ_format_FLXN`. |
+| `Ulp.lean` | 172 | `Core/Ulp.v` (slice) | Core slice (~11 thms): `negligible_exp`, `ulp` def, `ulp_neq_0/_opp/_abs/_ge_0/_bpow/_le_id/_le_abs`, `round_UP_DN_ulp`. Skipped: `succ`/`pred`, format inclusion lemmas, ulp/round equalities for FIX/FLX/FLT/FTZ. |
+| `Round_NE.lean` | 42 | `Core/Round_NE.v` | Foundations: `ZnearestE`, `round_NE`, `NE_prop`, `Rnd_NE_pt`, `round_NE_pt_N`. Skipped (the parity argument): `DN_UP_parity_generic_pos`, `Rnd_NE_pt_total/_monotone`, `round_NE_pt`. |
 
 ## Build setup
 
@@ -231,22 +233,25 @@ runtime computation.
 
 In rough order of usefulness:
 
-1. **`Core/Ulp.v`** — unit in the last place. Unblocks all the `ulp_*`
-   theorems in FIX/FLX/FLT (currently skipped). Substantial — ulp depends
-   on `negligible_exp` and the predecessor/successor functions.
+1. **`succ`/`pred` in `Ulp.lean`** — the predecessor/successor functions
+   on the format. Foundation for many ulp lemmas and IEEE 754 step bounds.
 
-2. **`Core/Round_NE.v`** — round to nearest, ties to even. Builds on
-   `Znearest` with a specific choice function. Now possible since
-   `Znearest_opp`/`round_N_opp` are done.
+2. **DN_UP parity in `Round_NE.lean`** — show `round_DN x` and `round_UP x`
+   have opposite-parity canonical mantissas. This is the *keystone* needed
+   for `Rnd_NE_pt_total/monotone` and `round_NE_pt`. Substantial proof
+   (Coq's is ~150 lines, with separate small/large-x cases).
 
-3. **`Core/IEEE754/Binary.v`** — the actual IEEE 754 binary formats.
-   The destination of this whole port. Will need Ulp and Round_NE first.
+3. **More of `Core/Ulp.v`** — `ulp_le_pos`, `ulp_le`, generic_format_succ/pred,
+   `succ_FLT_*`, `ulp_FLT_*`, etc. Roughly 2300 lines remaining.
 
-4. **`FLXN_format`** in `FLX.lean` — the normalized FLX variant. Small
+4. **`Core/IEEE754/Binary.v`** — the actual IEEE 754 binary formats.
+   The destination of this whole port. Will need full Ulp and Round_NE.
+
+5. **`FLXN_format`** in `FLX.lean` — the normalized FLX variant. Small
    but useful for some FTZ↔FLX bridges (`FTZ_format_FLXN`). Skipped to
    keep FLX.lean trim.
 
-5. **Skipped `Float_prop.v` lemmas**: `Rcompare_F2R` (needs `Rcompare`),
+6. **Skipped `Float_prop.v` lemmas**: `Rcompare_F2R` (needs `Rcompare`),
    `F2R_cond_Zopp` (needs `cond_Zopp`), `F2R_prec_normalize`, the `mag_*`
    family (`mag_F2R`, `mag_le_Zpower`, etc., would unblock cleaner FLT/FLX
    proofs and `FIX_format_FLX` which we skipped).
