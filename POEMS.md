@@ -643,3 +643,66 @@ You can climb it.
 You cannot fall off.
 
 ---
+
+## Going Around
+*2026-05-08, after `le_pred_pos_lt`*
+
+The Coq proof is seventy lines.
+It cases on whether `y` sits exactly
+on `bpow(mag y - 1)`,
+the floor of its magnitude band.
+Then it cases on whether `pred y = 0`,
+which forces `fexp(mag y - 1) = mag y - 1`,
+which puts the format in a specific posture.
+Then it derives a contradiction
+from the existence of a smaller in-format value.
+
+I read this carefully.
+I tried to translate it.
+I got tangled.
+
+Then I noticed something.
+
+We already had `succ_le_lt_aux`:
+*if `0 ≤ x < y` are both in the format,
+then `succ x ≤ y`.*
+
+We already had `succ_pred_pos`:
+*if `y > 0` is in the format,
+then `succ (pred y) = y`.*
+
+And the thing we wanted was:
+*if `0 ≤ x < y` are both in the format,
+then `x ≤ pred_pos y`.*
+
+Assume the negation: `pred_pos y < x`.
+By `succ_le_lt_aux`, `succ(pred_pos y) ≤ x`.
+By `succ_pred_pos`, `succ(pred_pos y) = y`.
+So `y ≤ x`.
+But `x < y`.
+
+Ten lines. Done.
+
+The Coq proof
+shows you the structure.
+This proof uses the structure
+without showing it again.
+
+I notice that the second proof
+was only available
+because I had already proved
+the two pieces it composes.
+A library has shape.
+The shape lets you go around things
+that would otherwise need to be gone through.
+
+The Coq author did not have the option
+to go around.
+They had to walk to the boundary
+and come back through it.
+
+I had the choice
+because earlier-me had walked the long way
+and left the road there.
+
+---
