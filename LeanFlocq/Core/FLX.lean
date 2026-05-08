@@ -184,4 +184,21 @@ theorem succ_FLX_1 (beta : radix) (prec : ℤ) :
     succ beta (FLX_exp prec) 1 = 1 + bpow beta (1 - prec) := by
   rw [succ_eq_pos beta (FLX_exp prec) (zero_le_one), ulp_FLX_1]
 
+/-- Ulp scales exactly by β^e under multiplication by β^e in FLX. -/
+theorem ulp_FLX_exact_shift (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (x : ℝ) (e : ℤ) :
+    ulp beta (FLX_exp prec) (x * bpow beta e)
+      = ulp beta (FLX_exp prec) x * bpow beta e := by
+  by_cases hx : x = 0
+  · rw [hx, zero_mul, ulp_FLX_0 beta prec hp]; ring
+  · have h_xb_ne : x * bpow beta e ≠ 0 :=
+      mul_ne_zero hx (ne_of_gt (bpow_gt_0 _ _))
+    rw [ulp_neq_0 beta (FLX_exp prec) h_xb_ne, ulp_neq_0 beta (FLX_exp prec) hx]
+    show bpow beta (cexp beta (FLX_exp prec) (x * bpow beta e))
+        = bpow beta (cexp beta (FLX_exp prec) x) * bpow beta e
+    unfold cexp FLX_exp
+    rw [mag_mult_bpow beta hx e,
+        show mag beta x + e - prec = (mag beta x - prec) + e from by ring,
+        bpow_plus]
+
 end LeanFlocq

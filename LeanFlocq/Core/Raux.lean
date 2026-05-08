@@ -315,4 +315,22 @@ theorem mag_1 (beta : radix) : mag beta 1 = 1 := by
   have := mag_bpow beta 0
   rwa [bpow_zero] at this
 
+/-- `mag β (x · β^e) = mag β x + e` for `x ≠ 0`. -/
+theorem mag_mult_bpow (beta : radix) {x : ℝ} (hx : x ≠ 0) (e : ℤ) :
+    mag beta (x * bpow beta e) = mag beta x + e := by
+  apply mag_unique beta
+  · have h_low := bpow_mag_le beta hx
+    rw [abs_mul, abs_of_pos (bpow_gt_0 beta e)]
+    calc bpow beta (mag beta x + e - 1)
+        = bpow beta (mag beta x - 1) * bpow beta e := by
+          rw [← bpow_plus]; congr 1; ring
+      _ ≤ |x| * bpow beta e :=
+          mul_le_mul_of_nonneg_right h_low (bpow_ge_0 _ _)
+  · have h_high := bpow_mag_gt beta x
+    rw [abs_mul, abs_of_pos (bpow_gt_0 beta e)]
+    calc |x| * bpow beta e
+        < bpow beta (mag beta x) * bpow beta e :=
+          mul_lt_mul_of_pos_right h_high (bpow_gt_0 _ _)
+      _ = bpow beta (mag beta x + e) := by rw [← bpow_plus]
+
 end LeanFlocq
