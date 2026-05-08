@@ -971,4 +971,30 @@ theorem error_le_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fex
     exact ulp_ge_0 beta fexp 0
   · exact le_of_lt (error_lt_ulp beta fexp hValid rnd hx)
 
+/-- For round-to-nearest, the absolute error is at most `ulp x / 2`. -/
+theorem error_le_half_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (choice : ℤ → Bool) (x : ℝ) :
+    |round beta fexp (Znearest choice) x - x| ≤ (1 / 2) * ulp beta fexp x := by
+  by_cases hfmt : generic_format beta fexp x
+  · rw [round_generic beta fexp _ hfmt]
+    rw [show x - x = 0 from by ring, abs_zero]
+    have : 0 ≤ ulp beta fexp x := ulp_ge_0 beta fexp x
+    linarith
+  · set d := round beta fexp (fun y : ℝ => ⌊y⌋) x with hd_def
+    set u := round beta fexp (fun y : ℝ => ⌈y⌉) x with hu_def
+    have h_u_eq : u = d + ulp beta fexp x := round_UP_DN_ulp beta fexp hfmt
+    have h_DN_le : d ≤ x := (round_DN_pt beta fexp hValid x).2.1
+    have h_UP_ge : x ≤ u := (round_UP_pt beta fexp hValid x).2.1
+    have h_F_d : generic_format beta fexp d := generic_format_round beta fexp hValid _ x
+    have h_F_u : generic_format beta fexp u := generic_format_round beta fexp hValid _ x
+    have hRN := round_N_pt beta fexp hValid choice x
+    have h_ulp : u - d = ulp beta fexp x := by rw [h_u_eq]; ring
+    rcases le_or_gt (x - d) (u - x) with H | H
+    · have h1 : |round beta fexp (Znearest choice) x - x| ≤ |d - x| := hRN.2 d h_F_d
+      rw [abs_of_nonpos (by linarith : d - x ≤ 0)] at h1
+      linarith
+    · have h1 : |round beta fexp (Znearest choice) x - x| ≤ |u - x| := hRN.2 u h_F_u
+      rw [abs_of_nonneg (by linarith : (0 : ℝ) ≤ u - x)] at h1
+      linarith
+
 end LeanFlocq
