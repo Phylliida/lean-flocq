@@ -1830,6 +1830,81 @@ theorem Znearest_opp (choice : ℤ → Bool) (x : ℝ) :
       rw [if_pos h1m, if_neg (by linarith : ¬ x - (⌊x⌋ : ℝ) < 1/2), if_pos hf]
       rw [h_floor_negx, h_ceil_eq]
 
+/-! ### Composition: rounding through one format stays inside another -/
+
+/-- Rounding under one format produces a value still in another format,
+provided the original is. The "outer" format is `fexp1`; the rounding is
+done with `fexp2`. The result `round fexp2 rnd x` lies in `fexp1`'s format. -/
+theorem generic_round_generic (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (hValid1 : Valid_exp fexp1) (hValid2 : Valid_exp fexp2)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ}
+    (Gx : generic_format beta fexp1 x) :
+    generic_format beta fexp1 (round beta fexp2 rnd x) := by
+  -- Reduce to nonneg x via the |x|/|round| reformulation.
+  apply generic_format_abs_inv
+  refine round_abs_abs beta fexp2 hValid2
+    (fun a b => generic_format beta fexp1 a → generic_format beta fexp1 b)
+    ?_ rnd x (generic_format_abs beta fexp1 Gx)
+  intro rnd' _ x' hx_nn Gx'
+  rcases eq_or_lt_of_le hx_nn with hx_eq | hx_pos
+  · -- x' = 0
+    rw [← hx_eq, round_0]
+    exact generic_format_0 beta fexp1
+  · -- 0 < x'
+    have hx_ne : x' ≠ 0 := ne_of_gt hx_pos
+    have h_fexp1_lt_ex : fexp1 (mag beta x') < mag beta x' :=
+      mag_generic_gt beta fexp1 hValid1 hx_ne Gx'
+    set ex := mag beta x' with hex_def
+    have h_x_low : bpow beta (ex - 1) ≤ x' := by
+      have := bpow_mag_le beta hx_ne
+      rwa [abs_of_pos hx_pos] at this
+    have h_x_high : x' < bpow beta ex := by
+      have := bpow_mag_gt beta x'
+      rwa [abs_of_pos hx_pos] at this
+    rcases le_or_gt ex (fexp2 ex) with He | He
+    · -- ex ≤ fexp2 ex: x' is "small" for fexp2 — round is 0 or `bpow (fexp2 ex)`.
+      rcases round_bounded_small_pos beta fexp2 rnd' He ⟨h_x_low, h_x_high⟩ with Hr | Hr
+      · rw [Hr]; exact generic_format_0 beta fexp1
+      · rw [Hr]
+        apply generic_format_bpow' beta fexp1 hValid1
+        -- fexp1 (fexp2 ex) ≤ fexp2 ex via valid_exp_large
+        exact le_of_lt (valid_exp_large hValid1 h_fexp1_lt_ex He)
+    · -- fexp2 ex < ex: x' is "large" for fexp2.
+      rcases le_or_gt (fexp2 ex) (fexp1 ex) with He'' | He''
+      · -- fexp2 ex ≤ fexp1 ex: x' is in fexp2 format, so round = x' ∈ fexp1.
+        have hx_in_f2 : generic_format beta fexp2 x' := by
+          rw [Gx']
+          apply generic_format_F2R beta fexp2 _ _
+          intro _
+          rw [show F2R (beta := beta)
+                ⟨Ztrunc (scaled_mantissa beta fexp1 x'), cexp beta fexp1 x'⟩ = x'
+                from Gx'.symm]
+          show fexp2 ex ≤ fexp1 ex
+          exact He''
+        rw [round_generic beta fexp2 rnd' hx_in_f2]
+        exact Gx'
+      · -- fexp1 ex < fexp2 ex: round may have "more digits than fexp1 likes."
+        obtain ⟨Hr1, Hr2⟩ :=
+          round_bounded_large_pos beta fexp2 rnd' He ⟨h_x_low, h_x_high⟩
+        rcases lt_or_eq_of_le Hr2 with Hr2_lt | Hr2_eq
+        · -- round < bpow ex: mag(round) = ex.
+          have h_mag_round : mag beta (round beta fexp2 rnd' x') = ex :=
+            mag_unique_pos beta Hr1 Hr2_lt
+          unfold round
+          apply generic_format_F2R beta fexp1 _ _
+          intro _
+          rw [show F2R (beta := beta)
+                ⟨rnd' (scaled_mantissa beta fexp2 x'), cexp beta fexp2 x'⟩
+                = round beta fexp2 rnd' x' from rfl]
+          show cexp beta fexp1 (round beta fexp2 rnd' x') ≤ cexp beta fexp2 x'
+          unfold cexp
+          rw [h_mag_round]
+          exact le_of_lt He''
+        · -- round = bpow ex: directly show bpow ex is in fexp1 format.
+          rw [Hr2_eq]
+          apply generic_format_bpow' beta fexp1 hValid1
+          exact le_of_lt h_fexp1_lt_ex
+
 /-- Rounding-to-nearest under negation, in the format. -/
 theorem round_N_opp (beta : radix) (fexp : ℤ → ℤ) (choice : ℤ → Bool) (x : ℝ) :
     round beta fexp (Znearest choice) (-x)
