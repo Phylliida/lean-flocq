@@ -158,4 +158,17 @@ theorem eq_0_round_0_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
   eq_0_round_0_negligible_exp beta (FLX_exp prec) (FLX_exp_valid prec hp)
     (negligible_exp_FLX prec hp) rnd Hx
 
+/-- In FLX, rounding preserves strict positivity: `0 < x → 0 < round x`. -/
+theorem gt_0_round_gt_0_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} (hx : 0 < x) :
+    0 < round beta (FLX_exp prec) rnd x := by
+  have h_round_nn : 0 ≤ round beta (FLX_exp prec) rnd x := by
+    have := round_le beta (FLX_exp prec) (FLX_exp_valid prec hp) rnd (le_of_lt hx)
+    rwa [round_0] at this
+  rcases lt_or_eq_of_le h_round_nn with h | h
+  · exact h
+  · exfalso
+    have := eq_0_round_0_FLX beta prec hp rnd h.symm
+    linarith
+
 end LeanFlocq
