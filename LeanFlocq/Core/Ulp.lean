@@ -918,4 +918,57 @@ theorem eq_0_round_0_negligible_exp (beta : radix) (fexp : ℤ → ℤ)
   have : 0 < bpow beta (mag beta x - 1) := bpow_gt_0 _ _
   linarith
 
+/-! ### Rounding error bounds -/
+
+/-- For `x ≠ 0`, the absolute rounding error is strictly less than `ulp x`. -/
+theorem error_lt_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} (hx : x ≠ 0) :
+    |round beta fexp rnd x - x| < ulp beta fexp x := by
+  by_cases hfmt : generic_format beta fexp x
+  · -- x is in F: round x = x.
+    rw [round_generic beta fexp rnd hfmt]
+    rw [show x - x = 0 from by ring, abs_zero]
+    rw [ulp_neq_0 beta fexp hx]
+    exact bpow_gt_0 _ _
+  · rcases round_DN_or_UP beta fexp rnd x with hDN | hUP
+    · -- round x = round_DN x: error is x - round_DN x.
+      rw [hDN]
+      have h_DN_le : round beta fexp (fun y : ℝ => ⌊y⌋) x ≤ x :=
+        (round_DN_pt beta fexp hValid x).2.1
+      rw [show round beta fexp (fun y : ℝ => ⌊y⌋) x - x
+          = -(x - round beta fexp (fun y : ℝ => ⌊y⌋) x) from by ring,
+          abs_neg, abs_of_nonneg (by linarith)]
+      have h_UP_eq := round_UP_DN_ulp beta fexp hfmt
+      have h_UP_ge : x ≤ round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+        (round_UP_pt beta fexp hValid x).2.1
+      have h_UP_strict : x < round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+        rcases lt_or_eq_of_le h_UP_ge with hlt | heq
+        · exact hlt
+        · exfalso; apply hfmt
+          rw [heq]; exact generic_format_round beta fexp hValid _ x
+      linarith
+    · -- round x = round_UP x: error is round_UP x - x.
+      rw [hUP]
+      have h_UP_ge : x ≤ round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+        (round_UP_pt beta fexp hValid x).2.1
+      rw [abs_of_nonneg (by linarith)]
+      have h_UP_eq := round_UP_DN_ulp beta fexp hfmt
+      have h_DN_le : round beta fexp (fun y : ℝ => ⌊y⌋) x ≤ x :=
+        (round_DN_pt beta fexp hValid x).2.1
+      have h_DN_strict : round beta fexp (fun y : ℝ => ⌊y⌋) x < x := by
+        rcases lt_or_eq_of_le h_DN_le with hlt | heq
+        · exact hlt
+        · exfalso; apply hfmt
+          rw [← heq]; exact generic_format_round beta fexp hValid _ x
+      linarith
+
+/-- The non-strict version: the absolute rounding error is at most `ulp x`. -/
+theorem error_le_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) :
+    |round beta fexp rnd x - x| ≤ ulp beta fexp x := by
+  by_cases hx : x = 0
+  · rw [hx, round_0, sub_zero, abs_zero]
+    exact ulp_ge_0 beta fexp 0
+  · exact le_of_lt (error_lt_ulp beta fexp hValid rnd hx)
+
 end LeanFlocq
