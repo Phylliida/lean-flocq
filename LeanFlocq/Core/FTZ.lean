@@ -364,4 +364,30 @@ theorem round_FTZ_small (beta : radix) (emin prec : ℤ)
     rw [h_zr]
     exact F2R_0 _
 
+/-- In FTZ, `ulp 0 = bpow (emin + prec - 1)` — the format pegs its smallest
+positive value at exactly the threshold below which everything flushes to zero. -/
+theorem ulp_FTZ_0 (beta : radix) (emin prec : ℤ) (hp : 0 < prec) :
+    ulp beta (FTZ_exp emin prec) 0 = bpow beta (emin + prec - 1) := by
+  unfold ulp
+  rw [if_pos rfl]
+  rcases h_neg : negligible_exp (FTZ_exp emin prec) with _ | n
+  · -- `none`: contradiction. emin + prec - 1 is a fixed point of FTZ_exp,
+    -- so the small regime is non-empty.
+    exfalso
+    have h_self : FTZ_exp emin prec (emin + prec - 1) = emin + prec - 1 := by
+      unfold FTZ_exp
+      rw [if_pos (by linarith : emin + prec - 1 - prec < emin)]
+    have := negligible_exp_none h_neg (emin + prec - 1)
+    linarith
+  · -- `some n`: bpow(fexp n) = bpow(fexp(emin+prec-1)) = bpow(emin+prec-1).
+    show bpow beta (FTZ_exp emin prec n) = bpow beta (emin + prec - 1)
+    have h_self : FTZ_exp emin prec (emin + prec - 1) = emin + prec - 1 := by
+      unfold FTZ_exp
+      rw [if_pos (by linarith : emin + prec - 1 - prec < emin)]
+    have h_n_le : n ≤ FTZ_exp emin prec n := negligible_exp_some h_neg
+    have h_emp1_le : emin + prec - 1 ≤ FTZ_exp emin prec (emin + prec - 1) := by
+      rw [h_self]
+    have h_eq := fexp_negligible_exp_eq (FTZ_exp_valid emin prec hp) h_n_le h_emp1_le
+    rw [h_eq, h_self]
+
 end LeanFlocq

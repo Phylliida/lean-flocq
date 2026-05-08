@@ -126,4 +126,20 @@ theorem FLX_format_FIX (beta : radix) (prec : ℤ) (hp : 0 < prec) {x : ℝ} (e 
   exact generic_inclusion beta (FIX_exp (e - prec)) (FLX_exp prec)
     (FIX_exp_valid (e - prec)) (FLX_exp_valid prec hp) e hle Hx hg
 
+/-- The FLX format has no minimum exponent: `negligible_exp = none`. -/
+theorem negligible_exp_FLX (prec : ℤ) (hp : 0 < prec) :
+    negligible_exp (FLX_exp prec) = none := by
+  classical
+  unfold negligible_exp
+  have h_no : ¬ ∃ n : ℤ, n ≤ FLX_exp prec n := by
+    rintro ⟨n, hn⟩
+    unfold FLX_exp at hn; linarith
+  exact dif_neg h_no
+
+/-- In FLX, `ulp 0 = 0` — there is no smallest representable positive value. -/
+theorem ulp_FLX_0 (beta : radix) (prec : ℤ) (hp : 0 < prec) :
+    ulp beta (FLX_exp prec) 0 = 0 := by
+  unfold ulp
+  rw [if_pos rfl, negligible_exp_FLX prec hp]
+
 end LeanFlocq
