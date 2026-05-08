@@ -169,4 +169,121 @@ theorem round_UP_DN_ulp (beta : radix) (fexp : ℤ → ℤ) {x : ℝ}
   push_cast
   ring
 
+/-! ### Predecessor and successor
+
+`pred_pos x` is `x` minus a step, where the step is `bpow (fexp (mag x - 1))`
+exactly when `x = bpow (mag x - 1)` (we are at the smallest representable
+of magnitude `mag x`, and the *next-down* step shrinks). Otherwise the step
+is just `ulp x`.
+
+`succ x = x + ulp x` for `x ≥ 0`, with a symmetric reflection for `x < 0`.
+`pred x := -succ(-x)`. -/
+
+/-- The "predecessor" step on the positive side: `x - step`, where the step
+shrinks at exact-bpow values. -/
+noncomputable def pred_pos (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) : ℝ :=
+  if x = bpow beta (mag beta x - 1) then
+    x - bpow beta (fexp (mag beta x - 1))
+  else
+    x - ulp beta fexp x
+
+/-- The successor of `x` in the format. -/
+noncomputable def succ (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) : ℝ :=
+  if 0 ≤ x then x + ulp beta fexp x
+  else -(pred_pos beta fexp (-x))
+
+/-- The predecessor of `x` in the format. -/
+noncomputable def pred (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) : ℝ :=
+  -(succ beta fexp (-x))
+
+/-- For `x ≥ 0`, `pred x = pred_pos x`. -/
+theorem pred_eq_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (hx : 0 ≤ x) :
+    pred beta fexp x = pred_pos beta fexp x := by
+  unfold pred succ
+  by_cases h : 0 ≤ -x
+  · -- 0 ≤ -x and 0 ≤ x means x = 0
+    rw [if_pos h]
+    have hx0 : x = 0 := le_antisymm (by linarith) hx
+    subst hx0
+    simp only [neg_zero]
+    unfold pred_pos
+    rw [if_neg (by
+      intro heq
+      have : (0 : ℝ) < bpow beta (mag beta 0 - 1) := bpow_gt_0 _ _
+      linarith)]
+    ring
+  · rw [if_neg h]; simp only [neg_neg]
+
+/-- For `x ≥ 0`, `succ x = x + ulp x`. -/
+theorem succ_eq_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (hx : 0 ≤ x) :
+    succ beta fexp x = x + ulp beta fexp x := by
+  unfold succ; rw [if_pos hx]
+
+/-- `succ (-x) = -pred x`. -/
+theorem succ_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    succ beta fexp (-x) = -(pred beta fexp x) := by
+  unfold pred; rw [neg_neg]
+
+/-- `pred (-x) = -succ x`. -/
+theorem pred_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    pred beta fexp (-x) = -(succ beta fexp x) := by
+  unfold pred; rw [neg_neg]
+
+/-! ### Ulp-step bounds against `bpow` -/
+
+/-- For `0 < x` in the format and `x < bpow e`, the next-up step `x + ulp x`
+still fits under `bpow e`. -/
+theorem id_p_ulp_le_bpow (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {e : ℤ}
+    (hx : 0 < x) (Fx : generic_format beta fexp x)
+    (h : x < bpow beta e) :
+    x + ulp beta fexp x ≤ bpow beta e := by
+  set m := Ztrunc (scaled_mantissa beta fexp x)
+  set ce := cexp beta fexp x with hce_def
+  have hxe : x = F2R (beta := beta) ⟨m, ce⟩ := Fx
+  have hm_pos : 0 < m := gt_0_F2R (by rw [← hxe]; exact hx)
+  rw [ulp_neq_0 beta fexp (ne_of_gt hx)]
+  show x + bpow beta ce ≤ bpow beta e
+  have h_mp1 : x + bpow beta ce = F2R (beta := beta) ⟨m + 1, ce⟩ := by
+    unfold F2R
+    show x + bpow beta ce = (↑(m + 1) : ℝ) * bpow beta ce
+    have hx_eq : x = (↑m : ℝ) * bpow beta ce := hxe
+    push_cast; linarith
+  rw [h_mp1]
+  apply F2R_p1_le_bpow hm_pos
+  rw [← hxe]; exact h
+
+/-- For `x` in the format with `x ≠ ulp x` and `bpow e < x`, the next-down
+step `x - ulp x` still lies above `bpow e`. -/
+theorem id_m_ulp_ge_bpow (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {e : ℤ}
+    (Fx : generic_format beta fexp x) (hxu : x ≠ ulp beta fexp x)
+    (h : bpow beta e < x) :
+    bpow beta e ≤ x - ulp beta fexp x := by
+  have hx_pos : 0 < x := lt_of_le_of_lt (bpow_ge_0 _ _) h
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  set m := Ztrunc (scaled_mantissa beta fexp x)
+  set ce := cexp beta fexp x with hce_def
+  have hxe : x = F2R (beta := beta) ⟨m, ce⟩ := Fx
+  have hm_pos : 0 < m := gt_0_F2R (by rw [← hxe]; exact hx_pos)
+  have hm_ge_1 : 1 ≤ m := hm_pos
+  rcases lt_or_eq_of_le hm_ge_1 with hm_gt | hm_eq
+  · -- 1 < m: use bpow_le_F2R_m1
+    rw [ulp_neq_0 beta fexp hx_ne]
+    show bpow beta e ≤ x - bpow beta ce
+    have h_mm1 : x - bpow beta ce = F2R (beta := beta) ⟨m - 1, ce⟩ := by
+      unfold F2R
+      show x - bpow beta ce = (↑(m - 1) : ℝ) * bpow beta ce
+      have hx_eq : x = (↑m : ℝ) * bpow beta ce := hxe
+      push_cast; linarith
+    rw [h_mm1]
+    apply bpow_le_F2R_m1 hm_gt
+    rw [← hxe]; exact h
+  · -- m = 1: x = bpow (cexp x) = ulp x, contradicting hxu.
+    exfalso
+    apply hxu
+    rw [ulp_neq_0 beta fexp hx_ne]
+    show x = bpow beta ce
+    have hx_eq : x = (↑m : ℝ) * bpow beta ce := hxe
+    rw [hx_eq, show m = 1 from hm_eq.symm]
+    push_cast; ring
+
 end LeanFlocq
