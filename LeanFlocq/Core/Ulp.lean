@@ -1350,7 +1350,8 @@ theorem ulp_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
   · rw [← hx_zero, round_0]
 
 /-- For `0 ≤ x ∉ F`, `succ(round_DN x) = round_UP x`. The successor of the
-down-rounded value is exactly the up-rounded value. -/
+down-rounded value is exactly the up-rounded value. (Direct version
+for the nonneg case using `ulp_DN` + `round_UP_DN_ulp`.) -/
 theorem succ_DN_eq_UP_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     {x : ℝ} (hx : 0 ≤ x) (Fx : ¬ generic_format beta fexp x) :
     succ beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x)
@@ -1359,6 +1360,73 @@ theorem succ_DN_eq_UP_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_ex
     round_ge_generic beta fexp hValid _ (generic_format_0 beta fexp) hx
   rw [succ_eq_pos beta fexp h_round_nn, ulp_DN beta fexp hValid hx]
   exact (round_UP_DN_ulp beta fexp Fx).symm
+
+/-- For any `x ∉ F`, `succ(round_DN x) = round_UP x`. Proved via
+`le_antisymm`: `succ d ≤ u` from `succ_le_lt`, and `u ≤ succ d` by
+contradiction (if `succ d < x`, the round_DN maximality + `succ_ge_id`
+force `succ d = d`, which only happens at `d = 0` with `negligible_exp = none`,
+giving `x = 0 ∈ F`, contradicting `x ∉ F`). -/
+theorem succ_DN_eq_UP (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : ¬ generic_format beta fexp x) :
+    succ beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x)
+      = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+  set d := round beta fexp (fun y : ℝ => ⌊y⌋) x
+  set u := round beta fexp (fun y : ℝ => ⌈y⌉) x
+  have F_d : generic_format beta fexp d := generic_format_round beta fexp hValid _ x
+  have F_u : generic_format beta fexp u := generic_format_round beta fexp hValid _ x
+  have h_d_le : d ≤ x := (round_DN_pt beta fexp hValid x).2.1
+  have h_u_ge : x ≤ u := (round_UP_pt beta fexp hValid x).2.1
+  have h_d_strict : d < x := by
+    rcases lt_or_eq_of_le h_d_le with h | h
+    · exact h
+    · exfalso; apply Fx; rw [← h]; exact F_d
+  have h_u_strict : x < u := by
+    rcases lt_or_eq_of_le h_u_ge with h | h
+    · exact h
+    · exfalso; apply Fx; rw [h]; exact F_u
+  apply le_antisymm
+  · exact succ_le_lt beta fexp hValid F_d F_u (by linarith)
+  · -- u ≤ succ d.
+    have F_succ_d : generic_format beta fexp (succ beta fexp d) :=
+      generic_format_succ beta fexp hValid F_d
+    have h_succ_ge_x : x ≤ succ beta fexp d := by
+      by_contra h
+      push_neg at h
+      -- Round_DN maximality: succ d ≤ d. With succ_ge_id: succ d = d.
+      have h_succ_le_d : succ beta fexp d ≤ d :=
+        (round_DN_pt beta fexp hValid x).2.2 _ F_succ_d (le_of_lt h)
+      have h_succ_eq_d : succ beta fexp d = d :=
+        le_antisymm h_succ_le_d (succ_ge_id beta fexp d)
+      -- succ d = d forces d = 0.
+      have h_d_zero : d = 0 := by
+        rcases lt_trichotomy d 0 with h_d_neg | h_d_zero | h_d_pos
+        · exfalso
+          unfold succ at h_succ_eq_d
+          rw [if_neg (not_le.mpr h_d_neg)] at h_succ_eq_d
+          have h_neg_d_pos : 0 < -d := by linarith
+          have h_pred_lt : pred_pos beta fexp (-d) < -d :=
+            pred_pos_lt_id beta fexp (ne_of_gt h_neg_d_pos)
+          linarith
+        · exact h_d_zero
+        · exfalso
+          have := succ_gt_id beta fexp (ne_of_gt h_d_pos)
+          linarith
+      -- d = 0 and succ 0 = 0 force ulp 0 = 0, hence negligible_exp = none.
+      rw [h_d_zero, succ_0] at h_succ_eq_d
+      have h_neg : negligible_exp fexp = none := by
+        rcases h_neg_cases : negligible_exp fexp with _ | n
+        · rfl
+        · exfalso
+          have h_ulp_0 : ulp beta fexp 0 = bpow beta (fexp n) := by
+            unfold ulp; rw [if_pos rfl, h_neg_cases]
+          rw [h_ulp_0] at h_succ_eq_d
+          have : 0 < bpow beta (fexp n) := bpow_gt_0 _ _
+          linarith
+      -- round_DN x = 0 and negligible_exp = none ⇒ x = 0 ∈ F, contradicting Fx.
+      have h_x_eq_0 : x = 0 :=
+        eq_0_round_0_negligible_exp beta fexp hValid h_neg _ h_d_zero
+      apply Fx; rw [h_x_eq_0]; exact generic_format_0 beta fexp
+    exact (round_UP_pt beta fexp hValid x).2.2 _ F_succ_d h_succ_ge_x
 
 /-- For positive `x` in F, either `ulp` is preserved by `succ` or `succ x`
 hits the next power of `β` exactly. -/
