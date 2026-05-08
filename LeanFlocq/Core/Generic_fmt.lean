@@ -1667,4 +1667,53 @@ theorem round_N_middle (beta : radix) (fexp : ℤ → ℤ) (choice : ℤ → Boo
     rw [h_zn]
     split_ifs <;> rfl
 
+/-! ### Round to nearest, ties away from zero (`NA`) -/
+
+/-- `round_NA_pt`: rounding via Znearest with `choice n = (0 ≤ n)` produces
+the away-from-zero nearest. -/
+theorem round_NA_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    Rnd_NA_pt (generic_format beta fexp) x
+        (round beta fexp (Znearest (fun n => decide (0 ≤ n))) x) := by
+  set choice : ℤ → Bool := fun n => decide (0 ≤ n) with hchoice
+  have Rxf : Rnd_N_pt (generic_format beta fexp) x
+      (round beta fexp (Znearest choice) x) :=
+    round_N_pt beta fexp hValid _ x
+  by_cases Hm : x - round beta fexp (fun y : ℝ => ⌊y⌋) x
+              = round beta fexp (fun y : ℝ => ⌈y⌉) x - x
+  · apply Rnd_NA_pt_N _ (generic_format_0 beta fexp) Rxf
+    rcases le_or_gt 0 x with Hx | Hx
+    · have h_round_nn : 0 ≤ round beta fexp (Znearest choice) x :=
+        Rnd_N_pt_ge_0 _ (generic_format_0 beta fexp) Hx Rxf
+      rw [abs_of_nonneg Hx, abs_of_nonneg h_round_nn]
+      rw [round_N_middle beta fexp _ Hm]
+      have h_floor_nn : 0 ≤ ⌊scaled_mantissa beta fexp x⌋ := by
+        apply Int.floor_nonneg.mpr
+        exact mul_nonneg Hx (bpow_ge_0 _ _)
+      split_ifs with h
+      · exact (round_UP_pt beta fexp hValid x).2.1
+      · simp only [hchoice, decide_eq_true_eq] at h
+        exact absurd h_floor_nn h
+    · have h_round_np : round beta fexp (Znearest choice) x ≤ 0 :=
+        Rnd_N_pt_le_0 _ (generic_format_0 beta fexp) (le_of_lt Hx) Rxf
+      rw [abs_of_neg Hx, abs_of_nonpos h_round_np]
+      rw [round_N_middle beta fexp _ Hm]
+      have h_floor_neg : ¬ (0 ≤ ⌊scaled_mantissa beta fexp x⌋) := by
+        push_neg
+        apply Int.floor_lt.mpr
+        push_cast
+        have hbpow_pos : 0 < bpow beta (-cexp beta fexp x) := bpow_gt_0 _ _
+        unfold scaled_mantissa
+        exact mul_neg_of_neg_of_pos Hx hbpow_pos
+      split_ifs with h
+      · simp only [hchoice, decide_eq_true_eq] at h
+        exact absurd h h_floor_neg
+      · have h_dn := (round_DN_pt beta fexp hValid x).2.1
+        linarith
+  · refine ⟨Rxf, ?_⟩
+    intro g Rxg
+    have h_eq : g = round beta fexp (Znearest choice) x :=
+      Rnd_N_pt_unique _ (round_DN_pt beta fexp hValid x)
+        (round_UP_pt beta fexp hValid x) Hm Rxg Rxf
+    rw [h_eq]
+
 end LeanFlocq
