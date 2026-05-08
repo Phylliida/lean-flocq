@@ -264,6 +264,33 @@ theorem bpow_mag_le (beta : radix) {x : ℝ} (hx : x ≠ 0) :
   rw [heq]
   exact h
 
+/-- If `|x| < β^e` and `x ≠ 0`, then `mag β x ≤ e`. -/
+theorem mag_le_bpow (beta : radix) {x : ℝ} {e : ℤ}
+    (hx : x ≠ 0) (h : |x| < bpow beta e) : mag beta x ≤ e := by
+  have h_chain : bpow beta (mag beta x - 1) < bpow beta e :=
+    lt_of_le_of_lt (bpow_mag_le beta hx) h
+  have := lt_bpow beta h_chain
+  omega
+
+/-- If `β^e ≤ |x|`, then `e < mag β x`. -/
+theorem mag_gt_bpow (beta : radix) {x : ℝ} {e : ℤ}
+    (h : bpow beta e ≤ |x|) : e < mag beta x := by
+  have h_high : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+  exact lt_bpow beta (lt_of_le_of_lt h h_high)
+
+/-- If `β^(e-1) ≤ |x|`, then `e ≤ mag β x`. -/
+theorem mag_ge_bpow (beta : radix) {x : ℝ} {e : ℤ}
+    (h : bpow beta (e - 1) ≤ |x|) : e ≤ mag beta x := by
+  rcases lt_or_ge (|x|) (bpow beta e) with h_lt | h_le
+  · have heq : mag beta x = e := mag_unique beta h h_lt
+    rw [heq]
+  · exact le_of_lt (mag_gt_bpow beta h_le)
+
+/-- `mag` is monotone in absolute value (when `x ≠ 0`). -/
+theorem mag_le_abs (beta : radix) {x y : ℝ} (hx : x ≠ 0) (h : |x| ≤ |y|) :
+    mag beta x ≤ mag beta y :=
+  mag_ge_bpow beta (le_trans (bpow_mag_le beta hx) h)
+
 /-- `mag` from a bound on positive `x`. -/
 theorem mag_unique_pos (beta : radix) {x : ℝ} {e : ℤ}
     (h_low : bpow beta (e - 1) ≤ x) (h_high : x < bpow beta e) :

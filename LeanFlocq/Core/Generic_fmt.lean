@@ -1232,6 +1232,49 @@ theorem scaled_mantissa_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_e
   rw [mul_assoc, ← bpow_plus, show (cexp beta fexp x + -cexp beta fexp x) = 0 from by ring,
       bpow_zero, mul_one]
 
+/-! ### Monotone exponent function -/
+
+/-- A `fexp` is `Monotone_exp` iff it is non-decreasing. -/
+def Monotone_exp (fexp : ℤ → ℤ) : Prop :=
+  ∀ ex ey, ex ≤ ey → fexp ex ≤ fexp ey
+
+theorem cexp_le_bpow (beta : radix) (fexp : ℤ → ℤ) (hMon : Monotone_exp fexp)
+    {x : ℝ} {e : ℤ} (Zx : x ≠ 0) (Hx : |x| < bpow beta e) :
+    cexp beta fexp x ≤ fexp e := by
+  unfold cexp
+  exact hMon _ _ (mag_le_bpow beta Zx Hx)
+
+theorem cexp_ge_bpow (beta : radix) (fexp : ℤ → ℤ) (hMon : Monotone_exp fexp)
+    {x : ℝ} {e : ℤ} (Hx : bpow beta (e - 1) ≤ |x|) :
+    fexp e ≤ cexp beta fexp x := by
+  unfold cexp
+  exact hMon _ _ (mag_ge_bpow beta Hx)
+
+theorem mag_round_ge (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ}
+    (Zr : round beta fexp rnd x ≠ 0) :
+    mag beta x ≤ mag beta (round beta fexp rnd x) := by
+  rcases round_ZR_or_AW beta fexp rnd x with H | H
+  · rw [H] at Zr ⊢
+    rw [mag_round_ZR beta fexp hValid Zr]
+  · rw [H] at Zr ⊢
+    -- mag x ≤ mag (round Zaway x)
+    -- Use mag_le_abs: |x| ≤ |round Zaway x|
+    apply mag_le_abs beta
+    · -- x ≠ 0
+      intro hx0; rw [hx0, round_0] at Zr; exact Zr rfl
+    · -- |x| ≤ |round Zaway x|
+      rw [← round_AW_abs beta fexp hValid, round_AW_UP beta fexp (abs_nonneg _)]
+      exact (round_UP_pt beta fexp hValid |x|).2.1
+
+theorem cexp_round_ge (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (hMon : Monotone_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ}
+    (Zr : round beta fexp rnd x ≠ 0) :
+    cexp beta fexp x ≤ cexp beta fexp (round beta fexp rnd x) := by
+  unfold cexp
+  exact hMon _ _ (mag_round_ge beta fexp hValid rnd Zr)
+
 /-! ### Round to nearest with tie-breaking: `Znearest` -/
 
 /-- `Znearest choice x` rounds to nearest, breaking ties by `choice ⌊x⌋`:
