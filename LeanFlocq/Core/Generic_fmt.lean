@@ -1604,4 +1604,67 @@ theorem round_N_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     rw [abs_mul, abs_of_nonneg hbe]
     exact mul_le_mul_of_nonneg_right (Znearest_dist_le_ceil choice m) hbe
 
+/-- At the midpoint, Znearest picks via the choice function. -/
+theorem round_N_middle (beta : radix) (fexp : ℤ → ℤ) (choice : ℤ → Bool) {x : ℝ}
+    (Hx : x - round beta fexp (fun y : ℝ => ⌊y⌋) x
+        = round beta fexp (fun y : ℝ => ⌈y⌉) x - x) :
+    round beta fexp (Znearest choice) x =
+      if choice ⌊scaled_mantissa beta fexp x⌋
+      then round beta fexp (fun y : ℝ => ⌈y⌉) x
+      else round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+  set sm := scaled_mantissa beta fexp x with hsm_def
+  set e := cexp beta fexp x with he_def
+  have hxm : x = sm * bpow beta e := (scaled_mantissa_mult_bpow beta fexp x).symm
+  have hbpow_pos : 0 < bpow beta e := bpow_gt_0 _ _
+  -- Hx implies sm - ⌊sm⌋ = ⌈sm⌉ - sm
+  have h_dn_val : round beta fexp (fun y : ℝ => ⌊y⌋) x
+      = ((⌊sm⌋ : ℤ) : ℝ) * bpow beta e := rfl
+  have h_up_val : round beta fexp (fun y : ℝ => ⌈y⌉) x
+      = ((⌈sm⌉ : ℤ) : ℝ) * bpow beta e := rfl
+  rw [h_dn_val, h_up_val, hxm] at Hx
+  have h_mid : sm - (⌊sm⌋ : ℝ) = (⌈sm⌉ : ℝ) - sm := by
+    have h_eq : (sm - (⌊sm⌋ : ℝ)) * bpow beta e
+        = ((⌈sm⌉ : ℝ) - sm) * bpow beta e := by
+      have h_d1 : (sm - (⌊sm⌋ : ℝ)) * bpow beta e
+          = sm * bpow beta e - (⌊sm⌋ : ℝ) * bpow beta e := by ring
+      have h_d2 : ((⌈sm⌉ : ℝ) - sm) * bpow beta e
+          = (⌈sm⌉ : ℝ) * bpow beta e - sm * bpow beta e := by ring
+      rw [h_d1, h_d2]
+      exact_mod_cast Hx
+    exact mul_right_cancel₀ (ne_of_gt hbpow_pos) h_eq
+  -- Case split on whether sm is integer
+  by_cases hsm_int : (sm : ℝ) = ⌊sm⌋
+  · -- sm integer: ⌈sm⌉ = sm = ⌊sm⌋
+    have h_ceil_eq : (⌈sm⌉ : ℝ) = (⌊sm⌋ : ℝ) := by linarith
+    have h_zn : Znearest choice sm = ⌊sm⌋ := by
+      unfold Znearest
+      rw [if_pos (by linarith : sm - (⌊sm⌋ : ℝ) < 1/2)]
+    unfold round F2R
+    show ((Znearest choice sm : ℤ) : ℝ) * bpow beta e
+        = if choice ⌊sm⌋ then ((⌈sm⌉ : ℤ) : ℝ) * bpow beta e
+                          else ((⌊sm⌋ : ℤ) : ℝ) * bpow beta e
+    rw [h_zn]
+    split_ifs
+    · rw [h_ceil_eq]
+    · rfl
+  · -- sm non-integer: ⌈sm⌉ = ⌊sm⌋ + 1, fractional = 1/2
+    have h_floor_lt : (⌊sm⌋ : ℝ) < sm :=
+      lt_of_le_of_ne (Int.floor_le sm) (Ne.symm hsm_int)
+    have h_le_ceil : sm ≤ (⌈sm⌉ : ℝ) := Int.le_ceil sm
+    have h_lt_ceil : (⌊sm⌋ : ℝ) < ⌈sm⌉ := by linarith
+    have h_lt_ceil_int : ⌊sm⌋ < ⌈sm⌉ := by exact_mod_cast h_lt_ceil
+    have h_le_int : ⌈sm⌉ ≤ ⌊sm⌋ + 1 := Int.ceil_le_floor_add_one sm
+    have h_ceil_eq_int : ⌈sm⌉ = ⌊sm⌋ + 1 := by omega
+    have h_ceil_eq : (⌈sm⌉ : ℝ) = (⌊sm⌋ : ℝ) + 1 := by exact_mod_cast h_ceil_eq_int
+    have h_frac_half : sm - (⌊sm⌋ : ℝ) = 1/2 := by linarith
+    have h_zn : Znearest choice sm = if choice ⌊sm⌋ then ⌈sm⌉ else ⌊sm⌋ := by
+      unfold Znearest
+      rw [if_neg (by linarith), if_neg (by linarith)]
+    unfold round F2R
+    show ((Znearest choice sm : ℤ) : ℝ) * bpow beta e
+        = if choice ⌊sm⌋ then ((⌈sm⌉ : ℤ) : ℝ) * bpow beta e
+                          else ((⌊sm⌋ : ℤ) : ℝ) * bpow beta e
+    rw [h_zn]
+    split_ifs <;> rfl
+
 end LeanFlocq
