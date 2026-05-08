@@ -234,4 +234,36 @@ theorem generic_format_FLT_FIX (beta : radix) (emin prec : ℤ) (hp : 0 < prec) 
   unfold FIX_exp FLT_exp
   exact max_le (by linarith) (le_refl _)
 
+/-- Below the gradual-underflow threshold, the FLT format has constant ulp
+equal to `bpow emin` — it behaves like FIX(emin) there. -/
+theorem ulp_FLT_small (beta : radix) (emin prec : ℤ) (hp : 0 < prec) {x : ℝ}
+    (hx : |x| < bpow beta (emin + prec)) :
+    ulp beta (FLT_exp emin prec) x = bpow beta emin := by
+  unfold ulp
+  by_cases hx0 : x = 0
+  · rw [if_pos hx0]
+    rcases h_neg : negligible_exp (FLT_exp emin prec) with _ | n
+    · -- `none`: contradiction. emin is in the small regime since
+      -- FLT_exp emin = max(emin - prec, emin) = emin (prec > 0).
+      exfalso
+      have h_self : FLT_exp emin prec emin = emin := by
+        unfold FLT_exp; exact max_eq_right (by linarith)
+      have := negligible_exp_none h_neg emin
+      linarith
+    · show bpow beta (FLT_exp emin prec n) = bpow beta emin
+      have h_self : FLT_exp emin prec emin = emin := by
+        unfold FLT_exp; exact max_eq_right (by linarith)
+      have h_n_le : n ≤ FLT_exp emin prec n := negligible_exp_some h_neg
+      have h_emin_le : emin ≤ FLT_exp emin prec emin := by rw [h_self]
+      have h_eq := fexp_negligible_exp_eq (FLT_exp_valid emin prec hp) h_n_le h_emin_le
+      rw [h_eq, h_self]
+  · rw [if_neg hx0]
+    show bpow beta (cexp beta (FLT_exp emin prec) x) = bpow beta emin
+    have h_mag_le : mag beta x ≤ emin + prec := mag_le_bpow beta hx0 hx
+    unfold cexp FLT_exp
+    show bpow beta (max (mag beta x - prec) emin) = bpow beta emin
+    have h_max : max (mag beta x - prec) emin = emin := by
+      apply max_eq_right; linarith
+    rw [h_max]
+
 end LeanFlocq
