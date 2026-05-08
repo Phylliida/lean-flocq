@@ -1251,10 +1251,68 @@ theorem pred_ge_gt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     (hxy : x < y) :
     x ≤ pred beta fexp y := by
   unfold pred
-  -- x ≤ -succ(-y) iff -x ≥ succ(-y), i.e., succ(-y) ≤ -x.
   have F_neg_y : generic_format beta fexp (-y) := generic_format_opp beta fexp Fy
   have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
   have := succ_le_lt beta fexp hValid F_neg_y F_neg_x (by linarith : -y < -x)
   linarith
+
+/-- For positive `x` in F, `pred (succ x) = x`. -/
+theorem pred_succ_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x) (hx : 0 < x) :
+    pred beta fexp (succ beta fexp x) = x := by
+  apply le_antisymm
+  · by_contra h
+    push_neg at h
+    have F_succ_x : generic_format beta fexp (succ beta fexp x) :=
+      generic_format_succ beta fexp hValid Fx
+    have F_pred_succ_x : generic_format beta fexp (pred beta fexp (succ beta fexp x)) :=
+      generic_format_pred beta fexp hValid F_succ_x
+    have h_succ_le : succ beta fexp x ≤ pred beta fexp (succ beta fexp x) :=
+      succ_le_lt beta fexp hValid Fx F_pred_succ_x h
+    have h_succ_pos : 0 < succ beta fexp x := lt_of_lt_of_le hx (succ_ge_id beta fexp x)
+    have h_pred_lt : pred beta fexp (succ beta fexp x) < succ beta fexp x :=
+      pred_lt_id beta fexp (ne_of_gt h_succ_pos)
+    linarith
+  · have F_succ_x : generic_format beta fexp (succ beta fexp x) :=
+      generic_format_succ beta fexp hValid Fx
+    exact pred_ge_gt beta fexp hValid Fx F_succ_x (succ_gt_id beta fexp (ne_of_gt hx))
+
+/-- The full `succ_pred`: for any `x` in F, `succ (pred x) = x`. -/
+theorem succ_pred (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x) :
+    succ beta fexp (pred beta fexp x) = x := by
+  rcases lt_trichotomy x 0 with hx | hx | hx
+  · -- x < 0: chain through pred-succ on (-x).
+    have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+    have h_neg_x_pos : 0 < -x := by linarith
+    show succ beta fexp (pred beta fexp x) = x
+    unfold pred
+    rw [succ_opp, pred_succ_pos beta fexp hValid F_neg_x h_neg_x_pos]
+    ring
+  · -- x = 0: pred 0 = -ulp 0; succ(-ulp 0) = -pred(ulp 0) = -0 = 0.
+    rw [hx, pred_0, succ_opp, pred_ulp_0 beta fexp hValid]
+    ring
+  · exact succ_pred_pos beta fexp hValid Fx hx
+
+/-- The full `pred_succ`: for any `x` in F, `pred (succ x) = x`. -/
+theorem pred_succ (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x) :
+    pred beta fexp (succ beta fexp x) = x := by
+  -- Use succ_pred at (-x), then unwind via opp.
+  have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+  have h := succ_pred beta fexp hValid F_neg_x
+  -- h : succ(pred(-x)) = -x.
+  -- Want: pred(succ x) = x.
+  -- pred y = -succ(-y), so pred(succ x) = -succ(-succ x) = -succ(-succ x).
+  -- -succ x via succ_opp: succ x = -pred(-x), so -succ x = pred(-x).
+  -- Hence -succ(-succ x) = -succ(pred(-x)) = -(-x) = x via h.
+  unfold pred
+  rw [show -succ beta fexp x = pred beta fexp (-x) from by
+    have := succ_opp beta fexp x
+    -- succ(-x) = -pred x. We want -succ x = pred (-x).
+    -- pred (-x) = -(succ(--x)) = -succ x. So pred (-x) = -succ x. ✓
+    unfold pred
+    rw [neg_neg]]
+  rw [h]; ring
 
 end LeanFlocq
