@@ -1428,6 +1428,29 @@ theorem succ_DN_eq_UP (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fe
       apply Fx; rw [h_x_eq_0]; exact generic_format_0 beta fexp
     exact (round_UP_pt beta fexp hValid x).2.2 _ F_succ_d h_succ_ge_x
 
+/-- For any `x ∉ F`, `pred(round_UP x) = round_DN x`. Direct corollary of
+`succ_DN_eq_UP` via `pred_succ`. -/
+theorem pred_UP_eq_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : ¬ generic_format beta fexp x) :
+    pred beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x)
+      = round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+  have F_d : generic_format beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x) :=
+    generic_format_round beta fexp hValid _ x
+  have h := succ_DN_eq_UP beta fexp hValid Fx
+  rw [← h]
+  exact pred_succ beta fexp hValid F_d
+
+/-- Universally, `pred(round_UP x) ≤ round_DN x`. Cases on whether `x` is
+in the format: equality via `pred_UP_eq_DN` if not, otherwise both sides
+equal `x` and `pred ≤ id`. -/
+theorem pred_UP_le_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    pred beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x)
+      ≤ round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+  by_cases Fx : generic_format beta fexp x
+  · rw [round_generic beta fexp _ Fx, round_generic beta fexp _ Fx]
+    exact pred_le_id beta fexp x
+  · rw [pred_UP_eq_DN beta fexp hValid Fx]
+
 /-- For positive `x` in F, either `ulp` is preserved by `succ` or `succ x`
 hits the next power of `β` exactly. -/
 theorem ulp_succ_pos (beta : radix) (fexp : ℤ → ℤ)
