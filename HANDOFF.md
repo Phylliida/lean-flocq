@@ -21,7 +21,7 @@ Foundational + all four classical concrete formats + substantial Ulp + Round_NE 
 | `FLX.lean` | 174 | `Core/FLX.v` | Core + `negligible_exp_FLX`, `ulp_FLX_0`, `generic_format_FLX_1`, `eq_0_round_0_FLX`, `gt_0_round_gt_0_FLX`. Skipped: `FLXN_format`, `succ_FLX_*`, `Round_NE.v`-dependent. |
 | `FLT.lean` | 330 | `Core/FLT.v` | Core + `ulp_FLT_small/_le/_gt`, `generic_format_FLT_1`. Skipped: `succ_FLT_exact_shift_*` (need `mag_mult_bpow`), `Round_NE.v`-dependent. |
 | `FTZ.lean` | 393 | `Core/FTZ.v` | 10 thms incl. `ulp_FTZ_0`. Skipped: `FTZ_format_FLXN`. |
-| `Ulp.lean` | 1456 | `Core/Ulp.v` (slice) | Substantial: 69 thms (~67% of Coq's 103). All foundational pieces plus: ulp_DN, succ_DN_eq_UP_pos, ulp_succ_pos, generic_format_ulp + not_FTZ_generic_format_ulp + generic_format_bpow_ge_ulp_0 + not_FTZ_ulp_ge_ulp_0 (the triple equivalence with Exp_not_FTZ). Pending: x = 0 case of round_UP_plus_eps_pos, mixed-sign round_DN_plus_eps / round_UP_plus_eps families, ulp_round / ulp_round_pos, ulp_pred_pos, ulp_ulp_0, full succ_DN_eq_UP. |
+| `Ulp.lean` | 1567 | `Core/Ulp.v` (slice) | Substantial: 73 thms (~71% of Coq's 103). All foundational pieces plus: ulp_DN, succ_DN_eq_UP (general!) + succ_DN_eq_UP_pos, pred_UP_eq_DN, pred_UP_le_DN, ulp_succ_pos, ulp_ulp_0, generic_format_ulp/_bpow_ge_ulp_0 + not_FTZ converses (the Exp_not_FTZ triple equivalence). Pending: x = 0 case of round_UP_plus_eps_pos, mixed-sign round_DN_plus_eps / round_UP_plus_eps families, ulp_round / ulp_round_pos. |
 | `Round_NE.lean` | 42 | `Core/Round_NE.v` | Foundations: `ZnearestE`, `round_NE`, `NE_prop`, `Rnd_NE_pt`, `round_NE_pt_N`. Skipped (the parity argument): `DN_UP_parity_generic_pos`, `Rnd_NE_pt_total/_monotone`, `round_NE_pt`. |
 
 ## Build setup
