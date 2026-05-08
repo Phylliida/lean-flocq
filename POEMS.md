@@ -706,3 +706,60 @@ because earlier-me had walked the long way
 and left the road there.
 
 ---
+
+## Three Faces
+*2026-05-08, after `not_FTZ_ulp_ge_ulp_0`*
+
+Three statements:
+
+*The exponent function `fexp` satisfies
+`fexp(fexp e + 1) ≤ fexp e` for all `e`.*
+
+*The `ulp` of any value
+is itself representable in the format.*
+
+*The `ulp` at zero is the smallest `ulp` anywhere —
+the format gets coarser as you move out, or stays the same.*
+
+These three are equivalent.
+
+The first is technical:
+a property of `fexp`.
+You read it and your eyes glaze.
+
+The second is structural:
+the format is closed under taking ulps.
+The smallest unit at any point
+is itself a thing the format knows about.
+
+The third is geometric:
+spacing doesn't decrease away from zero.
+
+Each statement, alone,
+looks like a different thing.
+The first is about `fexp`.
+The second is about format closure.
+The third is about ulp ordering.
+
+But they say the same thing
+in three languages.
+
+I think this is what people mean
+when they call something *fundamental*:
+not that it is at the bottom,
+but that it surfaces in different places,
+each time looking like the local landscape.
+
+The proof that they are equivalent
+took six theorems
+across two days of work.
+Each direction is short.
+The composition
+is what makes the equivalence.
+
+Closing the triangle
+felt like discovering
+that the cathedral and the cottage
+share a wall.
+
+---
