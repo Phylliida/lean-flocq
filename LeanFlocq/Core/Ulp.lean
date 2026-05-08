@@ -579,4 +579,60 @@ theorem pred_ge_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
   rw [pred_eq_pos beta fexp (le_of_lt hx)]
   exact pred_pos_ge_0 beta fexp hValid hx Fx
 
+/-- `succ 0 = ulp 0`. -/
+@[simp]
+theorem succ_0 (beta : radix) (fexp : ℤ → ℤ) :
+    succ beta fexp 0 = ulp beta fexp 0 := by
+  unfold succ
+  rw [if_pos (le_refl 0), zero_add]
+
+/-- `pred 0 = -(ulp 0)`. -/
+@[simp]
+theorem pred_0 (beta : radix) (fexp : ℤ → ℤ) :
+    pred beta fexp 0 = -(ulp beta fexp 0) := by
+  unfold pred
+  rw [neg_zero, succ_0]
+
+/-- `pred (ulp 0) = 0`. -/
+theorem pred_ulp_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) :
+    pred beta fexp (ulp beta fexp 0) = 0 := by
+  rw [pred_eq_pos beta fexp (ulp_ge_0 beta fexp 0)]
+  unfold pred_pos
+  cases h_neg : negligible_exp fexp with
+  | none =>
+    -- `ulp 0 = 0` in this case.
+    have h_ulp_0 : ulp beta fexp 0 = 0 := by
+      unfold ulp; rw [if_pos rfl, h_neg]
+    rw [h_ulp_0]
+    rw [if_neg (by
+      have : (0 : ℝ) < bpow beta (mag beta 0 - 1) := bpow_gt_0 _ _
+      linarith)]
+    rw [h_ulp_0]; ring
+  | some n =>
+    -- `ulp 0 = bpow (fexp n)`. The pred-pos branch hits the bpow boundary
+    -- because `mag (bpow (fexp n)) = fexp n + 1`.
+    have h_ulp_0 : ulp beta fexp 0 = bpow beta (fexp n) := by
+      unfold ulp; rw [if_pos rfl, h_neg]
+    rw [h_ulp_0]
+    have h_mag : mag beta (bpow beta (fexp n)) = fexp n + 1 := mag_bpow beta (fexp n)
+    rw [h_mag]
+    have h_simp : (fexp n + 1 - 1 : ℤ) = fexp n := by ring
+    rw [h_simp, if_pos rfl]
+    -- Goal: `bpow (fexp n) - bpow (fexp (fexp n)) = 0`. Use Valid_exp's stabilization.
+    have h_n_le : n ≤ fexp n := negligible_exp_some h_neg
+    have h_stab := (hValid n).2 h_n_le
+    have h_fxn : fexp (fexp n) = fexp n := h_stab.2 (fexp n) (le_refl _)
+    rw [h_fxn]; ring
+
+/-- `succ_gt_id` lifted to a non-strict comparison: `x ≤ y` (with `y ≠ 0`)
+implies `x < succ y`. -/
+theorem succ_gt_ge (beta : radix) (fexp : ℤ → ℤ) {x y : ℝ}
+    (hy : y ≠ 0) (hxy : x ≤ y) : x < succ beta fexp y :=
+  lt_of_le_of_lt hxy (succ_gt_id beta fexp hy)
+
+/-- `pred_lt_id` lifted: `x ≤ y` (with `x ≠ 0`) implies `pred x < y`. -/
+theorem pred_lt_le (beta : radix) (fexp : ℤ → ℤ) {x y : ℝ}
+    (hx : x ≠ 0) (hxy : x ≤ y) : pred beta fexp x < y :=
+  lt_of_lt_of_le (pred_lt_id beta fexp hx) hxy
+
 end LeanFlocq
