@@ -997,4 +997,34 @@ theorem error_le_half_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_ex
       rw [abs_of_nonneg (by linarith : (0 : ℝ) ≤ u - x)] at h1
       linarith
 
+/-- Adding `0 ≤ eps < ulp x` to a positive in-format `x` preserves the magnitude.
+The ulp-step is exactly the size of the magnitude band the value sits in. -/
+theorem mag_plus_eps (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (hx : 0 < x)
+    (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_nn : 0 ≤ eps) (heps_lt : eps < ulp beta fexp x) :
+    mag beta (x + eps) = mag beta x := by
+  apply mag_unique_pos beta
+  · have h_low : bpow beta (mag beta x - 1) ≤ x := by
+      have := bpow_mag_le beta (ne_of_gt hx)
+      rwa [abs_of_pos hx] at this
+    linarith
+  · set m := Ztrunc (scaled_mantissa beta fexp x)
+    set ce := cexp beta fexp x with hce_def
+    have hxe : x = F2R (beta := beta) ⟨m, ce⟩ := Fx
+    have hm_pos : 0 < m := gt_0_F2R (by rw [← hxe]; exact hx)
+    have h_high : x < bpow beta (mag beta x) := by
+      have := bpow_mag_gt beta x
+      rwa [abs_of_pos hx] at this
+    have h_F2R_p1 : F2R (beta := beta) ⟨m + 1, ce⟩ ≤ bpow beta (mag beta x) := by
+      apply F2R_p1_le_bpow hm_pos
+      rw [← hxe]; exact h_high
+    have h_eq : F2R (beta := beta) ⟨m + 1, ce⟩ = x + ulp beta fexp x := by
+      rw [ulp_neq_0 beta fexp (ne_of_gt hx)]
+      unfold F2R
+      show (↑(m + 1) : ℝ) * bpow beta ce = x + bpow beta ce
+      have hx_eq : x = (↑m : ℝ) * bpow beta ce := hxe
+      push_cast; linarith
+    rw [h_eq] at h_F2R_p1
+    linarith
+
 end LeanFlocq
