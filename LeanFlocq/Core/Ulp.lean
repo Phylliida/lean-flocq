@@ -1564,4 +1564,52 @@ theorem ulp_ulp_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
       rw [h_ulp_0, ulp_bpow] at h
       exact h
 
+/-- For positive `x` and `Exp_not_FTZ` `fexp`, the round of `x` either
+preserves `ulp` or hits the next power of `β` exactly. -/
+theorem ulp_round_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x : ℝ} (hx : 0 < x) :
+    ulp beta fexp (round beta fexp rnd x) = ulp beta fexp x
+      ∨ round beta fexp rnd x = bpow beta (mag beta x) := by
+  by_cases Fx : generic_format beta fexp x
+  · left; rw [round_generic beta fexp rnd Fx]
+  · rcases round_DN_or_UP beta fexp rnd x with hr_dn | hr_up
+    · -- round = round_DN: ulp_DN.
+      left; rw [hr_dn]
+      exact ulp_DN beta fexp hValid (le_of_lt hx)
+    · -- round = round_UP: rewrite as succ of round_DN.
+      have h_dn_nn : 0 ≤ round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+        round_ge_generic beta fexp hValid _ (generic_format_0 beta fexp) (le_of_lt hx)
+      rw [hr_up, ← succ_DN_eq_UP beta fexp hValid Fx]
+      rcases lt_or_eq_of_le h_dn_nn with h_dn_pos | h_dn_zero
+      · -- round_DN x > 0: ulp_succ_pos gives the disjunction.
+        rcases ulp_succ_pos beta fexp
+          (generic_format_round beta fexp hValid _ x) h_dn_pos with hY | hY
+        · left
+          rw [hY]; exact ulp_DN beta fexp hValid (le_of_lt hx)
+        · right
+          rw [hY]; congr 1
+          exact mag_DN beta fexp hValid h_dn_pos
+      · -- round_DN x = 0: subnormal regime. succ 0 = ulp 0, and
+        -- fexp(mag x) = fexp n for the negligible_exp witness, giving
+        -- ulp x = ulp 0.
+        left
+        rw [← h_dn_zero, succ_0, ulp_ulp_0 beta fexp hValid h_NotFTZ]
+        rcases h_neg : negligible_exp fexp with _ | n
+        · exfalso
+          have := eq_0_round_0_negligible_exp beta fexp hValid h_neg _ h_dn_zero.symm
+          linarith
+        · have h_ulp_0 : ulp beta fexp 0 = bpow beta (fexp n) := by
+            unfold ulp; rw [if_pos rfl, h_neg]
+          rw [h_ulp_0, ulp_neq_0 beta fexp (ne_of_gt hx)]
+          show bpow beta (fexp n) = bpow beta (cexp beta fexp x)
+          unfold cexp
+          have h_ex : bpow beta (mag beta x - 1) ≤ |x| ∧ |x| < bpow beta (mag beta x) :=
+            ⟨bpow_mag_le beta (ne_of_gt hx), bpow_mag_gt beta x⟩
+          have h_subnormal : mag beta x ≤ fexp (mag beta x) :=
+            exp_small_round_0 beta fexp hValid _ h_ex h_dn_zero.symm
+          have h_n_le : n ≤ fexp n := negligible_exp_some h_neg
+          congr 1
+          exact (fexp_negligible_exp_eq hValid h_subnormal h_n_le).symm
+
 end LeanFlocq
