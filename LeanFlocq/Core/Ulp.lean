@@ -1179,4 +1179,22 @@ theorem round_UP_plus_eps_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Vali
     rw [heps_eq]
     exact round_generic beta fexp _ (generic_format_succ_aux1 beta fexp hValid hx Fx)
 
+/-- For positive `x` in F and `0 < eps ≤ ulp (pred x)`,
+`round_DN (x - eps) = pred x`. The dual of `round_UP_plus_eps_pos`. -/
+theorem round_DN_minus_eps_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_pos : 0 < eps)
+    (heps_le : eps ≤ ulp beta fexp (pred beta fexp x)) :
+    round beta fexp (fun y : ℝ => ⌊y⌋) (x - eps) = pred beta fexp x := by
+  rw [pred_eq_pos beta fexp (le_of_lt hx)] at heps_le ⊢
+  -- pred_pos x + ulp(pred_pos x) = x, so x - eps = pred_pos x + (ulp - eps).
+  have h_pp_ulp := pred_pos_plus_ulp beta fexp hValid hx Fx
+  have h_eq : x - eps
+      = pred_pos beta fexp x + (ulp beta fexp (pred_pos beta fexp x) - eps) := by linarith
+  rw [h_eq]
+  exact round_DN_plus_eps_pos beta fexp hValid
+    (pred_pos_ge_0 beta fexp hValid hx Fx)
+    (generic_format_pred_pos beta fexp hValid Fx hx)
+    (by linarith) (by linarith)
+
 end LeanFlocq
