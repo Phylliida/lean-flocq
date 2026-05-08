@@ -393,4 +393,110 @@ theorem generic_format_pred_aux1 (beta : radix) (fexp : ℤ → ℤ) (_hValid : 
   unfold cexp
   rw [h_mag_diff]
 
+/-- For positive `x` in the format that *is* on the bpow lower boundary
+of its magnitude band (`x = bpow (mag x - 1)`), the predecessor uses a
+*shrunken* step `bpow (fexp (mag x - 1))`, and `x - bpow (fexp (mag x - 1))`
+is still in the format. -/
+theorem generic_format_pred_aux2 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (_hx : 0 < x) (Fx : generic_format beta fexp x)
+    (hbnd : x = bpow beta (mag beta x - 1)) :
+    generic_format beta fexp (x - bpow beta (fexp (mag beta x - 1))) := by
+  set e := mag beta x with he_def
+  have h_F_bpow : generic_format beta fexp (bpow beta (e - 1)) := by
+    rw [← hbnd]; exact Fx
+  have hfe_le : fexp (e - 1) ≤ e - 1 :=
+    generic_format_bpow_inv beta fexp hValid (e - 1) h_F_bpow
+  rcases lt_or_eq_of_le hfe_le with hfe_lt | hfe_eq
+  · -- fexp(e - 1) < e - 1: f decomposes as (β^(e-1-fexp(e-1)) - 1) · bpow(fexp(e-1)).
+    have hd : 0 ≤ e - 1 - fexp (e - 1) := by linarith
+    have h_decomp : x - bpow beta (fexp (e - 1))
+        = F2R (beta := beta)
+            ⟨(beta.val : ℤ) ^ (e - 1 - fexp (e - 1)).toNat - 1, fexp (e - 1)⟩ := by
+      rw [hbnd]
+      unfold F2R
+      show bpow beta (e - 1) - bpow beta (fexp (e - 1))
+          = (((beta.val ^ (e - 1 - fexp (e - 1)).toNat : ℤ) - 1 : ℤ) : ℝ)
+              * bpow beta (fexp (e - 1))
+      have hcast : (((beta.val ^ (e - 1 - fexp (e - 1)).toNat : ℤ) - 1 : ℤ) : ℝ)
+          = ((beta.val ^ (e - 1 - fexp (e - 1)).toNat : ℤ) : ℝ) - 1 := by push_cast; rfl
+      rw [hcast, IZR_Zpower beta hd]
+      have h_split : bpow beta (e - 1)
+          = bpow beta (e - 1 - fexp (e - 1)) * bpow beta (fexp (e - 1)) := by
+        rw [← bpow_plus]; congr 1; ring
+      rw [h_split]; ring
+    rw [h_decomp]
+    apply generic_format_F2R beta fexp _ _
+    intro _
+    rw [show F2R (beta := beta)
+            ⟨(beta.val : ℤ) ^ (e - 1 - fexp (e - 1)).toNat - 1, fexp (e - 1)⟩
+            = x - bpow beta (fexp (e - 1)) from h_decomp.symm]
+    -- Goal: cexp(x - bpow(fexp(e-1))) ≤ fexp(e-1).
+    -- Show mag(x - bpow(fexp(e-1))) = e - 1.
+    have h_2_le_beta : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+    have h_bpow_fe_le_e2 : bpow beta (fexp (e - 1)) ≤ bpow beta (e - 2) :=
+      bpow_le beta (by linarith)
+    have h_beta_eq : (beta.val : ℝ) * bpow beta (e - 2) = bpow beta (e - 1) := by
+      rw [show (beta.val : ℝ) = bpow beta 1 from (bpow_one beta).symm, ← bpow_plus]
+      congr 1; ring
+    have h_f_lb : bpow beta (e - 2) ≤ x - bpow beta (fexp (e - 1)) := by
+      have h1 : bpow beta (e - 2) + bpow beta (fexp (e - 1)) ≤ bpow beta (e - 1) := by
+        calc bpow beta (e - 2) + bpow beta (fexp (e - 1))
+            ≤ bpow beta (e - 2) + bpow beta (e - 2) := by linarith
+          _ = 2 * bpow beta (e - 2) := by ring
+          _ ≤ (beta.val : ℝ) * bpow beta (e - 2) :=
+              mul_le_mul_of_nonneg_right h_2_le_beta (bpow_ge_0 _ _)
+          _ = bpow beta (e - 1) := h_beta_eq
+      rw [hbnd]; linarith
+    have h_f_ub : x - bpow beta (fexp (e - 1)) < bpow beta (e - 1) := by
+      have : 0 < bpow beta (fexp (e - 1)) := bpow_gt_0 _ _
+      rw [hbnd]; linarith
+    have h_mag_f : mag beta (x - bpow beta (fexp (e - 1))) = e - 1 :=
+      mag_unique_pos beta (by rw [show (e - 1) - 1 = e - 2 from by ring]; exact h_f_lb) h_f_ub
+    show cexp beta fexp (x - bpow beta (fexp (e - 1))) ≤ fexp (e - 1)
+    unfold cexp
+    rw [h_mag_f]
+  · -- fexp(e-1) = e-1: f = bpow(e-1) - bpow(e-1) = 0.
+    have h_zero : x - bpow beta (fexp (e - 1)) = 0 := by
+      rw [hbnd, hfe_eq]; ring
+    rw [h_zero]
+    exact generic_format_0 beta fexp
+
+/-- The full `pred_pos`: for positive `x` in the format, `pred_pos x` is in
+the format. -/
+theorem generic_format_pred_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x) (hx : 0 < x) :
+    generic_format beta fexp (pred_pos beta fexp x) := by
+  unfold pred_pos
+  by_cases h : x = bpow beta (mag beta x - 1)
+  · rw [if_pos h]
+    exact generic_format_pred_aux2 beta fexp hValid hx Fx h
+  · rw [if_neg h]
+    exact generic_format_pred_aux1 beta fexp hValid hx Fx h
+
+/-- The successor of any element of the format is still in the format. -/
+theorem generic_format_succ (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x) :
+    generic_format beta fexp (succ beta fexp x) := by
+  unfold succ
+  by_cases hx : 0 ≤ x
+  · rw [if_pos hx]
+    rcases lt_or_eq_of_le hx with hx_pos | hx_eq
+    · exact generic_format_succ_aux1 beta fexp hValid hx_pos Fx
+    · -- x = 0: succ x = 0 + ulp 0 = ulp 0.
+      rw [← hx_eq, zero_add]
+      exact generic_format_ulp_0 beta fexp hValid
+  · rw [if_neg hx]
+    push_neg at hx
+    apply generic_format_opp
+    exact generic_format_pred_pos beta fexp hValid
+      (generic_format_opp beta fexp Fx) (by linarith)
+
+/-- The predecessor of any element of the format is still in the format. -/
+theorem generic_format_pred (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x) :
+    generic_format beta fexp (pred beta fexp x) := by
+  unfold pred
+  apply generic_format_opp
+  exact generic_format_succ beta fexp hValid (generic_format_opp beta fexp Fx)
+
 end LeanFlocq
