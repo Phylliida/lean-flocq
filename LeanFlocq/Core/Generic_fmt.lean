@@ -1476,6 +1476,37 @@ private theorem Znearest_dist_le_ceil (choice : ℤ → Bool) (m : ℝ) :
         abs_sub_comm _ _
       linarith [h_swap ▸ h_half]
 
+/-! ### Inclusion of formats -/
+
+/-- A format with smaller `fexp` (at the magnitude of `x`) includes another. -/
+theorem generic_inclusion_mag (beta : radix) (fexp1 fexp2 : ℤ → ℤ) {x : ℝ}
+    (He : x ≠ 0 → fexp2 (mag beta x) ≤ fexp1 (mag beta x))
+    (Fx : generic_format beta fexp1 x) :
+    generic_format beta fexp2 x := by
+  rw [show x = F2R (beta := beta)
+        ⟨Ztrunc (scaled_mantissa beta fexp1 x), cexp beta fexp1 x⟩ from Fx]
+  apply generic_format_F2R beta fexp2
+  intro hZx
+  rw [show F2R (beta := beta)
+        ⟨Ztrunc (scaled_mantissa beta fexp1 x), cexp beta fexp1 x⟩ = x from Fx.symm]
+  show fexp2 (mag beta x) ≤ fexp1 (mag beta x)
+  apply He
+  intro hx0
+  apply hZx
+  rw [hx0, scaled_mantissa_0]
+  unfold Ztrunc
+  rw [if_neg (lt_irrefl 0), Int.floor_zero]
+
+theorem generic_inclusion_lt_ge (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (e1 e2 : ℤ) (He : ∀ e : ℤ, e1 < e ∧ e ≤ e2 → fexp2 e ≤ fexp1 e)
+    {x : ℝ} (Hx : bpow beta e1 ≤ |x| ∧ |x| < bpow beta e2)
+    (Fx : generic_format beta fexp1 x) :
+    generic_format beta fexp2 x := by
+  apply generic_inclusion_mag beta fexp1 fexp2 _ Fx
+  intro hxn
+  apply He
+  refine ⟨mag_gt_bpow beta Hx.1, mag_le_bpow beta hxn Hx.2⟩
+
 /-- The Znearest-rounded value is a Rnd_N_pt of the generic format. -/
 theorem round_N_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     (choice : ℤ → Bool) (x : ℝ) :
