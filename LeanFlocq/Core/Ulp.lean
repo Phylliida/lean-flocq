@@ -691,4 +691,89 @@ theorem pred_pos_plus_ulp_aux1 (beta : radix) (fexp : ℤ → ℤ)
       _ = ulp beta fexp x := (ulp_neq_0 beta fexp hx_ne).symm
   rw [h_ulp_eq]; ring
 
+/-- Boundary case (non-zero): when `x = bpow(mag x - 1)` and the shrunken
+predecessor is nonzero, `(x - bpow(fexp(mag x - 1))) + ulp(...) = x`. -/
+theorem pred_pos_plus_ulp_aux2 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (_hx : 0 < x) (Fx : generic_format beta fexp x)
+    (hbnd : x = bpow beta (mag beta x - 1))
+    (hne : x - bpow beta (fexp (mag beta x - 1)) ≠ 0) :
+    (x - bpow beta (fexp (mag beta x - 1)))
+      + ulp beta fexp (x - bpow beta (fexp (mag beta x - 1)))
+      = x := by
+  set e := mag beta x with he_def
+  have h_F_bpow : generic_format beta fexp (bpow beta (e - 1)) := by
+    rw [← hbnd]; exact Fx
+  have hfe_le : fexp (e - 1) ≤ e - 1 :=
+    generic_format_bpow_inv beta fexp hValid (e - 1) h_F_bpow
+  rcases lt_or_eq_of_le hfe_le with hfe_lt | hfe_eq
+  · -- fexp(e-1) < e-1: f sits in [bpow(e-2), bpow(e-1)), so mag f = e-1.
+    have h_2_le_beta : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+    have h_bpow_fe_le_e2 : bpow beta (fexp (e - 1)) ≤ bpow beta (e - 2) :=
+      bpow_le beta (by linarith)
+    have h_beta_eq : (beta.val : ℝ) * bpow beta (e - 2) = bpow beta (e - 1) := by
+      rw [show (beta.val : ℝ) = bpow beta 1 from (bpow_one beta).symm, ← bpow_plus]
+      congr 1; ring
+    have h_f_lb : bpow beta (e - 2) ≤ x - bpow beta (fexp (e - 1)) := by
+      have h1 : bpow beta (e - 2) + bpow beta (fexp (e - 1)) ≤ bpow beta (e - 1) := by
+        calc bpow beta (e - 2) + bpow beta (fexp (e - 1))
+            ≤ bpow beta (e - 2) + bpow beta (e - 2) := by linarith
+          _ = 2 * bpow beta (e - 2) := by ring
+          _ ≤ (beta.val : ℝ) * bpow beta (e - 2) :=
+              mul_le_mul_of_nonneg_right h_2_le_beta (bpow_ge_0 _ _)
+          _ = bpow beta (e - 1) := h_beta_eq
+      rw [hbnd]; linarith
+    have h_f_ub : x - bpow beta (fexp (e - 1)) < bpow beta (e - 1) := by
+      have : 0 < bpow beta (fexp (e - 1)) := bpow_gt_0 _ _
+      rw [hbnd]; linarith
+    have h_mag_f : mag beta (x - bpow beta (fexp (e - 1))) = e - 1 :=
+      mag_unique_pos beta
+        (by rw [show (e - 1) - 1 = e - 2 from by ring]; exact h_f_lb) h_f_ub
+    have h_ulp_eq : ulp beta fexp (x - bpow beta (fexp (e - 1)))
+        = bpow beta (fexp (e - 1)) := by
+      rw [ulp_neq_0 beta fexp hne]
+      show bpow beta (cexp beta fexp (x - bpow beta (fexp (e - 1))))
+          = bpow beta (fexp (e - 1))
+      unfold cexp; rw [h_mag_f]
+    rw [h_ulp_eq]; ring
+  · -- fexp(e-1) = e-1: x - bpow(fexp(e-1)) = 0, contradicting hne.
+    exfalso
+    apply hne
+    rw [hbnd, hfe_eq]; ring
+
+/-- Boundary case (zero): when `x = bpow(mag x - 1)` and the shrunken
+predecessor is zero, then `ulp 0 = x`. The shrinking step reaches all
+the way down to zero, and the format's "minimal exponent" picks `x` itself. -/
+theorem pred_pos_plus_ulp_aux3 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (_hx : 0 < x) (_Fx : generic_format beta fexp x)
+    (hbnd : x = bpow beta (mag beta x - 1))
+    (heq : x - bpow beta (fexp (mag beta x - 1)) = 0) :
+    ulp beta fexp 0 = x := by
+  set e := mag beta x with he_def
+  -- From heq: x = bpow(fexp(e-1)). Combined with hbnd: bpow(e-1) = bpow(fexp(e-1)).
+  have h_x_eq : x = bpow beta (fexp (e - 1)) := by linarith
+  -- bpow injectivity (via strict monotonicity).
+  have h_fexp_eq : fexp (e - 1) = e - 1 := by
+    have h_bpow_eq : bpow beta (e - 1) = bpow beta (fexp (e - 1)) := by
+      rw [← hbnd]; exact h_x_eq
+    rcases lt_trichotomy (fexp (e - 1)) (e - 1) with hlt | heq' | hgt
+    · exfalso; have := bpow_lt beta hlt; linarith
+    · exact heq'
+    · exfalso; have := bpow_lt beta hgt; linarith
+  have h_em1_small : e - 1 ≤ fexp (e - 1) := by linarith
+  cases h_neg : negligible_exp fexp with
+  | none =>
+    exfalso
+    have := negligible_exp_none h_neg (e - 1)
+    linarith
+  | some n =>
+    have h_n_small : n ≤ fexp n := negligible_exp_some h_neg
+    have h_fexp_eq_n : fexp n = e - 1 := by
+      have h_eq := fexp_negligible_exp_eq hValid h_n_small h_em1_small
+      rw [h_eq, h_fexp_eq]
+    show ulp beta fexp 0 = x
+    unfold ulp
+    rw [if_pos rfl, h_neg]
+    show bpow beta (fexp n) = x
+    rw [h_fexp_eq_n, ← hbnd]
+
 end LeanFlocq
