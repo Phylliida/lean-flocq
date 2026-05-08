@@ -499,4 +499,84 @@ theorem generic_format_pred (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_
   apply generic_format_opp
   exact generic_format_succ beta fexp hValid (generic_format_opp beta fexp Fx)
 
+/-! ### Strict and non-strict order properties of succ/pred -/
+
+/-- `pred_pos x < x` for nonzero `x` (the step is strictly positive). -/
+theorem pred_pos_lt_id (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (hx : x ≠ 0) :
+    pred_pos beta fexp x < x := by
+  unfold pred_pos
+  by_cases h : x = bpow beta (mag beta x - 1)
+  · rw [if_pos h]
+    have : 0 < bpow beta (fexp (mag beta x - 1)) := bpow_gt_0 _ _
+    linarith
+  · rw [if_neg h, ulp_neq_0 beta fexp hx]
+    have : 0 < bpow beta (cexp beta fexp x) := bpow_gt_0 _ _
+    linarith
+
+/-- `x < succ x` for nonzero `x`. -/
+theorem succ_gt_id (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (hx : x ≠ 0) :
+    x < succ beta fexp x := by
+  unfold succ
+  by_cases h : 0 ≤ x
+  · rw [if_pos h, ulp_neq_0 beta fexp hx]
+    have : 0 < bpow beta (cexp beta fexp x) := bpow_gt_0 _ _
+    linarith
+  · rw [if_neg h]
+    push_neg at h
+    have h_neg_x_ne : -x ≠ 0 := fun hh => hx (by linarith)
+    have := pred_pos_lt_id beta fexp h_neg_x_ne
+    linarith
+
+/-- `pred x < x` for nonzero `x`. -/
+theorem pred_lt_id (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (hx : x ≠ 0) :
+    pred beta fexp x < x := by
+  unfold pred
+  have h_neg_x_ne : -x ≠ 0 := fun hh => hx (by linarith)
+  have := succ_gt_id beta fexp h_neg_x_ne
+  linarith
+
+/-- `x ≤ succ x` for any `x` (non-strict version covering `x = 0`). -/
+theorem succ_ge_id (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    x ≤ succ beta fexp x := by
+  by_cases hx : x = 0
+  · rw [hx]
+    unfold succ
+    rw [if_pos (le_refl 0), zero_add]
+    exact ulp_ge_0 beta fexp 0
+  · exact le_of_lt (succ_gt_id beta fexp hx)
+
+/-- `pred x ≤ x` for any `x`. -/
+theorem pred_le_id (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    pred beta fexp x ≤ x := by
+  unfold pred
+  have := succ_ge_id beta fexp (-x)
+  linarith
+
+/-- For positive `x` in the format, `pred_pos x` is non-negative. -/
+theorem pred_pos_ge_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x) :
+    0 ≤ pred_pos beta fexp x := by
+  unfold pred_pos
+  by_cases h : x = bpow beta (mag beta x - 1)
+  · rw [if_pos h]
+    have h_F_bpow : generic_format beta fexp (bpow beta (mag beta x - 1)) := by
+      rw [← h]; exact Fx
+    have h_fe_le : fexp (mag beta x - 1) ≤ mag beta x - 1 :=
+      generic_format_bpow_inv beta fexp hValid (mag beta x - 1) h_F_bpow
+    have h_bpow_le : bpow beta (fexp (mag beta x - 1)) ≤ bpow beta (mag beta x - 1) :=
+      bpow_le beta h_fe_le
+    -- x = bpow(mag x - 1), so the step bpow(fexp(mag x - 1)) ≤ x.
+    rw [show bpow beta (mag beta x - 1) = x from h.symm] at h_bpow_le
+    linarith
+  · rw [if_neg h]
+    have : ulp beta fexp x ≤ x := ulp_le_id beta fexp hx Fx
+    linarith
+
+/-- For positive `x` in the format, `pred x` is non-negative. -/
+theorem pred_ge_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x) :
+    0 ≤ pred beta fexp x := by
+  rw [pred_eq_pos beta fexp (le_of_lt hx)]
+  exact pred_pos_ge_0 beta fexp hValid hx Fx
+
 end LeanFlocq
