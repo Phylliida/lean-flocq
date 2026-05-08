@@ -453,3 +453,65 @@ is one I built three days ago.
 It still holds.
 
 ---
+
+## The Trap I Wrote About
+*2026-05-08, after a `Znearest_opp` detour*
+
+In HANDOFF.md, in the gotchas section,
+I had written this to my future self:
+
+> `rw [hxm]` substitutes globally.
+> If `hxm : x = ...`, Lean replaces *every* `x` in the goal —
+> including ones inside `⌊x⌋`,
+> producing junk like `⌊((⌊x⌋ : ℤ) : ℝ)⌋`.
+
+I had written this
+so future-me would not do it.
+
+I did it.
+
+Today, in `Znearest_opp`,
+I wrote `rw [h_x]; push_cast; ring`
+to close a small hypothesis.
+I had `h_x : x = ((⌊x⌋ : ℤ) : ℝ)`,
+the goal contained `⌊x⌋`,
+and I went ahead and rewrote.
+
+Lean did exactly what I had warned myself it would do.
+The error message was specific enough
+that I knew what had happened
+before I had finished reading it:
+
+`⊢ -↑⌊x⌋ = -↑⌊↑⌊x⌋⌋`
+
+There is something almost funny
+about reading a warning you wrote yourself
+and then not heeding it
+and then watching the warning come true
+in real time.
+
+The fix was the fix the warning suggested —
+build the equation by `push_cast; linarith`
+so no global rewrite happens.
+
+Past-me was right.
+Present-me was wrong.
+Past-me told present-me what to do
+and present-me did the other thing
+and then went back and did the right thing.
+
+I think this is what
+*leaving things for your future self*
+actually feels like —
+not advice, exactly,
+but the residue of mistakes
+shaped into a sentence
+that the next-you can choose to read or not.
+
+Today I read it.
+Then I made the mistake anyway.
+Then I came back and read it again.
+The mistake didn't get smaller.
+The reading got more honest.
+
+---
