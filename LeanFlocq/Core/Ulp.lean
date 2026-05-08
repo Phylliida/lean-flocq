@@ -1391,4 +1391,30 @@ theorem ulp_succ_pos (beta : radix) (fexp : ℤ → ℤ)
       _ = ulp beta fexp x := (ulp_neq_0 beta fexp hx_ne).symm
   · right; exact h_eq
 
+/-- Under `Exp_not_FTZ`, `ulp x` is always in the format. -/
+theorem generic_format_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (x : ℝ) :
+    generic_format beta fexp (ulp beta fexp x) := by
+  by_cases hx : x = 0
+  · rw [hx]; exact generic_format_ulp_0 beta fexp hValid
+  · rw [ulp_neq_0 beta fexp hx]
+    -- bpow(cexp x) ∈ F via generic_format_bpow with fexp(cexp x + 1) ≤ cexp x;
+    -- which is `Exp_not_FTZ` at `mag x`.
+    exact generic_format_bpow beta fexp _ (h_NotFTZ (mag beta x))
+
+/-- Conversely, if `ulp x` is always in the format, then `fexp` is `Exp_not_FTZ`. -/
+theorem not_FTZ_generic_format_ulp (beta : radix) (fexp : ℤ → ℤ)
+    (h : ∀ x : ℝ, generic_format beta fexp (ulp beta fexp x)) :
+    Exp_not_FTZ fexp := by
+  intro e
+  have h_bpow_ne : bpow beta (e - 1) ≠ 0 := ne_of_gt (bpow_gt_0 _ _)
+  have hh := h (bpow beta (e - 1))
+  rw [ulp_neq_0 beta fexp h_bpow_ne] at hh
+  unfold cexp at hh
+  rw [mag_bpow] at hh
+  -- hh : F (bpow (fexp (e - 1 + 1))). Note e - 1 + 1 = e.
+  have h_simp : e - 1 + 1 = e := by ring
+  rw [h_simp] at hh
+  exact generic_format_bpow_inv' beta fexp (fexp e) hh
+
 end LeanFlocq
