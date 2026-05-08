@@ -807,4 +807,82 @@ theorem succ_pred_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fe
   rw [succ_eq_pos beta fexp (pred_pos_ge_0 beta fexp hValid hx Fx)]
   exact pred_pos_plus_ulp beta fexp hValid hx Fx
 
+/-! ### `Exp_not_FTZ` and ulp monotonicity -/
+
+/-- A `fexp` is `Exp_not_FTZ` if `fexp(fexp e + 1) ≤ fexp e` for all `e`.
+This excludes FTZ-like formats where the small regime maps to a fixed
+larger value rather than stabilizing. -/
+def Exp_not_FTZ (fexp : ℤ → ℤ) : Prop :=
+  ∀ e : ℤ, fexp (fexp e + 1) ≤ fexp e
+
+/-- A monotone `fexp` is automatically `Exp_not_FTZ`. -/
+theorem monotone_exp_not_FTZ {fexp : ℤ → ℤ} (hValid : Valid_exp fexp)
+    (hMon : Monotone_exp fexp) : Exp_not_FTZ fexp := by
+  intro e
+  rcases lt_or_ge (fexp e) e with hfe | hfe
+  · -- fexp e < e: monotonicity gives fexp(fexp e + 1) ≤ fexp e.
+    apply hMon; omega
+  · -- e ≤ fexp e: stabilization branch.
+    exact ((hValid e).2 hfe).1
+
+/-- `ulp 0 ≤ ulp x` for any `x`, given `Exp_not_FTZ`. The "minimum unit"
+of the format never exceeds the local ulp. -/
+theorem ulp_ge_ulp_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (x : ℝ) :
+    ulp beta fexp 0 ≤ ulp beta fexp x := by
+  by_cases hx : x = 0
+  · rw [hx]
+  · cases h_neg : negligible_exp fexp with
+    | none =>
+      -- ulp 0 = 0, trivially.
+      have h_ulp_0 : ulp beta fexp 0 = 0 := by
+        unfold ulp; rw [if_pos rfl, h_neg]
+      rw [h_ulp_0]
+      exact ulp_ge_0 beta fexp x
+    | some n =>
+      have h_n_le : n ≤ fexp n := negligible_exp_some h_neg
+      have h_ulp_0 : ulp beta fexp 0 = bpow beta (fexp n) := by
+        unfold ulp; rw [if_pos rfl, h_neg]
+      rw [h_ulp_0, ulp_neq_0 beta fexp hx]
+      apply bpow_le
+      show fexp n ≤ cexp beta fexp x
+      unfold cexp
+      set m := mag beta x with hm_def
+      rcases le_or_gt m (fexp m) with hsmall | hlarge
+      · -- m in small regime: fexp m = fexp n via fexp_negligible_exp_eq.
+        have h_eq := fexp_negligible_exp_eq hValid h_n_le hsmall
+        omega
+      · -- m large: derive contradiction if fexp m < fexp n.
+        by_contra hgt
+        push_neg at hgt
+        have h_step : fexp m + 1 ≤ fexp n := by omega
+        have h_stab := (hValid n).2 h_n_le
+        have h_eq : fexp (fexp m + 1) = fexp n := h_stab.2 (fexp m + 1) h_step
+        have h_efm : fexp (fexp m + 1) ≤ fexp m := h_NotFTZ m
+        omega
+
+/-- For nonneg `x ≤ y` and a monotone `Exp_not_FTZ` `fexp`, `ulp x ≤ ulp y`. -/
+theorem ulp_le_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (hMon : Monotone_exp fexp) {x y : ℝ}
+    (hx : 0 ≤ x) (hxy : x ≤ y) :
+    ulp beta fexp x ≤ ulp beta fexp y := by
+  rcases lt_or_eq_of_le hx with hx_pos | hx_eq
+  · have hy_pos : 0 < y := lt_of_lt_of_le hx_pos hxy
+    rw [ulp_neq_0 beta fexp (ne_of_gt hx_pos), ulp_neq_0 beta fexp (ne_of_gt hy_pos)]
+    apply bpow_le
+    unfold cexp
+    apply hMon
+    apply mag_le_abs beta (ne_of_gt hx_pos)
+    rw [abs_of_pos hx_pos, abs_of_pos hy_pos]; exact hxy
+  · -- x = 0: use ulp_ge_ulp_0.
+    rw [← hx_eq]
+    exact ulp_ge_ulp_0 beta fexp hValid (monotone_exp_not_FTZ hValid hMon) y
+
+/-- Ulp monotonicity under absolute value: `|x| ≤ |y| → ulp x ≤ ulp y`. -/
+theorem ulp_le (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (hMon : Monotone_exp fexp) {x y : ℝ} (hxy : |x| ≤ |y|) :
+    ulp beta fexp x ≤ ulp beta fexp y := by
+  rw [← ulp_abs beta fexp x, ← ulp_abs beta fexp y]
+  exact ulp_le_pos beta fexp hValid hMon (abs_nonneg _) hxy
+
 end LeanFlocq
