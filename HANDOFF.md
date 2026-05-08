@@ -18,8 +18,8 @@ Foundational + all four classical concrete formats + substantial Ulp + Round_NE 
 | `Round_pred.lean` | 819 | `Core/Round_pred.v` | **Essentially complete** (every theorem ported except `Rnd_N_pt_DN_UP_eq` variants — see file header). |
 | `Generic_fmt.lean` | 1921 | `Core/Generic_fmt.v` | ~91 theorems. **All deferred items closed**: `Znearest_opp`, `round_N_opp`, `generic_round_generic` are now done. |
 | `FIX.lean` | 85 | `Core/FIX.v` | **Complete**: 7 thms incl. `ulp_FIX`. |
-| `FLX.lean` | 145 | `Core/FLX.v` | Core complete + `negligible_exp_FLX`, `ulp_FLX_0`. Skipped: `FLXN_format`, `succ_FLX_*`, `Round_NE.v`-dependent. |
-| `FLT.lean` | 269 | `Core/FLT.v` | Core complete + `ulp_FLT_small`. Skipped: other `ulp_FLT_*`, `succ_FLT_exact_shift_*`, `Round_NE.v`-dependent. |
+| `FLX.lean` | 174 | `Core/FLX.v` | Core + `negligible_exp_FLX`, `ulp_FLX_0`, `generic_format_FLX_1`, `eq_0_round_0_FLX`, `gt_0_round_gt_0_FLX`. Skipped: `FLXN_format`, `succ_FLX_*`, `Round_NE.v`-dependent. |
+| `FLT.lean` | 330 | `Core/FLT.v` | Core + `ulp_FLT_small/_le/_gt`, `generic_format_FLT_1`. Skipped: `succ_FLT_exact_shift_*` (need `mag_mult_bpow`), `Round_NE.v`-dependent. |
 | `FTZ.lean` | 393 | `Core/FTZ.v` | 10 thms incl. `ulp_FTZ_0`. Skipped: `FTZ_format_FLXN`. |
 | `Ulp.lean` | 1150 | `Core/Ulp.v` (slice) | Substantial slice: ~62 thms. ulp basics, round_UP_DN_ulp, succ/pred defs and full chain (`generic_format_succ/_pred`), order properties, succ_0/pred_0/pred_ulp_0, fexp_negligible_exp_eq, pred_pos_plus_ulp roundtrip, succ_pred_pos, Exp_not_FTZ + monotone_exp_not_FTZ, ulp_ge_ulp_0, ulp_le_pos/ulp_le, abs_round_ge_generic, eq_0_round_0_negligible_exp, error_lt_ulp/error_le_ulp/error_le_half_ulp, mag_plus_eps, round_DN_plus_eps_pos (incl. x = 0 case), succ_le_lt_aux. |
 | `Round_NE.lean` | 42 | `Core/Round_NE.v` | Foundations: `ZnearestE`, `round_NE`, `NE_prop`, `Rnd_NE_pt`, `round_NE_pt_N`. Skipped (the parity argument): `DN_UP_parity_generic_pos`, `Rnd_NE_pt_total/_monotone`, `round_NE_pt`. |
