@@ -1387,4 +1387,88 @@ theorem Znearest_imp (choice : ℤ → Bool) {x : ℝ} {n : ℤ}
     exact abs_nonpos_iff.mp habs
   omega
 
+/-- The error `|Znearest m - m|` is bounded by both `m - ⌊m⌋` and `⌈m⌉ - m`. -/
+private theorem Znearest_dist_le_floor (choice : ℤ → Bool) (m : ℝ) :
+    |((Znearest choice m : ℤ) : ℝ) - m| ≤ m - ⌊m⌋ := by
+  by_cases hfm : m - (⌊m⌋ : ℝ) < 1/2
+  · -- Znearest m = ⌊m⌋
+    have h_eq : Znearest choice m = ⌊m⌋ := by unfold Znearest; rw [if_pos hfm]
+    rw [h_eq, abs_of_nonpos (by linarith [Int.floor_le m] : ((⌊m⌋ : ℤ) : ℝ) - m ≤ 0)]
+    linarith [Int.floor_le m]
+  · push_neg at hfm
+    have h_half := Znearest_half choice m
+    have : |m - ((Znearest choice m : ℤ) : ℝ)| = |((Znearest choice m : ℤ) : ℝ) - m| :=
+      abs_sub_comm _ _
+    linarith [this ▸ h_half]
+
+private theorem Znearest_dist_le_ceil (choice : ℤ → Bool) (m : ℝ) :
+    |((Znearest choice m : ℤ) : ℝ) - m| ≤ (⌈m⌉ : ℝ) - m := by
+  by_cases hfm : 1/2 < m - (⌊m⌋ : ℝ)
+  · -- Znearest m = ⌈m⌉
+    have h_eq : Znearest choice m = ⌈m⌉ := by
+      unfold Znearest; rw [if_neg (by linarith), if_pos hfm]
+    rw [h_eq, abs_of_nonneg (by linarith [Int.le_ceil m] : 0 ≤ ((⌈m⌉ : ℤ) : ℝ) - m)]
+  · push_neg at hfm
+    by_cases h_int : (m : ℝ) = ⌊m⌋
+    · -- m is an integer: ⌈m⌉ = m = Znearest m, both sides 0
+      have h_lt_half : m - (⌊m⌋ : ℝ) < 1/2 := by linarith
+      have h_zn_eq : Znearest choice m = ⌊m⌋ := by
+        unfold Znearest; rw [if_pos h_lt_half]
+      have h_ceil_eq : (⌈m⌉ : ℝ) = ⌊m⌋ := by
+        conv_lhs => rw [show m = ((⌊m⌋ : ℤ) : ℝ) from h_int]
+        exact_mod_cast Int.ceil_intCast _
+      rw [h_zn_eq, h_ceil_eq, abs_of_nonpos (by linarith : ((⌊m⌋ : ℤ) : ℝ) - m ≤ 0)]
+      linarith
+    · -- m ∉ ℤ: ⌈m⌉ = ⌊m⌋ + 1
+      have h_floor_lt : (⌊m⌋ : ℝ) < m :=
+        lt_of_le_of_ne (Int.floor_le m) (Ne.symm h_int)
+      have h_le_ceil : m ≤ (⌈m⌉ : ℝ) := Int.le_ceil m
+      have h_lt_ceil_real : (⌊m⌋ : ℝ) < ⌈m⌉ := by linarith
+      have h_lt_ceil_int : ⌊m⌋ < ⌈m⌉ := by exact_mod_cast h_lt_ceil_real
+      have h_ceil_le : ⌈m⌉ ≤ ⌊m⌋ + 1 := Int.ceil_le_floor_add_one m
+      have h_ceil_eq_int : ⌈m⌉ = ⌊m⌋ + 1 := by omega
+      have h_ceil_eq : (⌈m⌉ : ℝ) = ⌊m⌋ + 1 := by exact_mod_cast h_ceil_eq_int
+      have h_half := Znearest_half choice m
+      have h_swap : |m - ((Znearest choice m : ℤ) : ℝ)| = |((Znearest choice m : ℤ) : ℝ) - m| :=
+        abs_sub_comm _ _
+      linarith [h_swap ▸ h_half]
+
+/-- The Znearest-rounded value is a Rnd_N_pt of the generic format. -/
+theorem round_N_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (choice : ℤ → Bool) (x : ℝ) :
+    Rnd_N_pt (generic_format beta fexp) x (round beta fexp (Znearest choice) x) := by
+  set m := scaled_mantissa beta fexp x with hm_def
+  set e := cexp beta fexp x with he_def
+  have hbe : 0 ≤ bpow beta e := bpow_ge_0 _ _
+  have hxm : x = m * bpow beta e := (scaled_mantissa_mult_bpow beta fexp x).symm
+  apply Rnd_N_pt_DN_UP (generic_format beta fexp)
+    (generic_format_round beta fexp hValid _ x)
+    (round_DN_pt beta fexp hValid x) (round_UP_pt beta fexp hValid x)
+  · -- |round Znearest x - x| ≤ x - round_DN x
+    show |round beta fexp (Znearest choice) x - x|
+        ≤ x - round beta fexp (fun y : ℝ => ⌊y⌋) x
+    unfold round F2R
+    show |((Znearest choice m : ℤ) : ℝ) * bpow beta e - x|
+        ≤ x - ((⌊m⌋ : ℤ) : ℝ) * bpow beta e
+    rw [hxm]
+    rw [show ((Znearest choice m : ℤ) : ℝ) * bpow beta e - m * bpow beta e
+          = (((Znearest choice m : ℤ) : ℝ) - m) * bpow beta e from by ring,
+        show m * bpow beta e - ((⌊m⌋ : ℤ) : ℝ) * bpow beta e
+          = (m - ⌊m⌋) * bpow beta e from by ring]
+    rw [abs_mul, abs_of_nonneg hbe]
+    exact mul_le_mul_of_nonneg_right (Znearest_dist_le_floor choice m) hbe
+  · -- |round Znearest x - x| ≤ round_UP x - x
+    show |round beta fexp (Znearest choice) x - x|
+        ≤ round beta fexp (fun y : ℝ => ⌈y⌉) x - x
+    unfold round F2R
+    show |((Znearest choice m : ℤ) : ℝ) * bpow beta e - x|
+        ≤ ((⌈m⌉ : ℤ) : ℝ) * bpow beta e - x
+    rw [hxm]
+    rw [show ((Znearest choice m : ℤ) : ℝ) * bpow beta e - m * bpow beta e
+          = (((Znearest choice m : ℤ) : ℝ) - m) * bpow beta e from by ring,
+        show ((⌈m⌉ : ℤ) : ℝ) * bpow beta e - m * bpow beta e
+          = ((⌈m⌉ : ℝ) - m) * bpow beta e from by ring]
+    rw [abs_mul, abs_of_nonneg hbe]
+    exact mul_le_mul_of_nonneg_right (Znearest_dist_le_ceil choice m) hbe
+
 end LeanFlocq
