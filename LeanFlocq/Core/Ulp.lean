@@ -1417,4 +1417,40 @@ theorem not_FTZ_generic_format_ulp (beta : radix) (fexp : ℤ → ℤ)
   rw [h_simp] at hh
   exact generic_format_bpow_inv' beta fexp (fexp e) hh
 
+/-- If `ulp 0 ≤ bpow e`, then `bpow e` is in the format. The "minimum unit"
+of the format never exceeds the value's distance to it. -/
+theorem generic_format_bpow_ge_ulp_0 (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) {e : ℤ} (h : ulp beta fexp 0 ≤ bpow beta e) :
+    generic_format beta fexp (bpow beta e) := by
+  apply generic_format_bpow beta fexp e
+  rcases h_neg : negligible_exp fexp with _ | n
+  · have := negligible_exp_none h_neg (e + 1); linarith
+  · have h_ulp_0 : ulp beta fexp 0 = bpow beta (fexp n) := by
+      unfold ulp; rw [if_pos rfl, h_neg]
+    rw [h_ulp_0] at h
+    have h_fn_le_e : fexp n ≤ e := le_bpow beta h
+    by_cases h_case : e + 1 ≤ fexp (e + 1)
+    · have h_n_le : n ≤ fexp n := negligible_exp_some h_neg
+      have h_eq := fexp_negligible_exp_eq hValid h_case h_n_le
+      omega
+    · push_neg at h_case; omega
+
+/-- The third equivalence direction: `(∀ x, ulp 0 ≤ ulp x)` implies `Exp_not_FTZ`. -/
+theorem not_FTZ_ulp_ge_ulp_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h : ∀ x : ℝ, ulp beta fexp 0 ≤ ulp beta fexp x) :
+    Exp_not_FTZ fexp := by
+  intro e
+  -- Apply generic_format_bpow_ge_ulp_0 at e, using ulp 0 ≤ ulp(bpow(e-1)) = bpow(fexp e).
+  have h_step := h (bpow beta (e - 1))
+  have h_bpow_ne : bpow beta (e - 1) ≠ 0 := ne_of_gt (bpow_gt_0 _ _)
+  rw [ulp_neq_0 beta fexp h_bpow_ne] at h_step
+  unfold cexp at h_step
+  rw [mag_bpow] at h_step
+  have h_simp : e - 1 + 1 = e := by ring
+  rw [h_simp] at h_step
+  -- h_step : ulp 0 ≤ bpow (fexp e). So bpow(fexp e) ∈ F.
+  have h_F : generic_format beta fexp (bpow beta (fexp e)) :=
+    generic_format_bpow_ge_ulp_0 beta fexp hValid h_step
+  exact generic_format_bpow_inv' beta fexp (fexp e) h_F
+
 end LeanFlocq
