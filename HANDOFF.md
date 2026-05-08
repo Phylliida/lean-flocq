@@ -21,7 +21,7 @@ Foundational + all four classical concrete formats + Ulp core + Round_NE skeleto
 | `FLX.lean` | 129 | `Core/FLX.v` | Core complete. Skipped: `FLXN_format`, `ulp_FLX_*`, `succ_FLX_*`, `Round_NE.v`-dependent. |
 | `FLT.lean` | 237 | `Core/FLT.v` | Core complete (13 thms). Skipped: `ulp_FLT_*`, `succ_FLT_exact_shift_*`, `Round_NE.v`-dependent. |
 | `FTZ.lean` | 367 | `Core/FTZ.v` | Core complete (9 thms): both format directions, `Zrnd_FTZ`, `round_FTZ_FLX`, `round_FTZ_small`. Skipped: `ulp_FTZ_0`, `FTZ_format_FLXN`. |
-| `Ulp.lean` | 396 | `Core/Ulp.v` (slice) | Core slice + step lemmas: ~22 thms. `negligible_exp`, `ulp`, `ulp_*` basics, `round_UP_DN_ulp`, `succ`/`pred`/`pred_pos` defs, basic equalities, `id_p_ulp_le_bpow`/`id_m_ulp_ge_bpow`, `generic_format_ulp_0`, `generic_format_succ_aux1`, `generic_format_pred_aux1`. Pending: `pred_aux2` (bpow boundary), `pred_pos`/`succ`/`pred` format preservation. |
+| `Ulp.lean` | 502 | `Core/Ulp.v` (slice) | Core + full succ/pred chain: ~27 thms. `negligible_exp`, `ulp`, `ulp_*` basics, `round_UP_DN_ulp`, `succ`/`pred`/`pred_pos` defs and equalities, `id_p_ulp_le_bpow`/`id_m_ulp_ge_bpow`, `generic_format_ulp_0/_succ_aux1/_pred_aux1/_pred_aux2/_pred_pos/_succ/_pred`. |
 | `Round_NE.lean` | 42 | `Core/Round_NE.v` | Foundations: `ZnearestE`, `round_NE`, `NE_prop`, `Rnd_NE_pt`, `round_NE_pt_N`. Skipped (the parity argument): `DN_UP_parity_generic_pos`, `Rnd_NE_pt_total/_monotone`, `round_NE_pt`. |
 
 ## Build setup
@@ -233,16 +233,14 @@ runtime computation.
 
 In rough order of usefulness:
 
-1. **`succ`/`pred` in `Ulp.lean`** — the predecessor/successor functions
-   on the format. Foundation for many ulp lemmas and IEEE 754 step bounds.
-
-2. **DN_UP parity in `Round_NE.lean`** — show `round_DN x` and `round_UP x`
+1. **DN_UP parity in `Round_NE.lean`** — show `round_DN x` and `round_UP x`
    have opposite-parity canonical mantissas. This is the *keystone* needed
    for `Rnd_NE_pt_total/monotone` and `round_NE_pt`. Substantial proof
    (Coq's is ~150 lines, with separate small/large-x cases).
 
-3. **More of `Core/Ulp.v`** — `ulp_le_pos`, `ulp_le`, generic_format_succ/pred,
-   `succ_FLT_*`, `ulp_FLT_*`, etc. Roughly 2300 lines remaining.
+2. **More of `Core/Ulp.v`** — `ulp_le_pos`, `ulp_le`, `eq_0_round_0_negligible_exp`,
+   the `succ_lt_le_aux` lemmas, `succ_FLT_*`, `ulp_FLT_*`, etc.
+   ~2000 lines remaining; mostly format-specific instantiations.
 
 4. **`Core/IEEE754/Binary.v`** — the actual IEEE 754 binary formats.
    The destination of this whole port. Will need full Ulp and Round_NE.
