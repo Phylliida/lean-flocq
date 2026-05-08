@@ -21,7 +21,7 @@ Foundational + all four classical concrete formats + Ulp core + Round_NE skeleto
 | `FLX.lean` | 129 | `Core/FLX.v` | Core complete. Skipped: `FLXN_format`, `ulp_FLX_*`, `succ_FLX_*`, `Round_NE.v`-dependent. |
 | `FLT.lean` | 237 | `Core/FLT.v` | Core complete (13 thms). Skipped: `ulp_FLT_*`, `succ_FLT_exact_shift_*`, `Round_NE.v`-dependent. |
 | `FTZ.lean` | 367 | `Core/FTZ.v` | Core complete (9 thms): both format directions, `Zrnd_FTZ`, `round_FTZ_FLX`, `round_FTZ_small`. Skipped: `ulp_FTZ_0`, `FTZ_format_FLXN`. |
-| `Ulp.lean` | 502 | `Core/Ulp.v` (slice) | Core + full succ/pred chain: ~27 thms. `negligible_exp`, `ulp`, `ulp_*` basics, `round_UP_DN_ulp`, `succ`/`pred`/`pred_pos` defs and equalities, `id_p_ulp_le_bpow`/`id_m_ulp_ge_bpow`, `generic_format_ulp_0/_succ_aux1/_pred_aux1/_pred_aux2/_pred_pos/_succ/_pred`. |
+| `Ulp.lean` | 810 | `Core/Ulp.v` (slice) | Core + step structure + pred-plus-ulp roundtrip: ~40 thms. `negligible_exp`, `ulp`, `ulp_*` basics, `round_UP_DN_ulp`, `succ`/`pred`/`pred_pos` defs and equalities, `id_p_ulp_le_bpow`/`id_m_ulp_ge_bpow`, full `generic_format_*` chain, succ/pred order properties (`pred_pos_lt_id`, `succ_gt_id`, etc.), `succ_0`/`pred_0`/`pred_ulp_0`, `fexp_negligible_exp_eq`, full `pred_pos_plus_ulp` chain (3 aux + main + `pred_plus_ulp`), `succ_pred_pos`. |
 | `Round_NE.lean` | 42 | `Core/Round_NE.v` | Foundations: `ZnearestE`, `round_NE`, `NE_prop`, `Rnd_NE_pt`, `round_NE_pt_N`. Skipped (the parity argument): `DN_UP_parity_generic_pos`, `Rnd_NE_pt_total/_monotone`, `round_NE_pt`. |
 
 ## Build setup
