@@ -327,4 +327,27 @@ theorem generic_format_FLT_1 (beta : radix) (emin prec : ℤ) (hp : 0 < prec)
     · linarith
     · exact Hemin
 
+/-- Above the gradual-underflow threshold, ulp scales exactly by `β^e`
+under multiplication by `β^e` in FLT. -/
+theorem ulp_FLT_exact_shift (beta : radix) (emin prec : ℤ) {x : ℝ} (hx_ne : x ≠ 0)
+    {e : ℤ} (h_mag : emin + prec ≤ mag beta x)
+    (h_e : emin + prec - mag beta x ≤ e) :
+    ulp beta (FLT_exp emin prec) (x * bpow beta e)
+      = ulp beta (FLT_exp emin prec) x * bpow beta e := by
+  have h_xb_ne : x * bpow beta e ≠ 0 :=
+    mul_ne_zero hx_ne (ne_of_gt (bpow_gt_0 _ _))
+  rw [ulp_neq_0 beta (FLT_exp emin prec) h_xb_ne,
+      ulp_neq_0 beta (FLT_exp emin prec) hx_ne]
+  show bpow beta (cexp beta (FLT_exp emin prec) (x * bpow beta e))
+      = bpow beta (cexp beta (FLT_exp emin prec) x) * bpow beta e
+  unfold cexp FLT_exp
+  rw [mag_mult_bpow beta hx_ne e]
+  have h_max1 : max (mag beta x + e - prec) emin = mag beta x + e - prec := by
+    apply max_eq_left; linarith
+  have h_max2 : max (mag beta x - prec) emin = mag beta x - prec := by
+    apply max_eq_left; linarith
+  rw [h_max1, h_max2,
+      show mag beta x + e - prec = (mag beta x - prec) + e from by ring,
+      bpow_plus]
+
 end LeanFlocq
