@@ -266,4 +266,53 @@ theorem ulp_FLT_small (beta : radix) (emin prec : ℤ) (hp : 0 < prec) {x : ℝ}
       apply max_eq_right; linarith
     rw [h_max]
 
+/-- Above the gradual-underflow threshold, ulp is bounded above by
+`|x| · β^(1 - prec)` — the relative error is at most `β^(1 - prec)`. -/
+theorem ulp_FLT_le (beta : radix) (emin prec : ℤ) {x : ℝ}
+    (hx : bpow beta (emin + prec - 1) ≤ |x|) :
+    ulp beta (FLT_exp emin prec) x ≤ |x| * bpow beta (1 - prec) := by
+  have hx_ne : x ≠ 0 := by
+    intro h0; rw [h0, abs_zero] at hx
+    exact absurd hx (not_le.mpr (bpow_gt_0 _ _))
+  rw [ulp_neq_0 beta (FLT_exp emin prec) hx_ne]
+  have h_mag_gt : emin + prec - 1 < mag beta x := mag_gt_bpow beta hx
+  have h_max : max (mag beta x - prec) emin = mag beta x - prec := by
+    apply max_eq_left; linarith
+  show bpow beta (cexp beta (FLT_exp emin prec) x) ≤ |x| * bpow beta (1 - prec)
+  unfold cexp FLT_exp
+  rw [h_max]
+  have h_split : bpow beta (mag beta x - prec)
+      = bpow beta (mag beta x - 1) * bpow beta (1 - prec) := by
+    rw [← bpow_plus]; congr 1; ring
+  rw [h_split]
+  exact mul_le_mul_of_nonneg_right (bpow_mag_le beta hx_ne) (bpow_ge_0 _ _)
+
+/-- Universal lower bound: `ulp x > |x| · β^(-prec)`. The format always
+spaces values at least this finely (in relative terms). -/
+theorem ulp_FLT_gt (beta : radix) (emin prec : ℤ) (hp : 0 < prec) (x : ℝ) :
+    |x| * bpow beta (-prec) < ulp beta (FLT_exp emin prec) x := by
+  by_cases hx : x = 0
+  · rw [hx, abs_zero, zero_mul]
+    rw [ulp_FLT_small beta emin prec hp (x := 0) (by
+      rw [abs_zero]; exact bpow_gt_0 _ _)]
+    exact bpow_gt_0 _ _
+  · rw [ulp_neq_0 beta (FLT_exp emin prec) hx]
+    show |x| * bpow beta (-prec) < bpow beta (cexp beta (FLT_exp emin prec) x)
+    have h_mag_gt : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+    have h_step1 : |x| * bpow beta (-prec) < bpow beta (mag beta x - prec) := by
+      have h_split : bpow beta (mag beta x) * bpow beta (-prec)
+          = bpow beta (mag beta x - prec) := by
+        rw [show mag beta x - prec = mag beta x + (-prec) from by ring,
+            ← bpow_plus]
+      calc |x| * bpow beta (-prec)
+          < bpow beta (mag beta x) * bpow beta (-prec) :=
+            mul_lt_mul_of_pos_right h_mag_gt (bpow_gt_0 _ _)
+        _ = bpow beta (mag beta x - prec) := h_split
+    have h_step2 : bpow beta (mag beta x - prec)
+        ≤ bpow beta (cexp beta (FLT_exp emin prec) x) := by
+      apply bpow_le
+      unfold cexp FLT_exp
+      exact le_max_left _ _
+    linarith
+
 end LeanFlocq
