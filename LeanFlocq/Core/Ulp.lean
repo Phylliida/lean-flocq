@@ -1612,4 +1612,32 @@ theorem ulp_round_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fe
           congr 1
           exact (fexp_negligible_exp_eq hValid h_subnormal h_n_le).symm
 
+/-- For arbitrary `x` and `Exp_not_FTZ` `fexp`, the round of `x` either
+preserves `ulp` or rounds to a value of magnitude `bpow(mag x)`. -/
+theorem ulp_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) :
+    ulp beta fexp (round beta fexp rnd x) = ulp beta fexp x
+      ∨ |round beta fexp rnd x| = bpow beta (mag beta x) := by
+  rcases lt_trichotomy x 0 with hx_neg | hx_zero | hx_pos
+  · -- x < 0: lift via opp.
+    have h_neg_x_pos : 0 < -x := by linarith
+    have h_ropp : round beta fexp rnd x
+        = -round beta fexp (Zrnd_opp rnd) (-x) := by
+      have h := round_opp beta fexp rnd (-x)
+      rw [neg_neg] at h
+      linarith
+    rcases ulp_round_pos beta fexp hValid h_NotFTZ (Zrnd_opp rnd) h_neg_x_pos with hY | hY
+    · left
+      rw [h_ropp, ulp_opp, hY, ulp_opp]
+    · right
+      rw [h_ropp, hY, mag_opp, abs_neg, abs_of_nonneg (bpow_ge_0 _ _)]
+  · -- x = 0: round 0 = 0, ulp 0 = ulp 0.
+    left
+    rw [hx_zero, round_0]
+  · -- 0 < x: ulp_round_pos directly; right disjunct uses |bpow| = bpow.
+    rcases ulp_round_pos beta fexp hValid h_NotFTZ rnd hx_pos with hY | hY
+    · left; exact hY
+    · right
+      rw [hY, abs_of_nonneg (bpow_ge_0 _ _)]
+
 end LeanFlocq
