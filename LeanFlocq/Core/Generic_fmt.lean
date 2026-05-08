@@ -1329,4 +1329,62 @@ instance valid_rnd_N (choice : ℤ → Bool) : Valid_rnd (Znearest choice) where
       rw [Int.floor_intCast]; norm_num
     rw [if_pos h, Int.floor_intCast]
 
+/-- When `x` is not at a tie, the rounding error is strictly less than 1/2. -/
+theorem Znearest_N_strict (choice : ℤ → Bool) {x : ℝ}
+    (Hx : x - ⌊x⌋ ≠ 1/2) :
+    |x - Znearest choice x| < 1/2 := by
+  unfold Znearest
+  rcases lt_trichotomy (x - (⌊x⌋ : ℝ)) (1/2) with hfx | hfx | hfx
+  · rw [if_pos hfx]
+    rw [abs_of_nonneg (by linarith [Int.floor_le x] : 0 ≤ x - (⌊x⌋ : ℝ))]
+    exact hfx
+  · exact absurd hfx Hx
+  · rw [if_neg (by linarith), if_pos hfx]
+    have h_le_ceil : x ≤ (⌈x⌉ : ℝ) := Int.le_ceil x
+    have h_ceil_le : (⌈x⌉ : ℝ) ≤ ⌊x⌋ + 1 := by
+      exact_mod_cast Int.ceil_le_floor_add_one x
+    rw [abs_of_nonpos (by linarith : x - (⌈x⌉ : ℝ) ≤ 0)]
+    linarith
+
+/-- The rounding error is always at most 1/2. -/
+theorem Znearest_half (choice : ℤ → Bool) (x : ℝ) :
+    |x - Znearest choice x| ≤ 1/2 := by
+  by_cases Hx : x - (⌊x⌋ : ℝ) = 1/2
+  · -- Tie: |x - ⌊x⌋| = 1/2 and |x - ⌈x⌉| = 1/2 (since ⌈x⌉ = ⌊x⌋ + 1)
+    have h_le_ceil : x ≤ (⌈x⌉ : ℝ) := Int.le_ceil x
+    have h_ceil_le : (⌈x⌉ : ℝ) ≤ ⌊x⌋ + 1 := by
+      exact_mod_cast Int.ceil_le_floor_add_one x
+    have h_lt_real : (⌊x⌋ : ℝ) < ⌈x⌉ := by linarith
+    have h_lt_int : ⌊x⌋ < ⌈x⌉ := by exact_mod_cast h_lt_real
+    have h_le_int : ⌈x⌉ ≤ ⌊x⌋ + 1 := Int.ceil_le_floor_add_one x
+    have h_ceil_eq_int : ⌈x⌉ = ⌊x⌋ + 1 := by omega
+    have h_ceil_eq : (⌈x⌉ : ℝ) = ⌊x⌋ + 1 := by exact_mod_cast h_ceil_eq_int
+    rcases Znearest_DN_or_UP choice x with H | H
+    · rw [H, abs_of_nonneg (by linarith [Int.floor_le x] : 0 ≤ x - (⌊x⌋ : ℝ))]
+      linarith
+    · rw [H, abs_of_nonpos (by linarith : x - (⌈x⌉ : ℝ) ≤ 0)]
+      linarith
+  · linarith [Znearest_N_strict choice Hx]
+
+/-- If `n` is within distance `< 1/2` of `x`, then `Znearest x = n`. -/
+theorem Znearest_imp (choice : ℤ → Bool) {x : ℝ} {n : ℤ}
+    (Hd : |x - n| < 1/2) : Znearest choice x = n := by
+  have h_real_diff : |(Znearest choice x : ℝ) - n| < 1 := by
+    have h_split : (Znearest choice x : ℝ) - n
+        = ((Znearest choice x : ℝ) - x) + (x - n) := by ring
+    rw [h_split]
+    have h_half : |(Znearest choice x : ℝ) - x| ≤ 1/2 := by
+      rw [show (Znearest choice x : ℝ) - x = -(x - Znearest choice x) from by ring,
+          abs_neg]
+      exact Znearest_half choice x
+    have h_tri : |((Znearest choice x : ℝ) - x) + (x - n)|
+        ≤ |(Znearest choice x : ℝ) - x| + |x - n| := abs_add_le _ _
+    linarith
+  have h_int_lt : |Znearest choice x - n| < 1 := by exact_mod_cast h_real_diff
+  -- |k| < 1 for an integer k iff k = 0
+  have h_zero : Znearest choice x - n = 0 := by
+    have habs : |Znearest choice x - n| ≤ 0 := by omega
+    exact abs_nonpos_iff.mp habs
+  omega
+
 end LeanFlocq
