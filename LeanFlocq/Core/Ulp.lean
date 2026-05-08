@@ -776,4 +776,26 @@ theorem pred_pos_plus_ulp_aux3 (beta : radix) (fexp : ℤ → ℤ) (hValid : Val
     show bpow beta (fexp n) = x
     rw [h_fexp_eq_n, ← hbnd]
 
+/-- The predecessor-plus-ulp roundtrip: for positive `x` in the format,
+`pred_pos x + ulp (pred_pos x) = x`. -/
+theorem pred_pos_plus_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x) :
+    pred_pos beta fexp x + ulp beta fexp (pred_pos beta fexp x) = x := by
+  unfold pred_pos
+  by_cases hbnd : x = bpow beta (mag beta x - 1)
+  · rw [if_pos hbnd]
+    by_cases h_zero : x - bpow beta (fexp (mag beta x - 1)) = 0
+    · rw [h_zero, zero_add]
+      exact pred_pos_plus_ulp_aux3 beta fexp hValid hx Fx hbnd h_zero
+    · exact pred_pos_plus_ulp_aux2 beta fexp hValid hx Fx hbnd h_zero
+  · rw [if_neg hbnd]
+    exact pred_pos_plus_ulp_aux1 beta fexp hx Fx hbnd
+
+/-- The predecessor-plus-ulp roundtrip via `pred`. -/
+theorem pred_plus_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x) :
+    pred beta fexp x + ulp beta fexp (pred beta fexp x) = x := by
+  rw [pred_eq_pos beta fexp (le_of_lt hx)]
+  exact pred_pos_plus_ulp beta fexp hValid hx Fx
+
 end LeanFlocq
