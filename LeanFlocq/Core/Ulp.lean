@@ -1197,4 +1197,64 @@ theorem round_DN_minus_eps_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Val
     (generic_format_pred_pos beta fexp hValid Fx hx)
     (by linarith) (by linarith)
 
+/-- `x ≤ pred_pos y` whenever `0 ≤ x < y` are both in the format.
+Proved by contradiction via `succ_le_lt_aux` + `succ_pred_pos`: if instead
+`pred_pos y < x`, then `succ (pred_pos y) = y ≤ x`, contradicting `x < y`. -/
+theorem le_pred_pos_lt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (hx_nn : 0 ≤ x) (hxy : x < y) :
+    x ≤ pred_pos beta fexp y := by
+  by_contra h
+  push_neg at h
+  have hy_pos : 0 < y := lt_of_le_of_lt hx_nn hxy
+  have h_pred_pos_nn : 0 ≤ pred_pos beta fexp y :=
+    pred_pos_ge_0 beta fexp hValid hy_pos Fy
+  have F_pred_pos : generic_format beta fexp (pred_pos beta fexp y) := by
+    have := generic_format_pred beta fexp hValid Fy
+    rwa [pred_eq_pos beta fexp (le_of_lt hy_pos)] at this
+  have h_succ_le : succ beta fexp (pred_pos beta fexp y) ≤ x :=
+    succ_le_lt_aux beta fexp hValid F_pred_pos Fx h_pred_pos_nn h
+  have h_succ_pred : succ beta fexp (pred_pos beta fexp y) = y := by
+    rw [show pred_pos beta fexp y = pred beta fexp y from
+      (pred_eq_pos beta fexp (le_of_lt hy_pos)).symm]
+    exact succ_pred_pos beta fexp hValid Fy hy_pos
+  linarith [h_succ_le.trans_eq' h_succ_pred.symm]
+
+/-- The full `succ_le_lt`: for any `x < y` both in F, `succ x ≤ y`. -/
+theorem succ_le_lt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (hxy : x < y) :
+    succ beta fexp x ≤ y := by
+  by_cases hx : 0 ≤ x
+  · exact succ_le_lt_aux beta fexp hValid Fx Fy hx hxy
+  · push_neg at hx
+    unfold succ
+    rw [if_neg (not_le.mpr hx)]
+    -- Goal: -(pred_pos (-x)) ≤ y, i.e., pred_pos (-x) ≥ -y.
+    rcases le_or_gt y 0 with hy_le | hy_pos
+    · -- y ≤ 0: Apply le_pred_pos_lt at (-y, -x) with -y ≥ 0 and -y < -x.
+      have h_neg_y_nn : 0 ≤ -y := by linarith
+      have h_neg_lt : -y < -x := by linarith
+      have F_neg_y : generic_format beta fexp (-y) := generic_format_opp beta fexp Fy
+      have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+      have := le_pred_pos_lt beta fexp hValid F_neg_y F_neg_x h_neg_y_nn h_neg_lt
+      linarith
+    · -- 0 < y: pred_pos (-x) ≥ 0, so -(pred_pos (-x)) ≤ 0 < y.
+      have h_neg_x_pos : 0 < -x := by linarith
+      have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+      have h_pred_nn := pred_pos_ge_0 beta fexp hValid h_neg_x_pos F_neg_x
+      linarith
+
+/-- The dual `pred_ge_gt`: for any `x < y` both in F, `x ≤ pred y`. -/
+theorem pred_ge_gt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (hxy : x < y) :
+    x ≤ pred beta fexp y := by
+  unfold pred
+  -- x ≤ -succ(-y) iff -x ≥ succ(-y), i.e., succ(-y) ≤ -x.
+  have F_neg_y : generic_format beta fexp (-y) := generic_format_opp beta fexp Fy
+  have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+  have := succ_le_lt beta fexp hValid F_neg_y F_neg_x (by linarith : -y < -x)
+  linarith
+
 end LeanFlocq
