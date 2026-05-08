@@ -1667,6 +1667,66 @@ theorem round_N_middle (beta : radix) (fexp : ℤ → ℤ) (choice : ℤ → Boo
     rw [h_zn]
     split_ifs <;> rfl
 
+/-- For `x` strictly subnormal (`ex < fexp ex`) with `x ≥ 0`, round Znearest gives 0. -/
+theorem round_N_small_pos (beta : radix) (fexp : ℤ → ℤ) (choice : ℤ → Bool)
+    {x : ℝ} {ex : ℤ}
+    (Hex : bpow beta (ex - 1) ≤ x ∧ x < bpow beta ex)
+    (Hf : ex < fexp ex) :
+    round beta fexp (Znearest choice) x = 0 := by
+  have hxpos : 0 < x := lt_of_lt_of_le (bpow_gt_0 _ _) Hex.1
+  have h_mag : mag beta x = ex := mag_unique_pos beta Hex.1 Hex.2
+  have h_sm_lt_half : |x * bpow beta (-fexp ex)| < 1/2 := by
+    have h_sm_pos : 0 ≤ x * bpow beta (-fexp ex) :=
+      mul_nonneg (le_of_lt hxpos) (bpow_ge_0 _ _)
+    rw [abs_of_nonneg h_sm_pos]
+    have h1 : x * bpow beta (-fexp ex) < bpow beta ex * bpow beta (-fexp ex) :=
+      mul_lt_mul_of_pos_right Hex.2 (bpow_gt_0 _ _)
+    have h2 : bpow beta ex * bpow beta (-fexp ex) = bpow beta (ex - fexp ex) := by
+      rw [← bpow_plus]; rfl
+    have h3 : bpow beta (ex - fexp ex) ≤ bpow beta (-1) := bpow_le beta (by omega)
+    have h4 : bpow beta (-1) ≤ 1/2 := by
+      show (beta.val : ℝ)^(-1 : ℤ) ≤ 1/2
+      rw [zpow_neg, zpow_one, ← one_div]
+      apply one_div_le_one_div_of_le (by norm_num : (0 : ℝ) < 2)
+      exact_mod_cast beta.prop
+    linarith
+  unfold round F2R scaled_mantissa cexp
+  rw [h_mag]
+  have h_zn : Znearest choice (x * bpow beta (-fexp ex)) = 0 := by
+    apply Znearest_imp choice
+    push_cast; rw [sub_zero]; exact h_sm_lt_half
+  rw [h_zn]
+  push_cast; ring
+
+/-- General `round_N_small`: works for any sign of `x`. -/
+theorem round_N_small (beta : radix) (fexp : ℤ → ℤ) (choice : ℤ → Bool)
+    {x : ℝ} {ex : ℤ}
+    (Hex : bpow beta (ex - 1) ≤ |x| ∧ |x| < bpow beta ex)
+    (Hf : ex < fexp ex) :
+    round beta fexp (Znearest choice) x = 0 := by
+  have hxabs_pos : 0 < |x| := lt_of_lt_of_le (bpow_gt_0 _ _) Hex.1
+  have h_mag : mag beta x = ex := mag_unique beta Hex.1 Hex.2
+  have h_sm_lt_half : |x * bpow beta (-fexp ex)| < 1/2 := by
+    rw [abs_mul, abs_of_pos (bpow_gt_0 beta (-fexp ex))]
+    have h1 : |x| * bpow beta (-fexp ex) < bpow beta ex * bpow beta (-fexp ex) :=
+      mul_lt_mul_of_pos_right Hex.2 (bpow_gt_0 _ _)
+    have h2 : bpow beta ex * bpow beta (-fexp ex) = bpow beta (ex - fexp ex) := by
+      rw [← bpow_plus]; rfl
+    have h3 : bpow beta (ex - fexp ex) ≤ bpow beta (-1) := bpow_le beta (by omega)
+    have h4 : bpow beta (-1) ≤ 1/2 := by
+      show (beta.val : ℝ)^(-1 : ℤ) ≤ 1/2
+      rw [zpow_neg, zpow_one, ← one_div]
+      apply one_div_le_one_div_of_le (by norm_num : (0 : ℝ) < 2)
+      exact_mod_cast beta.prop
+    linarith
+  unfold round F2R scaled_mantissa cexp
+  rw [h_mag]
+  have h_zn : Znearest choice (x * bpow beta (-fexp ex)) = 0 := by
+    apply Znearest_imp choice
+    push_cast; rw [sub_zero]; exact h_sm_lt_half
+  rw [h_zn]
+  push_cast; ring
+
 /-! ### Round to nearest, ties away from zero (`NA`) -/
 
 /-- `round_NA_pt`: rounding via Znearest with `choice n = (0 ≤ n)` produces
