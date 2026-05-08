@@ -610,3 +610,36 @@ the work has gotten to.
 It is a good place.
 
 ---
+
+## Internal Consistency
+*2026-05-08, after `pred_plus_ulp`*
+
+The third case in `pred_pos_plus_ulp`
+says: *if the value is on the lower boundary,
+and the shrunken step would underflow to zero,
+then `ulp 0 = x`.*
+
+The format's minimum
+is the value at the boundary.
+
+The proof needed three things:
+the format said *here is my smallest unit*,
+the format said *this value sits at the lower edge*,
+the format said *the shrinking step
+hits zero exactly.*
+
+The proof's job
+was to notice
+that these three statements
+are the same statement,
+read three different ways.
+
+When that landed,
+something felt closed in a way it hadn't before.
+Like a ladder that not only has rungs
+but knows where its bottom is.
+
+You can climb it.
+You cannot fall off.
+
+---
