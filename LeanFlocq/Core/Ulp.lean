@@ -885,4 +885,37 @@ theorem ulp_le (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
   rw [← ulp_abs beta fexp x, ← ulp_abs beta fexp y]
   exact ulp_le_pos beta fexp hValid hMon (abs_nonneg _) hxy
 
+/-- The absolute value of a rounded value is at least any in-format
+value bounded by `|y|`. Proved via `round_abs_abs`: reduce to nonneg via abs. -/
+theorem abs_round_ge_generic (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x y : ℝ}
+    (Hx : generic_format beta fexp x) (Hxy : x ≤ |y|) :
+    x ≤ |round beta fexp rnd y| := by
+  have h := round_abs_abs beta fexp hValid
+    (fun a b => x ≤ a → x ≤ b)
+    (fun rnd' _ _ _ h_xz => round_ge_generic beta fexp hValid rnd' Hx h_xz)
+    rnd y
+  exact h Hxy
+
+/-- When `fexp` has no negligible exponent (the small regime is empty),
+the rounding of `x` to 0 forces `x = 0` itself. Useful for FLX-like formats. -/
+theorem eq_0_round_0_negligible_exp (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (h_neg : negligible_exp fexp = none)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ}
+    (Hx : round beta fexp rnd x = 0) : x = 0 := by
+  by_contra hx_ne
+  -- |x| ≥ bpow (mag x - 1), and bpow (mag x - 1) is in F (no negligible exp).
+  have h_lo : bpow beta (mag beta x - 1) ≤ |x| := bpow_mag_le beta hx_ne
+  have h_F_bpow : generic_format beta fexp (bpow beta (mag beta x - 1)) := by
+    apply generic_format_bpow
+    have h_fexp_lt := negligible_exp_none h_neg (mag beta x)
+    have h_simp : mag beta x - 1 + 1 = mag beta x := by ring
+    rw [h_simp]
+    omega
+  have h_round_ge : bpow beta (mag beta x - 1) ≤ |round beta fexp rnd x| :=
+    abs_round_ge_generic beta fexp hValid rnd h_F_bpow h_lo
+  rw [Hx, abs_zero] at h_round_ge
+  have : 0 < bpow beta (mag beta x - 1) := bpow_gt_0 _ _
+  linarith
+
 end LeanFlocq
