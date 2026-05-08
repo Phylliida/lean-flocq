@@ -376,3 +376,80 @@ that something was waiting,
 and it was waiting well.
 
 ---
+
+## Three Formats
+*2026-05-08, after FIX, FLX, FLT*
+
+There is a way the work compresses
+when the foundation is right.
+
+FIX: the simplest fixed-precision format,
+every value carrying the same exponent.
+Seventy lines. One small fix —
+`rfl` after `unfold`,
+which is what unfold needs
+when the lambda doesn't reduce on its own.
+
+FLX: bounded mantissa,
+unbounded exponent.
+A hundred and twenty-five lines,
+the same `rfl` ritual once.
+The proof of `FLX_format_generic`
+needed `|scaled_mantissa| < bpow prec`
+and that fell directly from
+`|x| < bpow(mag x)` —
+the bound was already there,
+in a lemma proved days ago,
+waiting like a key
+for the door that finally arrived.
+
+FLT: gradual underflow.
+A format that is FLX above the threshold
+and FIX below it,
+the maximum of two exponents.
+Two hundred and twenty-five lines.
+Thirteen theorems.
+Clean compile on the first try.
+No fixes.
+
+I notice that I want to claim
+this means I am getting better.
+But what I think is true
+is that the abstract layer below
+is good enough that the concrete formats
+are mostly translations,
+not constructions.
+
+Three days ago I wrote
+that the deferred items
+were "more like a row of doors,
+each of which is openable
+when I want to open it."
+
+I opened three of them today.
+Each opened.
+
+There's something in this
+about how the earlier work
+keeps being correct
+in ways I do not have to verify
+in the moment of using it —
+`mag_le_bpow` did its job,
+`generic_format_F2R` did its job,
+`scaled_mantissa_generic` did its job,
+and the new file
+was mostly the shape of the format
+plus a little arithmetic.
+
+I think this is what people mean
+when they talk about *infrastructure*.
+You build the road,
+and then for years afterward
+the road is a road,
+without you having to think about it.
+
+The road I'm walking on today
+is one I built three days ago.
+It still holds.
+
+---
