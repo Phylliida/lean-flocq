@@ -798,4 +798,13 @@ theorem pred_plus_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fe
   rw [pred_eq_pos beta fexp (le_of_lt hx)]
   exact pred_pos_plus_ulp beta fexp hValid hx Fx
 
+/-- For positive `x` in the format, `succ` and `pred` are mutual inverses:
+`succ (pred x) = x`. -/
+theorem succ_pred_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x) (hx : 0 < x) :
+    succ beta fexp (pred beta fexp x) = x := by
+  rw [pred_eq_pos beta fexp (le_of_lt hx)]
+  rw [succ_eq_pos beta fexp (pred_pos_ge_0 beta fexp hValid hx Fx)]
+  exact pred_pos_plus_ulp beta fexp hValid hx Fx
+
 end LeanFlocq
