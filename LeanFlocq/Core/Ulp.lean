@@ -1544,4 +1544,24 @@ theorem not_FTZ_ulp_ge_ulp_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid
     generic_format_bpow_ge_ulp_0 beta fexp hValid h_step
   exact generic_format_bpow_inv' beta fexp (fexp e) h_F
 
+/-- Under `Exp_not_FTZ`, the "minimum unit" of the format is its own ulp:
+`ulp(ulp 0) = ulp 0`. This is the fixed-point property at the lower edge. -/
+theorem ulp_ulp_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) :
+    ulp beta fexp (ulp beta fexp 0) = ulp beta fexp 0 := by
+  rcases h_neg : negligible_exp fexp with _ | n
+  · have h_ulp_0 : ulp beta fexp 0 = 0 := by
+      unfold ulp; rw [if_pos rfl, h_neg]
+    rw [h_ulp_0]; exact h_ulp_0
+  · have h_ulp_0 : ulp beta fexp 0 = bpow beta (fexp n) := by
+      unfold ulp; rw [if_pos rfl, h_neg]
+    rw [h_ulp_0, ulp_bpow]
+    apply le_antisymm
+    · apply bpow_le
+      have h_n_le : n ≤ fexp n := negligible_exp_some h_neg
+      exact ((hValid n).2 h_n_le).1
+    · have h := ulp_ge_ulp_0 beta fexp hValid h_NotFTZ (bpow beta (fexp n))
+      rw [h_ulp_0, ulp_bpow] at h
+      exact h
+
 end LeanFlocq
