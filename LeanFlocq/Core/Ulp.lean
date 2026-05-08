@@ -1027,4 +1027,56 @@ theorem mag_plus_eps (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} (hx : 0 < x)
     rw [h_eq] at h_F2R_p1
     linarith
 
+/-- For positive `x` in the format and small enough perturbation `eps`,
+the round-down of `x + eps` is `x`: small additions don't cross to the
+next representable value. -/
+theorem round_DN_plus_eps_pos (beta : radix) (fexp : ℤ → ℤ)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_nn : 0 ≤ eps) (heps_lt : eps < ulp beta fexp x) :
+    round beta fexp (fun y : ℝ => ⌊y⌋) (x + eps) = x := by
+  have hx_ne : x ≠ 0 := ne_of_gt hx
+  have h_x_eps_pos : 0 < x + eps := by linarith
+  have h_mag_eq : mag beta (x + eps) = mag beta x :=
+    mag_plus_eps beta fexp hx Fx heps_nn heps_lt
+  have h_cexp_eq : cexp beta fexp (x + eps) = cexp beta fexp x := by
+    unfold cexp; rw [h_mag_eq]
+  set ce := cexp beta fexp x with hce_def
+  set m := Ztrunc (scaled_mantissa beta fexp x) with hm_def
+  have hxe : x = F2R (beta := beta) ⟨m, ce⟩ := Fx
+  have hx_eq_real : x = (m : ℝ) * bpow beta ce := hxe
+  have h_x_bpow_eq_m : x * bpow beta (-ce) = (m : ℝ) := by
+    rw [hx_eq_real, mul_assoc, ← bpow_plus]
+    rw [show ce + -ce = 0 from by ring, bpow_zero, mul_one]
+  -- (x + eps) * bpow(-ce) = m + eps * bpow(-ce), with 0 ≤ ... < 1.
+  have h_eps_bpow_lt_1 : eps * bpow beta (-ce) < 1 := by
+    have h_ulp_eq : ulp beta fexp x = bpow beta ce := ulp_neq_0 beta fexp hx_ne
+    rw [h_ulp_eq] at heps_lt
+    have h_bpow_neg_pos : 0 < bpow beta (-ce) := bpow_gt_0 _ _
+    have : eps * bpow beta (-ce) < bpow beta ce * bpow beta (-ce) :=
+      mul_lt_mul_of_pos_right heps_lt h_bpow_neg_pos
+    rwa [show bpow beta ce * bpow beta (-ce) = 1 from by
+      rw [← bpow_plus, show ce + -ce = 0 from by ring, bpow_zero]] at this
+  have h_eps_bpow_nn : 0 ≤ eps * bpow beta (-ce) :=
+    mul_nonneg heps_nn (bpow_ge_0 _ _)
+  unfold round
+  show F2R (beta := beta) ⟨⌊scaled_mantissa beta fexp (x + eps)⌋,
+                            cexp beta fexp (x + eps)⟩ = x
+  rw [h_cexp_eq]
+  have h_sm_eq : scaled_mantissa beta fexp (x + eps)
+      = (m : ℝ) + eps * bpow beta (-ce) := by
+    unfold scaled_mantissa
+    rw [h_cexp_eq]
+    show (x + eps) * bpow beta (-ce) = (m : ℝ) + eps * bpow beta (-ce)
+    rw [show (x + eps) * bpow beta (-ce)
+        = x * bpow beta (-ce) + eps * bpow beta (-ce) from by ring,
+        h_x_bpow_eq_m]
+  rw [h_sm_eq]
+  have h_floor : (⌊(m : ℝ) + eps * bpow beta (-ce)⌋ : ℤ) = m := by
+    apply Int.floor_eq_iff.mpr
+    refine ⟨?_, ?_⟩
+    · linarith
+    · linarith
+  rw [h_floor]
+  exact hxe.symm
+
 end LeanFlocq
