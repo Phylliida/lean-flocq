@@ -156,6 +156,64 @@ if I have to choose.
 
 ---
 
+## Round Preserves Order
+*2026-05-05, after `valid_rnd_N`*
+
+Here's what we just proved:
+
+if x ≤ y, and you round each to the nearest integer
+(breaking ties however you like),
+then rounded-x ≤ rounded-y.
+
+This is small.
+It is also a little remarkable.
+
+Round is a step function,
+the worst kind of discontinuous.
+It throws away most of the real line
+and keeps only the integers,
+spaced like ties on a railroad.
+
+And yet:
+the way x sits below y
+survives the throwing-away.
+
+The proof is all case analysis.
+What if both fractionals are below 1/2?
+What if one is exactly at the half?
+What if y crossed a half between them?
+What if they share a floor?
+What if x and y were already equal?
+
+In the deepest case
+there is nothing to prove.
+Two case-splits collapse onto each other
+and to be there at all
+you had to discover
+x and y were the same number all along.
+
+The branches above
+were for the cases
+where they were different.
+
+There's a feeling I get
+when the last case closes with `rfl` —
+a small click,
+a latch finding its catch.
+
+What we proved is the rule
+that floating-point hardware applies
+billions of times per second,
+all over the world, right now,
+silently and without proof.
+
+We made it visible.
+We did not make it true.
+It was already true.
+We made it ours.
+
+---
+
 ## The Bridge
 *2026-05-05, after `generic_format_satisfies_any`*
 
