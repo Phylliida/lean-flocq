@@ -4,10 +4,10 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `dad01c0`)
+## Status (as of commit `8f2a478`)
 
-~3300 lines of Lean across 6 files. **0 `sorry`s.** All files build clean.
-Roughly the foundational third of `flocq/src/Core/` is ported:
+~3830 lines of Lean across 9 files. **0 `sorry`s.** All files build clean.
+Foundational + the four classical concrete formats:
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -16,7 +16,10 @@ Roughly the foundational third of `flocq/src/Core/` is ported:
 | `Defs.lean` | 62 | `Core/Defs.v` | **Complete.** All 11 definitions. |
 | `Float_prop.lean` | 247 | `Core/Float_prop.v` | Algebraic lemmas + bpow-bound family. Skipped: `Rcompare_F2R`, `F2R_cond_Zopp`, `F2R_prec_normalize`, `mag_*` family. |
 | `Round_pred.lean` | 819 | `Core/Round_pred.v` | **Essentially complete** (every theorem ported except `Rnd_N_pt_DN_UP_eq` variants — see file header). |
-| `Generic_fmt.lean` | 1779 | `Core/Generic_fmt.v` | ~88 theorems. Skipped: `Znearest_opp`, `round_N_opp`, `generic_round_generic`. |
+| `Generic_fmt.lean` | 1921 | `Core/Generic_fmt.v` | ~91 theorems. **All deferred items closed**: `Znearest_opp`, `round_N_opp`, `generic_round_generic` are now done. |
+| `FIX.lean` | 66 | `Core/FIX.v` | **Complete** modulo `ulp_FIX` (needs `Ulp.v`). |
+| `FLX.lean` | 129 | `Core/FLX.v` | Core complete. Skipped: `FLXN_format`, `ulp_FLX_*`, `succ_FLX_*`, `Round_NE.v`-dependent. |
+| `FLT.lean` | 237 | `Core/FLT.v` | Core complete (13 thms). Skipped: `ulp_FLT_*`, `succ_FLT_exact_shift_*`, `Round_NE.v`-dependent. |
 
 ## Build setup
 
@@ -227,28 +230,25 @@ runtime computation.
 
 In rough order of usefulness:
 
-1. **`generic_round_generic`** — composition of formats. If x is in
-   format1 and we round through format2, the result is back in format1.
-   Substantial proof but tractable using `round_abs_abs`, `mag_generic_gt`,
-   the bounded family, and `mag_round_ZR`. Important for combining formats.
+1. **`Core/FTZ.v`** — flush-to-zero format. The fourth classical format.
+   Like FLT but values below the threshold round to 0. Should be
+   tractable now that FIX/FLX/FLT are in place.
 
-2. **`Znearest_opp` / `round_N_opp`** — negation symmetry. The choice for
-   `-x` is `fun t => negb (choice (-(t+1)))`, which is intricate to track.
-   Useful for cleanly stating symmetry but not blocking.
+2. **`Core/Ulp.v`** — unit in the last place. Unblocks all the `ulp_*`
+   theorems in FIX/FLX/FLT (currently skipped). Substantial — ulp depends
+   on `negligible_exp` and the predecessor/successor functions.
 
-3. **Port a concrete format** — `Core/FIX.v`, `Core/FLT.v`, or `Core/FLX.v`.
-   Each is a few hundred lines and instantiates the generic machinery to
-   a specific format. Once you have one, you have a verified IEEE-754-like
-   floating-point arithmetic.
+3. **`Core/Round_NE.v`** — round to nearest, ties to even. Builds on
+   `Znearest` with a specific choice function. Now possible since
+   `Znearest_opp`/`round_N_opp` are done.
 
-4. **`Core/Round_NE.v`** — round to nearest, ties to even. Builds on
-   `Znearest` with a specific choice function.
+4. **`Core/IEEE754/Binary.v`** — the actual IEEE 754 binary formats.
+   The destination of this whole port. Will need Ulp and Round_NE first.
 
-5. **`Core/IEEE754/Binary.v`** — the actual IEEE 754 binary formats. Far,
-   but reachable.
-
-6. **`Core/Ulp.v`** — unit in the last place; useful for floating-point
-   error analysis.
+5. **Skipped `Float_prop.v` lemmas**: `Rcompare_F2R` (needs `Rcompare`),
+   `F2R_cond_Zopp` (needs `cond_Zopp`), `F2R_prec_normalize`, the `mag_*`
+   family (`mag_F2R`, `mag_le_Zpower`, etc., would unblock cleaner FLT/FLX
+   proofs and `FIX_format_FLX` which we skipped).
 
 ## Useful commands
 
