@@ -1640,4 +1640,44 @@ theorem ulp_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     · right
       rw [hY, abs_of_nonneg (bpow_ge_0 _ _)]
 
+/-- Characterization of `round_DN`: if `d ∈ F` and `d ≤ x < succ d`, then
+`round_DN x = d`. -/
+theorem round_DN_eq (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x d : ℝ} (Fd : generic_format beta fexp d)
+    (h_lo : d ≤ x) (h_hi : x < succ beta fexp d) :
+    round beta fexp (fun y : ℝ => ⌊y⌋) x = d := by
+  apply le_antisymm
+  · -- round_DN x ≤ d. Suppose not: d < round_DN x. Then succ d ≤ round_DN x ≤ x,
+    -- contradicting x < succ d.
+    by_contra hne
+    push_neg at hne
+    have F_DN : generic_format beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x) :=
+      generic_format_round beta fexp hValid _ x
+    have h_succ_le : succ beta fexp d ≤ round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+      succ_le_lt beta fexp hValid Fd F_DN hne
+    have h_DN_le : round beta fexp (fun y : ℝ => ⌊y⌋) x ≤ x :=
+      (round_DN_pt beta fexp hValid x).2.1
+    linarith
+  · exact (round_DN_pt beta fexp hValid x).2.2 d Fd h_lo
+
+/-- Characterization of `round_UP`: if `u ∈ F` and `pred u < x ≤ u`, then
+`round_UP x = u`. -/
+theorem round_UP_eq (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x u : ℝ} (Fu : generic_format beta fexp u)
+    (h_lo : pred beta fexp u < x) (h_hi : x ≤ u) :
+    round beta fexp (fun y : ℝ => ⌈y⌉) x = u := by
+  apply le_antisymm
+  · exact (round_UP_pt beta fexp hValid x).2.2 u Fu h_hi
+  · -- u ≤ round_UP x. Suppose not: round_UP x < u. Then round_UP x ≤ pred u,
+    -- contradicting pred u < x ≤ round_UP x.
+    by_contra hne
+    push_neg at hne
+    have F_UP : generic_format beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x) :=
+      generic_format_round beta fexp hValid _ x
+    have h_pred_ge : round beta fexp (fun y : ℝ => ⌈y⌉) x ≤ pred beta fexp u :=
+      pred_ge_gt beta fexp hValid F_UP Fu hne
+    have h_UP_ge : x ≤ round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+      (round_UP_pt beta fexp hValid x).2.1
+    linarith
+
 end LeanFlocq
