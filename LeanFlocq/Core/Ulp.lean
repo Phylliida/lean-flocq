@@ -1315,4 +1315,38 @@ theorem pred_succ (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     rw [neg_neg]]
   rw [h]; ring
 
+/-- For `0 ≤ x`, `ulp(round_DN x) = ulp x`. The down-rounded value sits
+in the same magnitude band, or both ulps reduce to `ulp 0` in the
+subnormal regime. -/
+theorem ulp_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 ≤ x) :
+    ulp beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x) = ulp beta fexp x := by
+  rcases lt_or_eq_of_le hx with hx_pos | hx_zero
+  · have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+    have h_round_nn : 0 ≤ round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+      round_ge_generic beta fexp hValid _ (generic_format_0 beta fexp) hx
+    rcases lt_or_eq_of_le h_round_nn with hr_pos | hr_zero
+    · -- round_DN x > 0: cexp coincides via cexp_DN.
+      rw [ulp_neq_0 beta fexp (ne_of_gt hr_pos), ulp_neq_0 beta fexp hx_ne,
+          cexp_DN beta fexp hValid hr_pos]
+    · -- round_DN x = 0: subnormal regime, mag x ≤ fexp(mag x).
+      rw [← hr_zero]
+      have h_ex : bpow beta (mag beta x - 1) ≤ |x| ∧ |x| < bpow beta (mag beta x) :=
+        ⟨bpow_mag_le beta hx_ne, bpow_mag_gt beta x⟩
+      have h_subnormal : mag beta x ≤ fexp (mag beta x) :=
+        exp_small_round_0 beta fexp hValid _ h_ex hr_zero.symm
+      rw [ulp_neq_0 beta fexp hx_ne]
+      show ulp beta fexp 0 = bpow beta (cexp beta fexp x)
+      unfold cexp ulp
+      rw [if_pos rfl]
+      rcases h_neg : negligible_exp fexp with _ | n
+      · exfalso
+        have := negligible_exp_none h_neg (mag beta x)
+        linarith
+      · show bpow beta (fexp n) = bpow beta (fexp (mag beta x))
+        congr 1
+        have h_n_le : n ≤ fexp n := negligible_exp_some h_neg
+        exact (fexp_negligible_exp_eq hValid h_subnormal h_n_le).symm
+  · rw [← hx_zero, round_0]
+
 end LeanFlocq
