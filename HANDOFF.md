@@ -4,9 +4,9 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `e3592eb`)
+## Status (as of commit `f957264`)
 
-~5760 lines of Lean across 12 files. **0 `sorry`s.** All files build clean.
+~5950 lines of Lean across 12 files. **0 `sorry`s.** All files build clean.
 Foundational + all four classical concrete formats + substantial Ulp + Round_NE skeleton:
 
 | File | Lean lines | Coq source | Status |
@@ -21,7 +21,7 @@ Foundational + all four classical concrete formats + substantial Ulp + Round_NE 
 | `FLX.lean` | 174 | `Core/FLX.v` | Core + `negligible_exp_FLX`, `ulp_FLX_0`, `generic_format_FLX_1`, `eq_0_round_0_FLX`, `gt_0_round_gt_0_FLX`. Skipped: `FLXN_format`, `succ_FLX_*`, `Round_NE.v`-dependent. |
 | `FLT.lean` | 330 | `Core/FLT.v` | Core + `ulp_FLT_small/_le/_gt`, `generic_format_FLT_1`. Skipped: `succ_FLT_exact_shift_*` (need `mag_mult_bpow`), `Round_NE.v`-dependent. |
 | `FTZ.lean` | 393 | `Core/FTZ.v` | 10 thms incl. `ulp_FTZ_0`. Skipped: `FTZ_format_FLXN`. |
-| `Ulp.lean` | 1318 | `Core/Ulp.v` (slice) | Substantial: 62 thms (~60% of Coq's 103). All foundational pieces: ulp basics, round_UP_DN_ulp, succ/pred and full format-preservation chain, order properties, pred_pos_plus_ulp roundtrip, Exp_not_FTZ family, ulp_ge_ulp_0, ulp_le_pos/ulp_le, abs_round_ge_generic, eq_0_round_0_negligible_exp, error_lt_ulp/error_le_ulp/error_le_half_ulp, mag_plus_eps, round_DN_plus_eps_pos (incl. x = 0), round_UP_plus_eps_pos (positive only), round_DN_minus_eps_pos, succ_le_lt_aux/full, le_pred_pos_lt, pred_ge_gt, pred_succ_pos, **succ_pred / pred_succ** (full inverse). Pending: x = 0 case of round_UP_plus_eps_pos, mixed-sign round_DN_plus_eps / round_UP_plus_eps families, ulp_round / ulp_round_pos, succ_FLT_exact_shift_*. |
+| `Ulp.lean` | 1456 | `Core/Ulp.v` (slice) | Substantial: 69 thms (~67% of Coq's 103). All foundational pieces plus: ulp_DN, succ_DN_eq_UP_pos, ulp_succ_pos, generic_format_ulp + not_FTZ_generic_format_ulp + generic_format_bpow_ge_ulp_0 + not_FTZ_ulp_ge_ulp_0 (the triple equivalence with Exp_not_FTZ). Pending: x = 0 case of round_UP_plus_eps_pos, mixed-sign round_DN_plus_eps / round_UP_plus_eps families, ulp_round / ulp_round_pos, ulp_pred_pos, ulp_ulp_0, full succ_DN_eq_UP. |
 | `Round_NE.lean` | 42 | `Core/Round_NE.v` | Foundations: `ZnearestE`, `round_NE`, `NE_prop`, `Rnd_NE_pt`, `round_NE_pt_N`. Skipped (the parity argument): `DN_UP_parity_generic_pos`, `Rnd_NE_pt_total/_monotone`, `round_NE_pt`. |
 
 ## Build setup
