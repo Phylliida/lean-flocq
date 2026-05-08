@@ -142,4 +142,20 @@ theorem ulp_FLX_0 (beta : radix) (prec : ℤ) (hp : 0 < prec) :
   unfold ulp
   rw [if_pos rfl, negligible_exp_FLX prec hp]
 
+/-- `1` is in the FLX format. -/
+theorem generic_format_FLX_1 (beta : radix) (prec : ℤ) (hp : 0 < prec) :
+    generic_format beta (FLX_exp prec) 1 := by
+  have h := generic_format_bpow' beta (FLX_exp prec)
+    (FLX_exp_valid prec hp) 0 ?_
+  · rwa [bpow_zero] at h
+  · unfold FLX_exp; linarith
+
+/-- In FLX, rounding to zero forces the input to be zero — there's no
+underflow. -/
+theorem eq_0_round_0_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ}
+    (Hx : round beta (FLX_exp prec) rnd x = 0) : x = 0 :=
+  eq_0_round_0_negligible_exp beta (FLX_exp prec) (FLX_exp_valid prec hp)
+    (negligible_exp_FLX prec hp) rnd Hx
+
 end LeanFlocq
