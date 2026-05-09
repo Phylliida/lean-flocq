@@ -1147,37 +1147,95 @@ theorem succ_le_lt_aux (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp f
       round_generic beta fexp _ Fy
     linarith [h1, h2]
 
-/-- For positive `x` in F and `0 < eps ≤ ulp x`, `round_UP (x + eps) = x + ulp x`.
+/-- For nonnegative `x` in F and `0 < eps ≤ ulp x`, `round_UP (x + eps) = x + ulp x`.
 A small step up reaches the next representable value exactly. -/
 theorem round_UP_plus_eps_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
-    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x)
+    {x : ℝ} (hx : 0 ≤ x) (Fx : generic_format beta fexp x)
     {eps : ℝ} (heps_pos : 0 < eps) (heps_le : eps ≤ ulp beta fexp x) :
     round beta fexp (fun y : ℝ => ⌈y⌉) (x + eps) = x + ulp beta fexp x := by
-  rcases lt_or_eq_of_le heps_le with heps_lt | heps_eq
-  · -- eps < ulp x: x + eps is strictly between x and x + ulp x, hence not in F.
-    have heps_nn : 0 ≤ eps := le_of_lt heps_pos
-    have hd : round beta fexp (fun y : ℝ => ⌊y⌋) (x + eps) = x :=
-      round_DN_plus_eps_pos beta fexp hValid (le_of_lt hx) Fx heps_nn heps_lt
-    have h_not_F : ¬ generic_format beta fexp (x + eps) := by
-      intro Fxe
-      have h_dn_eq : round beta fexp (fun y : ℝ => ⌊y⌋) (x + eps) = x + eps :=
-        round_generic beta fexp _ Fxe
+  rcases lt_or_eq_of_le hx with hx_pos | hx_eq
+  · -- 0 < x: original argument.
+    rcases lt_or_eq_of_le heps_le with heps_lt | heps_eq
+    · -- eps < ulp x: x + eps is strictly between x and x + ulp x, hence not in F.
+      have heps_nn : 0 ≤ eps := le_of_lt heps_pos
+      have hd : round beta fexp (fun y : ℝ => ⌊y⌋) (x + eps) = x :=
+        round_DN_plus_eps_pos beta fexp hValid (le_of_lt hx_pos) Fx heps_nn heps_lt
+      have h_not_F : ¬ generic_format beta fexp (x + eps) := by
+        intro Fxe
+        have h_dn_eq : round beta fexp (fun y : ℝ => ⌊y⌋) (x + eps) = x + eps :=
+          round_generic beta fexp _ Fxe
+        linarith
+      rw [round_UP_DN_ulp beta fexp h_not_F, hd]
+      have h_ulp_eq : ulp beta fexp (x + eps) = ulp beta fexp x := by
+        have h_xeps_pos : 0 < x + eps := by linarith
+        have h_xeps_ne : x + eps ≠ 0 := ne_of_gt h_xeps_pos
+        have h_x_ne : x ≠ 0 := ne_of_gt hx_pos
+        rw [ulp_neq_0 beta fexp h_xeps_ne, ulp_neq_0 beta fexp h_x_ne]
+        show bpow beta (cexp beta fexp (x + eps)) = bpow beta (cexp beta fexp x)
+        have h_mag_eq : mag beta (x + eps) = mag beta x :=
+          mag_plus_eps beta fexp hx_pos Fx heps_nn heps_lt
+        unfold cexp; rw [h_mag_eq]
+      rw [h_ulp_eq]
+    · -- eps = ulp x: x + eps = x + ulp x ∈ F (succ_aux1), so round_UP is identity.
+      rw [heps_eq]
+      exact round_generic beta fexp _ (generic_format_succ_aux1 beta fexp hValid hx_pos Fx)
+  · -- x = 0: round_UP eps = ulp 0. Cases on negligible_exp.
+    rw [← hx_eq] at heps_le
+    rw [← hx_eq, zero_add, zero_add]
+    rcases h_neg : negligible_exp fexp with _ | n
+    · -- ulp 0 = 0, contradicting 0 < eps ≤ ulp 0
+      exfalso
+      have h_ulp_0 : ulp beta fexp 0 = 0 := by
+        unfold ulp; rw [if_pos rfl, h_neg]
+      rw [h_ulp_0] at heps_le
       linarith
-    rw [round_UP_DN_ulp beta fexp h_not_F, hd]
-    -- ulp (x + eps) = ulp x via mag_plus_eps.
-    have h_ulp_eq : ulp beta fexp (x + eps) = ulp beta fexp x := by
-      have h_xeps_pos : 0 < x + eps := by linarith
-      have h_xeps_ne : x + eps ≠ 0 := ne_of_gt h_xeps_pos
-      have h_x_ne : x ≠ 0 := ne_of_gt hx
-      rw [ulp_neq_0 beta fexp h_xeps_ne, ulp_neq_0 beta fexp h_x_ne]
-      show bpow beta (cexp beta fexp (x + eps)) = bpow beta (cexp beta fexp x)
-      have h_mag_eq : mag beta (x + eps) = mag beta x :=
-        mag_plus_eps beta fexp hx Fx heps_nn heps_lt
-      unfold cexp; rw [h_mag_eq]
-    rw [h_ulp_eq]
-  · -- eps = ulp x: x + eps = x + ulp x ∈ F (succ_aux1), so round_UP is identity.
-    rw [heps_eq]
-    exact round_generic beta fexp _ (generic_format_succ_aux1 beta fexp hValid hx Fx)
+    · -- some n: ulp 0 = bpow(fexp n). Sub-cases on eps < ulp 0 vs eps = ulp 0.
+      have h_ulp_0 : ulp beta fexp 0 = bpow beta (fexp n) := by
+        unfold ulp; rw [if_pos rfl, h_neg]
+      rw [h_ulp_0]
+      have h_n_le : n ≤ fexp n := negligible_exp_some h_neg
+      have heps_ne : eps ≠ 0 := ne_of_gt heps_pos
+      have h_stab := (hValid n).2 h_n_le
+      rw [h_ulp_0] at heps_le
+      rcases lt_or_eq_of_le heps_le with heps_lt | heps_eq
+      · -- 0 < eps < bpow(fexp n): ⌈eps * bpow(-fexp n)⌉ = 1.
+        have h_mag_le : mag beta eps ≤ fexp n := by
+          apply mag_le_bpow beta heps_ne
+          rw [abs_of_pos heps_pos]; exact heps_lt
+        have h_fexp_eq : fexp (mag beta eps) = fexp n :=
+          h_stab.2 (mag beta eps) h_mag_le
+        unfold round
+        show F2R (beta := beta) ⟨⌈scaled_mantissa beta fexp eps⌉,
+                                  cexp beta fexp eps⟩ = bpow beta (fexp n)
+        have h_cexp_eq : cexp beta fexp eps = fexp n := by
+          unfold cexp; exact h_fexp_eq
+        rw [h_cexp_eq]
+        have h_sm_eq : scaled_mantissa beta fexp eps = eps * bpow beta (-fexp n) := by
+          unfold scaled_mantissa; rw [h_cexp_eq]
+        rw [h_sm_eq]
+        have h_ceil_one : ⌈eps * bpow beta (-fexp n)⌉ = 1 := by
+          apply Int.ceil_eq_iff.mpr
+          refine ⟨?_, ?_⟩
+          · push_cast
+            have : 0 < eps * bpow beta (-fexp n) :=
+              mul_pos heps_pos (bpow_gt_0 _ _)
+            linarith
+          · push_cast
+            have h_bpow_neg : 0 < bpow beta (-fexp n) := bpow_gt_0 _ _
+            have hmul : eps * bpow beta (-fexp n)
+                < bpow beta (fexp n) * bpow beta (-fexp n) :=
+              mul_lt_mul_of_pos_right heps_lt h_bpow_neg
+            rw [show bpow beta (fexp n) * bpow beta (-fexp n) = 1 from by
+              rw [← bpow_plus, show fexp n + -fexp n = 0 from by ring, bpow_zero]] at hmul
+            linarith
+        rw [h_ceil_one]
+        show ((1 : ℤ) : ℝ) * bpow beta (fexp n) = bpow beta (fexp n)
+        push_cast; ring
+      · -- eps = bpow(fexp n): round_UP eps = eps since bpow(fexp n) ∈ F.
+        rw [← heps_eq]
+        apply round_generic
+        rw [heps_eq]
+        exact generic_format_bpow beta fexp (fexp n) h_stab.1
 
 /-- For positive `x` in F and `0 < eps ≤ ulp (pred x)`,
 `round_DN (x - eps) = pred x`. The dual of `round_UP_plus_eps_pos`. -/
@@ -1196,6 +1254,95 @@ theorem round_DN_minus_eps_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Val
     (pred_pos_ge_0 beta fexp hValid hx Fx)
     (generic_format_pred_pos beta fexp hValid Fx hx)
     (by linarith) (by linarith)
+
+/-- For positive `x` in F and `0 < eps ≤ ulp (pred x)`,
+`round_UP (pred x + eps) = x`. Composes `round_UP_plus_eps_pos` at `pred_pos x`
+with `pred_pos_plus_ulp`. -/
+theorem round_UP_pred_plus_eps_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (hx : 0 < x) (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_pos : 0 < eps)
+    (heps_le : eps ≤ ulp beta fexp (pred beta fexp x)) :
+    round beta fexp (fun y : ℝ => ⌈y⌉) (pred beta fexp x + eps) = x := by
+  rw [pred_eq_pos beta fexp (le_of_lt hx)] at heps_le ⊢
+  have h_up_eps :
+      round beta fexp (fun y : ℝ => ⌈y⌉) (pred_pos beta fexp x + eps)
+        = pred_pos beta fexp x + ulp beta fexp (pred_pos beta fexp x) :=
+    round_UP_plus_eps_pos beta fexp hValid
+      (pred_pos_ge_0 beta fexp hValid hx Fx)
+      (generic_format_pred_pos beta fexp hValid Fx hx)
+      heps_pos heps_le
+  rw [h_up_eps]
+  exact pred_pos_plus_ulp beta fexp hValid hx Fx
+
+/-- Mixed-sign version: for any `x ∈ F` and `0 ≤ eps` strictly less than the
+appropriate ulp (above `x` if `x ≥ 0`, below `x` toward zero if `x < 0`),
+`round_DN (x + eps) = x`. -/
+theorem round_DN_plus_eps (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_nn : 0 ≤ eps)
+    (heps_lt : eps < if 0 ≤ x then ulp beta fexp x
+                     else ulp beta fexp (pred beta fexp (-x))) :
+    round beta fexp (fun y : ℝ => ⌊y⌋) (x + eps) = x := by
+  classical
+  rcases le_or_gt 0 x with hx | hx
+  · rw [if_pos hx] at heps_lt
+    exact round_DN_plus_eps_pos beta fexp hValid hx Fx heps_nn heps_lt
+  · -- x < 0: reduce to round_UP_pred_plus_eps_pos at -x via round_DN_opp.
+    rw [if_neg (not_le.mpr hx)] at heps_lt
+    have hxneg_pos : 0 < -x := by linarith
+    have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+    have h_pp : pred beta fexp (-x) + ulp beta fexp (pred beta fexp (-x)) = -x := by
+      rw [pred_eq_pos beta fexp (le_of_lt hxneg_pos)]
+      exact pred_pos_plus_ulp beta fexp hValid hxneg_pos F_neg_x
+    have h_eq : -(x + eps)
+        = pred beta fexp (-x) + (ulp beta fexp (pred beta fexp (-x)) - eps) := by linarith
+    have h_up_eps :
+        round beta fexp (fun y : ℝ => ⌈y⌉)
+            (pred beta fexp (-x) + (ulp beta fexp (pred beta fexp (-x)) - eps))
+          = -x :=
+      round_UP_pred_plus_eps_pos beta fexp hValid hxneg_pos F_neg_x
+        (by linarith) (by linarith)
+    have h_dn := round_DN_opp beta fexp (-(x + eps))
+    rw [neg_neg] at h_dn
+    rw [h_dn, h_eq, h_up_eps, neg_neg]
+
+/-- Mixed-sign version: for any `x ∈ F` and `0 < eps` at most the appropriate
+ulp, `round_UP (x + eps) = succ x`. -/
+theorem round_UP_plus_eps (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_pos : 0 < eps)
+    (heps_le : eps ≤ if 0 ≤ x then ulp beta fexp x
+                     else ulp beta fexp (pred beta fexp (-x))) :
+    round beta fexp (fun y : ℝ => ⌈y⌉) (x + eps) = succ beta fexp x := by
+  classical
+  rcases le_or_gt 0 x with hx | hx
+  · rw [if_pos hx] at heps_le
+    rw [succ_eq_pos beta fexp hx]
+    exact round_UP_plus_eps_pos beta fexp hValid hx Fx heps_pos heps_le
+  · -- x < 0: reduce to round_DN_plus_eps_pos at pred(-x) via round_UP_opp.
+    rw [if_neg (not_le.mpr hx)] at heps_le
+    have hxneg_pos : 0 < -x := by linarith
+    have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+    have h_pp : pred beta fexp (-x) + ulp beta fexp (pred beta fexp (-x)) = -x := by
+      rw [pred_eq_pos beta fexp (le_of_lt hxneg_pos)]
+      exact pred_pos_plus_ulp beta fexp hValid hxneg_pos F_neg_x
+    have h_eq : -(x + eps)
+        = pred beta fexp (-x) + (ulp beta fexp (pred beta fexp (-x)) - eps) := by linarith
+    have h_dn_eps :
+        round beta fexp (fun y : ℝ => ⌊y⌋)
+            (pred beta fexp (-x) + (ulp beta fexp (pred beta fexp (-x)) - eps))
+          = pred beta fexp (-x) :=
+      round_DN_plus_eps_pos beta fexp hValid
+        (pred_ge_0 beta fexp hValid hxneg_pos F_neg_x)
+        (generic_format_pred beta fexp hValid F_neg_x)
+        (by linarith) (by linarith)
+    have h_up := round_UP_opp beta fexp (-(x + eps))
+    rw [neg_neg] at h_up
+    rw [h_up, h_eq, h_dn_eps]
+    have h_succ : succ beta fexp x = -pred beta fexp (-x) := by
+      have h := succ_opp beta fexp (-x)
+      rwa [neg_neg] at h
+    exact h_succ.symm
 
 /-- `x ≤ pred_pos y` whenever `0 ≤ x < y` are both in the format.
 Proved by contradiction via `succ_le_lt_aux` + `succ_pred_pos`: if instead
@@ -1314,6 +1461,111 @@ theorem pred_succ (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     unfold pred
     rw [neg_neg]]
   rw [h]; ring
+
+/-- Mixed-sign version: for any `x ∈ F` and `0 < eps` at most the appropriate
+ulp, `round_UP (pred x + eps) = x`. The bound is `ulp x` when `x ≤ 0` and
+`ulp (pred x)` when `x > 0`. -/
+theorem round_UP_pred_plus_eps (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_pos : 0 < eps)
+    (heps_le : eps ≤ if x ≤ 0 then ulp beta fexp x
+                     else ulp beta fexp (pred beta fexp x)) :
+    round beta fexp (fun y : ℝ => ⌈y⌉) (pred beta fexp x + eps) = x := by
+  classical
+  have F_pred : generic_format beta fexp (pred beta fexp x) :=
+    generic_format_pred beta fexp hValid Fx
+  have h_succ_pred : succ beta fexp (pred beta fexp x) = x :=
+    succ_pred beta fexp hValid Fx
+  have h_pred_neg_pred : pred beta fexp (-pred beta fexp x) = -x := by
+    have h := pred_opp beta fexp (pred beta fexp x)
+    rw [h_succ_pred] at h
+    exact h
+  have h_ulp_pred_neg :
+      ulp beta fexp (pred beta fexp (-pred beta fexp x)) = ulp beta fexp x := by
+    rw [h_pred_neg_pred, ulp_opp]
+  rcases le_or_gt x 0 with hx | hx
+  · rw [if_pos hx] at heps_le
+    have h_pred_le : pred beta fexp x ≤ 0 :=
+      le_trans (pred_le_id beta fexp x) hx
+    rcases lt_or_eq_of_le h_pred_le with h_pred_neg | h_pred_zero
+    · -- pred x < 0: round_UP_plus_eps inner bound is ulp(pred(-pred x)) = ulp x.
+      have h_inner : eps ≤ if 0 ≤ pred beta fexp x
+                           then ulp beta fexp (pred beta fexp x)
+                           else ulp beta fexp (pred beta fexp (-pred beta fexp x)) := by
+        rw [if_neg (not_le.mpr h_pred_neg), h_ulp_pred_neg]
+        exact heps_le
+      have h_up := round_UP_plus_eps beta fexp hValid F_pred heps_pos h_inner
+      rwa [h_succ_pred] at h_up
+    · -- pred x = 0 with x ≤ 0: forces x = 0 and ulp 0 = 0, contradicting heps_pos.
+      exfalso
+      have h_x_zero : x = 0 := by
+        have hple := pred_le_id beta fexp x
+        linarith
+      rw [h_x_zero] at heps_le h_pred_zero
+      have h_pred_eq : pred beta fexp (0 : ℝ) = -ulp beta fexp 0 := pred_0 beta fexp
+      have h_ulp_zero : ulp beta fexp (0 : ℝ) = 0 := by linarith
+      rw [h_ulp_zero] at heps_le
+      linarith
+  · -- 0 < x: pred x ≥ 0, inner bound = ulp(pred x).
+    rw [if_neg (not_le.mpr hx)] at heps_le
+    have h_pred_ge : 0 ≤ pred beta fexp x := pred_ge_0 beta fexp hValid hx Fx
+    have h_inner : eps ≤ if 0 ≤ pred beta fexp x
+                         then ulp beta fexp (pred beta fexp x)
+                         else ulp beta fexp (pred beta fexp (-pred beta fexp x)) := by
+      rw [if_pos h_pred_ge]
+      exact heps_le
+    have h_up := round_UP_plus_eps beta fexp hValid F_pred heps_pos h_inner
+    rwa [h_succ_pred] at h_up
+
+/-- Mixed-sign version: for any `x ∈ F` and `0 < eps` at most the appropriate
+ulp, `round_DN (x - eps) = pred x`. The bound is `ulp x` when `x ≤ 0` and
+`ulp (pred x)` when `x > 0`. -/
+theorem round_DN_minus_eps (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} (Fx : generic_format beta fexp x)
+    {eps : ℝ} (heps_pos : 0 < eps)
+    (heps_le : eps ≤ if x ≤ 0 then ulp beta fexp x
+                     else ulp beta fexp (pred beta fexp x)) :
+    round beta fexp (fun y : ℝ => ⌊y⌋) (x - eps) = pred beta fexp x := by
+  -- x - eps = -(-x + eps); use round_DN_opp + round_UP_pred_plus_eps at -x.
+  classical
+  have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+  have h_eq : x - eps = -(-x + eps) := by ring
+  -- Bound translation: the mirrored hypothesis at -x.
+  have h_pred_neg_eq : pred beta fexp (succ beta fexp (-x)) = -x :=
+    pred_succ beta fexp hValid F_neg_x
+  -- The inner bound for round_UP_pred_plus_eps at succ(-x):
+  -- if succ(-x) ≤ 0 then ulp(succ(-x)) else ulp(pred(succ(-x))) = ulp(-x) = ulp x.
+  -- Coq's trick: apply at succ(-x); pred(succ(-x)) = -x.
+  have F_succ_neg_x : generic_format beta fexp (succ beta fexp (-x)) :=
+    generic_format_succ beta fexp hValid F_neg_x
+  -- We want round_UP(pred(succ(-x)) + eps) = succ(-x). pred(succ(-x)) = -x.
+  -- So we want round_UP(-x + eps) = succ(-x). Hmm, that's round_UP_plus_eps.
+  -- Actually: round_DN(x - eps) = -round_UP(-(x-eps)) = -round_UP(-x + eps).
+  -- pred x = ?. We want: -round_UP(-x + eps) = pred x.
+  -- pred x = -succ(-x) (from pred_opp at x backwards, or succ_opp at -x).
+  -- So we want: round_UP(-x + eps) = succ(-x).
+  -- This is round_UP_plus_eps at -x.
+  have h_pred_x : pred beta fexp x = -(succ beta fexp (-x)) := by
+    have := succ_opp beta fexp x
+    -- succ(-x) = -pred x ⟹ pred x = -succ(-x).
+    linarith
+  -- Inner bound for round_UP_plus_eps at -x:
+  -- if 0 ≤ -x then ulp(-x) else ulp(pred(-(-x))) = ulp(pred x).
+  have h_ulp_neg_x : ulp beta fexp (-x) = ulp beta fexp x := ulp_opp beta fexp x
+  have h_inner : eps ≤ if 0 ≤ -x then ulp beta fexp (-x)
+                       else ulp beta fexp (pred beta fexp (-(-x))) := by
+    rcases le_or_gt x 0 with hx | hx
+    · -- x ≤ 0: -x ≥ 0, inner uses ulp(-x) = ulp x.
+      rw [if_pos (by linarith : 0 ≤ -x), h_ulp_neg_x]
+      rwa [if_pos hx] at heps_le
+    · -- x > 0: -x < 0, inner uses ulp(pred(-(-x))) = ulp(pred x).
+      rw [if_neg (not_le.mpr (by linarith : -x < 0)), neg_neg]
+      rwa [if_neg (not_le.mpr hx)] at heps_le
+  have h_up := round_UP_plus_eps beta fexp hValid F_neg_x heps_pos h_inner
+  -- h_up : round_UP(-x + eps) = succ(-x)
+  have h_dn := round_DN_opp beta fexp (-x + eps)
+  -- h_dn : round_DN(-(-x + eps)) = -round_UP(-x + eps)
+  rw [h_eq, h_dn, h_up, h_pred_x]
 
 /-- For `0 ≤ x`, `ulp(round_DN x) = ulp x`. The down-rounded value sits
 in the same magnitude band, or both ulps reduce to `ulp 0` in the
