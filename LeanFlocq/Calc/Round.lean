@@ -747,6 +747,62 @@ theorem truncate_correct {x : ℝ} {m e : ℤ} {l : location}
   apply truncate_correct' beta fexp hValid Hx H1
   exact (cexp_inbetween_float_loc_Exact beta fexp hValid Hx H1).mpr H2
 
+/-! ## Generic correctness theorems
+
+Combining `inbetween_float_round` with `truncate_correct` gives generic
+correctness theorems that any rounding can plug into. -/
+
+theorem round_any_correct (rnd : ℝ → ℤ) [Valid_rnd rnd] (choice : ℤ → location → ℤ)
+    (inbetween_int_valid :
+      ∀ (x : ℝ) (m : ℤ) (l : location), inbetween_int m x l → rnd x = choice m l)
+    {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e x l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp rnd x = F2R (beta := beta) ⟨choice m l, e⟩ := by
+  rcases He with He | ⟨Hl, Hf⟩
+  · subst He
+    exact inbetween_float_round beta fexp rnd choice inbetween_int_valid Hin
+  · subst Hl
+    rcases Hin with hExact | ⟨c, _, _, _⟩
+    · rw [show x = F2R (beta := beta) ⟨m, e⟩ from hExact] at Hf ⊢
+      have h_choice : choice m location.Exact = m := by
+        have := inbetween_int_valid (m : ℝ) m location.Exact (.Exact rfl)
+        have h_rnd_m : rnd ((m : ℤ) : ℝ) = m := Valid_rnd.Zrnd_intCast m
+        rw [h_rnd_m] at this
+        exact this.symm
+      rw [h_choice]
+      exact round_generic beta fexp rnd Hf
+
+theorem round_trunc_any_correct' (rnd : ℝ → ℤ) [Valid_rnd rnd] (choice : ℤ → location → ℤ)
+    (inbetween_int_valid :
+      ∀ (x : ℝ) (m : ℤ) (l : location), inbetween_int m x l → rnd x = choice m l)
+    {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp rnd x =
+      F2R (beta := beta)
+        ⟨choice (truncate beta fexp (m, e, l)).1 (truncate beta fexp (m, e, l)).2.2,
+         (truncate beta fexp (m, e, l)).2.1⟩ := by
+  have h := truncate_correct' beta fexp hValid Hx Hin He
+  exact round_any_correct beta fexp rnd choice inbetween_int_valid h.1
+    (h.2.imp_right (fun ⟨h1, h2⟩ => ⟨h1, h2⟩))
+
+theorem round_trunc_any_correct (rnd : ℝ → ℤ) [Valid_rnd rnd] (choice : ℤ → location → ℤ)
+    (inbetween_int_valid :
+      ∀ (x : ℝ) (m : ℤ) (l : location), inbetween_int m x l → rnd x = choice m l)
+    {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp rnd x =
+      F2R (beta := beta)
+        ⟨choice (truncate beta fexp (m, e, l)).1 (truncate beta fexp (m, e, l)).2.2,
+         (truncate beta fexp (m, e, l)).2.1⟩ := by
+  have h := truncate_correct beta fexp hValid Hx Hin He
+  exact round_any_correct beta fexp rnd choice inbetween_int_valid h.1
+    (h.2.imp_right (fun ⟨h1, h2⟩ => ⟨h1, h2⟩))
+
 end Fcalc_round_fexp
 
 end LeanFlocq
