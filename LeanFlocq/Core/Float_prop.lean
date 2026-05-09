@@ -10,6 +10,7 @@ import Mathlib.Algebra.Order.AbsoluteValue.Basic
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
 import LeanFlocq.Core.Defs
+import LeanFlocq.Core.Digits
 
 namespace LeanFlocq
 
@@ -331,6 +332,25 @@ theorem mag_F2R (m e : ℤ) (h : m ≠ 0) :
     mag beta (F2R (beta := beta) ⟨m, e⟩) = mag beta (m : ℝ) + e := by
   show mag beta ((m : ℝ) * bpow beta e) = mag beta (m : ℝ) + e
   exact mag_mult_bpow beta (by exact_mod_cast h) e
+
+/-- For nonzero `n`, `Zdigits β n = mag β (n : ℝ)`. Trivial since `Zdigits` is
+defined as `mag` of the real cast. -/
+theorem Zdigits_mag (n : ℤ) (Hn : n ≠ 0) :
+    Zdigits beta n = mag beta (n : ℝ) := rfl
+
+/-- `mag (F2R ⟨m, e⟩) = Zdigits m + e` for `m ≠ 0`. Composes `mag_F2R`
+with `Zdigits_mag`. -/
+theorem mag_F2R_Zdigits (m e : ℤ) (Hm : m ≠ 0) :
+    mag beta (F2R (beta := beta) ⟨m, e⟩) = Zdigits beta m + e := by
+  rw [mag_F2R m e Hm, ← Zdigits_mag m Hm]
+
+/-- `Zdigits`-flavored version of `mag_F2R_bounds`: when `x` lies in
+`[F2R ⟨m, e⟩, F2R ⟨m+1, e⟩)` with `0 < m`, then `mag x = Zdigits m + e`. -/
+theorem mag_F2R_bounds_Zdigits {x : ℝ} (m e : ℤ) (Hp : 0 < m)
+    (Hx : F2R (beta := beta) ⟨m, e⟩ ≤ x ∧ x < F2R (beta := beta) ⟨m + 1, e⟩) :
+    mag beta x = Zdigits beta m + e := by
+  rw [mag_F2R_bounds m e Hp Hx]
+  exact mag_F2R_Zdigits m e (by linarith : m ≠ 0)
 
 /-- If `F2R ⟨m1, e1⟩ < F2R ⟨m2, e2⟩ < F2R ⟨m1+1, e1⟩` with `0 < m1`,
 then `e2 < e1` and the magnitudes align: `e1 + mag m1 = e2 + mag m2`. -/
