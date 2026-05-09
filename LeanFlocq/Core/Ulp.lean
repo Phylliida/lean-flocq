@@ -2247,6 +2247,120 @@ theorem succ_le_plus_ulp (beta : radix) (fexp : ℤ → ℤ) (hMon : Monotone_ex
       · -- pred_pos(-x) = -x - ulp(-x).
         linarith
     linarith
+
+/-- Under `Monotone_exp`, the format is closed under `+ ulp`: `x ∈ F → x + ulp x ∈ F`.
+On the nonneg side this is `succ x` directly. On the negative side at the
+`bpow` boundary, the value is `bpow(e-1) - bpow(fexp e)`, written as
+`(β^(e-1-fexp e) - 1) * bpow(fexp e)`. The mantissa `β^k - 1` is non-zero
+with magnitude `e - 1`, and `Monotone_exp` provides `fexp(e-1) ≤ fexp e`
+to certify it as a canonical-or-larger-exponent F2R. -/
+theorem generic_format_plus_ulp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (hMon : Monotone_exp fexp) {x : ℝ} (Fx : generic_format beta fexp x) :
+    generic_format beta fexp (x + ulp beta fexp x) := by
+  rcases le_or_gt 0 x with hx | hx
+  · -- x ≥ 0: x + ulp x = succ x ∈ F.
+    rw [show x + ulp beta fexp x = succ beta fexp x from (succ_eq_pos beta fexp hx).symm]
+    exact generic_format_succ beta fexp hValid Fx
+  · -- x < 0: x + ulp x = -((-x) - ulp(-x)). Show (-x) - ulp(-x) ∈ F.
+    have h_neg_pos : 0 < -x := by linarith
+    have h_neg_ne : -x ≠ 0 := ne_of_gt h_neg_pos
+    have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+    have h_eq : x + ulp beta fexp x = -((-x) - ulp beta fexp (-x)) := by
+      rw [ulp_opp]; ring
+    rw [h_eq]
+    apply generic_format_opp
+    by_cases h_bpow : (-x) = bpow beta (mag beta (-x) - 1)
+    · -- Boundary case: -x = bpow(e-1) where e = mag(-x).
+      set e := mag beta (-x) with he_def
+      have hfe_lt : fexp e < e :=
+        mag_generic_gt beta fexp hValid h_neg_ne F_neg_x
+      have h_ulp_eq : ulp beta fexp (-x) = bpow beta (fexp e) := by
+        rw [ulp_neq_0 beta fexp h_neg_ne]; rfl
+      rw [h_ulp_eq, h_bpow]
+      -- Goal: bpow(e-1) - bpow(fexp e) ∈ F.
+      set k := e - 1 - fexp e with hk_def
+      have hk_nn : 0 ≤ k := by simp [hk_def]; linarith
+      have h_beta_ge_2 : (2 : ℤ) ≤ beta.val := by
+        have := beta.prop; exact_mod_cast this
+      have h_one_le_beta : (1 : ℤ) ≤ beta.val := by linarith
+      -- bpow k = (β^k.toNat : ℤ) cast to ℝ.
+      have h_bpow_k : bpow beta k = (((beta.val : ℤ) ^ k.toNat : ℤ) : ℝ) :=
+        (IZR_Zpower beta hk_nn).symm
+      -- bpow(e-1) = bpow k * bpow(fexp e).
+      have h_bpow_eminus1 : bpow beta (e - 1) = bpow beta k * bpow beta (fexp e) := by
+        rw [← bpow_plus]; congr 1; simp [hk_def]
+      -- Decomposition: bpow(e-1) - bpow(fexp e) = (β^k - 1 : ℤ) * bpow(fexp e).
+      have h_decomp : bpow beta (e - 1) - bpow beta (fexp e)
+          = (((beta.val : ℤ) ^ k.toNat - 1 : ℤ) : ℝ) * bpow beta (fexp e) := by
+        rw [h_bpow_eminus1, h_bpow_k]; push_cast; ring
+      rw [h_decomp]
+      rcases eq_or_lt_of_le hk_nn with hk_eq | hk_pos
+      · -- k = 0: β^0 - 1 = 0.
+        have hk_toNat : k.toNat = 0 := by rw [← hk_eq]; rfl
+        have h_zero : (((beta.val : ℤ) ^ k.toNat - 1 : ℤ) : ℝ) * bpow beta (fexp e) = 0 := by
+          rw [hk_toNat]; push_cast; ring
+        rw [h_zero]
+        exact generic_format_0 beta fexp
+      · -- k ≥ 1: build float ⟨β^k - 1, fexp e⟩.
+        set m := (beta.val : ℤ) ^ k.toNat - 1 with hm_def
+        show generic_format beta fexp ((m : ℝ) * bpow beta (fexp e))
+        have h_F2R : (m : ℝ) * bpow beta (fexp e) = F2R (beta := beta) ⟨m, fexp e⟩ := rfl
+        rw [h_F2R]
+        apply generic_format_F2R
+        intro hm_ne
+        -- Show mag(F2R) = e - 1, then hMon gives fexp(e-1) ≤ fexp e.
+        have hk_toNat_pos : 0 < k.toNat := by
+          have : k.toNat = k := Int.toNat_of_nonneg (le_of_lt hk_pos)
+          omega
+        have h_pow_ge_beta : beta.val ≤ beta.val ^ k.toNat := by
+          calc beta.val = beta.val ^ 1 := (pow_one _).symm
+            _ ≤ beta.val ^ k.toNat := pow_le_pow_right₀ h_one_le_beta hk_toNat_pos
+        have hm_pos : 0 < m := by simp [hm_def]; linarith
+        have h_kmin1_nn : 0 ≤ k - 1 := by linarith
+        have hk_toNat_succ : k.toNat = (k - 1).toNat + 1 := by
+          have h1 : k.toNat = k := Int.toNat_of_nonneg (le_of_lt hk_pos)
+          have h2 : (k - 1).toNat = k - 1 := Int.toNat_of_nonneg h_kmin1_nn
+          omega
+        have h_pow_succ : (beta.val : ℤ) ^ k.toNat
+            = beta.val * (beta.val ^ (k - 1).toNat) := by
+          rw [hk_toNat_succ, pow_succ]; ring
+        have h_pow_kmin1_pos : (1 : ℤ) ≤ beta.val ^ (k - 1).toNat := by
+          calc (1 : ℤ) = beta.val ^ 0 := (pow_zero _).symm
+            _ ≤ beta.val ^ (k - 1).toNat :=
+              pow_le_pow_right₀ h_one_le_beta (Nat.zero_le _)
+        have h_bpow_kmin1 : bpow beta (k - 1) = (((beta.val : ℤ) ^ (k - 1).toNat : ℤ) : ℝ) :=
+          (IZR_Zpower beta h_kmin1_nn).symm
+        have h_mag_eq : mag beta ((m : ℝ) * bpow beta (fexp e)) = e - 1 := by
+          apply mag_unique_pos
+          · -- bpow(e - 2) ≤ m * bpow(fexp e)
+            have h_e_minus_2 : bpow beta (e - 1 - 1)
+                = bpow beta (k - 1) * bpow beta (fexp e) := by
+              rw [← bpow_plus]; congr 1; simp [hk_def]; ring
+            rw [h_e_minus_2, h_bpow_kmin1]
+            apply mul_le_mul_of_nonneg_right _ (bpow_ge_0 _ _)
+            -- (β^(k-1) : ℤ) ≤ m = β^k - 1
+            have h_int_le : (beta.val : ℤ) ^ (k - 1).toNat ≤ m := by
+              rw [hm_def, h_pow_succ]
+              nlinarith [h_pow_kmin1_pos, h_one_le_beta]
+            exact_mod_cast h_int_le
+          · -- m * bpow(fexp e) < bpow(e - 1)
+            rw [h_bpow_eminus1, h_bpow_k]
+            apply (mul_lt_mul_iff_of_pos_right (bpow_gt_0 _ _)).mpr
+            -- m < β^k
+            have : ((m : ℤ) : ℝ) < (((beta.val : ℤ) ^ k.toNat : ℤ) : ℝ) := by
+              push_cast; rw [hm_def]; push_cast; linarith
+            exact this
+        unfold cexp
+        show fexp (mag beta ((m : ℝ) * bpow beta (fexp e))) ≤ fexp e
+        rw [h_mag_eq]
+        exact hMon _ _ (by linarith)
+    · -- Non-boundary: (-x) - ulp(-x) = pred_pos(-x), which is in F.
+      have h_eq' : (-x) - ulp beta fexp (-x) = pred_pos beta fexp (-x) := by
+        unfold pred_pos
+        rw [if_neg h_bpow]
+      rw [h_eq']
+      exact generic_format_pred_pos beta fexp hValid F_neg_x h_neg_pos
+
 theorem succ_round_ge_id (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) :
     x ≤ succ beta fexp (round beta fexp rnd x) := by
@@ -2260,6 +2374,25 @@ theorem succ_round_ge_id (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp
       have h_xup : x ≤ round beta fexp (fun y : ℝ => ⌈y⌉) x :=
         (round_UP_pt beta fexp hValid x).2.1
       linarith [succ_ge_id beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x)]
+
+/-- Under `Monotone_exp`, rounding `round_N x + ulp(round_N x)` lands at or
+above `x`: the next representable value is never less than the original. -/
+theorem round_N_plus_ulp_ge (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (hMon : Monotone_exp fexp) (choice1 choice2 : ℤ → Bool) (x : ℝ) :
+    x ≤ round beta fexp (Znearest choice1)
+        (round beta fexp (Znearest choice2) x
+          + ulp beta fexp (round beta fexp (Znearest choice2) x)) := by
+  set rx := round beta fexp (Znearest choice2) x with hrx_def
+  have h_rx_F : generic_format beta fexp rx :=
+    generic_format_round beta fexp hValid _ x
+  have h_succ_ge : x ≤ succ beta fexp rx :=
+    succ_round_ge_id beta fexp hValid (Znearest choice2) x
+  have h_succ_le : succ beta fexp rx ≤ rx + ulp beta fexp rx :=
+    succ_le_plus_ulp beta fexp hMon rx
+  have h_F : generic_format beta fexp (rx + ulp beta fexp rx) :=
+    generic_format_plus_ulp beta fexp hValid hMon h_rx_F
+  rw [round_generic beta fexp _ h_F]
+  linarith
 
 /-- Variant of `round_N_eq_DN` taking `Rnd_DN_pt`/`Rnd_UP_pt` witnesses
 explicitly. -/
