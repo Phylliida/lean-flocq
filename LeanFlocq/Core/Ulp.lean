@@ -1724,4 +1724,26 @@ theorem round_neq_0_negligible_exp (beta : radix) (fexp : ℤ → ℤ) (hValid :
   intro h_round_zero
   exact hx (eq_0_round_0_negligible_exp beta fexp hValid h_neg rnd h_round_zero)
 
+/-- Stronger error bound: under `Monotone_exp` and `Exp_not_FTZ`, the rounding
+error is strictly less than the ulp *of the rounded value*. -/
+theorem error_lt_ulp_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (hMon : Monotone_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} (hx : x ≠ 0) :
+    |round beta fexp rnd x - x| < ulp beta fexp (round beta fexp rnd x) := by
+  -- Key: `ulp x ≤ ulp(round x)` always, then chain with error_lt_ulp.
+  have h_ulp_le : ulp beta fexp x ≤ ulp beta fexp (round beta fexp rnd x) := by
+    rcases ulp_round beta fexp hValid h_NotFTZ rnd x with h_eq | h_abs
+    · linarith
+    · -- |round x| = bpow(mag x), so ulp(round x) = bpow(fexp(mag x + 1)).
+      -- Under Monotone_exp, fexp(mag x) ≤ fexp(mag x + 1).
+      have h_ulp_round : ulp beta fexp (round beta fexp rnd x)
+          = bpow beta (fexp (mag beta x + 1)) := by
+        rw [← ulp_abs beta fexp (round beta fexp rnd x), h_abs, ulp_bpow]
+      rw [h_ulp_round, ulp_neq_0 beta fexp hx]
+      show bpow beta (cexp beta fexp x) ≤ bpow beta (fexp (mag beta x + 1))
+      apply bpow_le
+      unfold cexp
+      exact hMon (mag beta x) (mag beta x + 1) (by linarith)
+  exact lt_of_lt_of_le (error_lt_ulp beta fexp hValid rnd hx) h_ulp_le
+
 end LeanFlocq
