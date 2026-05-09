@@ -297,6 +297,17 @@ theorem mantissa_UP_small_pos (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {ex 
   · push_cast; linarith [H.1]
   · push_cast; linarith [H.2]
 
+/-- The scaled mantissa is bounded: `|sm x| < bpow(mag x - cexp x)`. -/
+theorem scaled_mantissa_lt_bpow (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    |scaled_mantissa beta fexp x| < bpow beta (mag beta x - cexp beta fexp x) := by
+  by_cases hx : x = 0
+  · rw [hx, scaled_mantissa_0, abs_zero]; exact bpow_gt_0 _ _
+  · refine lt_of_lt_of_le (bpow_mag_gt beta _) ?_
+    apply bpow_le
+    unfold scaled_mantissa
+    rw [mag_mult_bpow beta hx]
+    omega
+
 /-- When `|x| < β^ex` and `ex ≤ fexp ex`, the scaled mantissa is in `(-1, 1)`. -/
 theorem scaled_mantissa_lt_1 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     {x : ℝ} {ex : ℤ} (Ex : |x| < bpow beta ex) (He : ex ≤ fexp ex) :

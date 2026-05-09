@@ -825,6 +825,52 @@ theorem monotone_exp_not_FTZ {fexp : ℤ → ℤ} (hValid : Valid_exp fexp)
   · -- e ≤ fexp e: stabilization branch.
     exact ((hValid e).2 hfe).1
 
+/-- In the subnormal regime (`e ≤ fexp e`), any `x ∈ F` admits an F2R
+representation at exponent `fexp e` (not just at its canonical `cexp x`).
+Requires `Exp_not_FTZ` to ensure `fexp e ≤ cexp x` so the rescaled mantissa
+is still an integer. -/
+theorem subnormal_exponent (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (e : ℤ) {x : ℝ}
+    (He : e ≤ fexp e) (Hx : generic_format beta fexp x) :
+    x = F2R (beta := beta) ⟨Ztrunc (x * bpow beta (-fexp e)), fexp e⟩ := by
+  have h_fexp_le : fexp e ≤ cexp beta fexp x := by
+    show fexp e ≤ fexp (mag beta x)
+    by_cases h_le : fexp (mag beta x) + 1 ≤ fexp e
+    · have h_stab := ((hValid e).2 He).2 (fexp (mag beta x) + 1) h_le
+      have h_ne_ftz := h_NotFTZ (mag beta x)
+      linarith
+    · push_neg at h_le; linarith
+  have h_d_nn : 0 ≤ cexp beta fexp x - fexp e := by linarith
+  have h_x_eq : x = (Ztrunc (scaled_mantissa beta fexp x) : ℝ)
+      * bpow beta (cexp beta fexp x) := Hx
+  have h_pow_eq : bpow beta (cexp beta fexp x - fexp e)
+      = (((beta.val : ℤ) ^ (cexp beta fexp x - fexp e).toNat : ℤ) : ℝ) :=
+    (IZR_Zpower beta h_d_nn).symm
+  -- Set d := cexp x - fexp e. β^d as an integer.
+  -- x * bpow(-fexp e) = Ztrunc(sm) * bpow(d) = (Ztrunc(sm) * β^d.toNat : ℤ) as ℝ.
+  have h_x_scaled :
+      x * bpow beta (-fexp e)
+        = ((Ztrunc (scaled_mantissa beta fexp x) * (beta.val : ℤ)
+            ^ (cexp beta fexp x - fexp e).toNat : ℤ) : ℝ) := by
+    conv_lhs => rw [h_x_eq]
+    rw [mul_assoc, ← bpow_plus,
+        show cexp beta fexp x + -fexp e = cexp beta fexp x - fexp e from by ring,
+        h_pow_eq]
+    push_cast; ring
+  have h_Ztrunc : Ztrunc (x * bpow beta (-fexp e))
+      = Ztrunc (scaled_mantissa beta fexp x)
+        * (beta.val : ℤ) ^ (cexp beta fexp x - fexp e).toNat := by
+    rw [h_x_scaled, Ztrunc_intCast]
+  show x = F2R (beta := beta) ⟨Ztrunc (x * bpow beta (-fexp e)), fexp e⟩
+  rw [h_Ztrunc]
+  show x = (((Ztrunc (scaled_mantissa beta fexp x)
+        * (beta.val : ℤ) ^ (cexp beta fexp x - fexp e).toNat : ℤ)) : ℝ)
+      * bpow beta (fexp e)
+  rw [Int.cast_mul, ← h_pow_eq, mul_assoc, ← bpow_plus,
+      show (cexp beta fexp x - fexp e) + fexp e = cexp beta fexp x from by ring]
+  push_cast
+  exact h_x_eq
+
 /-- `ulp 0 ≤ ulp x` for any `x`, given `Exp_not_FTZ`. The "minimum unit"
 of the format never exceeds the local ulp. -/
 theorem ulp_ge_ulp_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
@@ -895,6 +941,17 @@ theorem abs_round_ge_generic (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid
     (fun a b => x ≤ a → x ≤ b)
     (fun rnd' _ _ _ h_xz => round_ge_generic beta fexp hValid rnd' Hx h_xz)
     rnd y
+  exact h Hxy
+
+/-- Companion: `|round x| ≤ y` whenever `|x| ≤ y` and `y ∈ F`. -/
+theorem abs_round_le_generic (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x y : ℝ}
+    (Hy : generic_format beta fexp y) (Hxy : |x| ≤ y) :
+    |round beta fexp rnd x| ≤ y := by
+  have h := round_abs_abs beta fexp hValid
+    (fun a b => a ≤ y → b ≤ y)
+    (fun rnd' _ _ _ h_zy => round_le_generic beta fexp hValid rnd' Hy h_zy)
+    rnd x
   exact h Hxy
 
 /-- When `fexp` has no negligible exponent (the small regime is empty),
