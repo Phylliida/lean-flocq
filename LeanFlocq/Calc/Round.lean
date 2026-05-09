@@ -805,4 +805,64 @@ theorem round_trunc_any_correct (rnd : ℝ → ℤ) [Valid_rnd rnd] (choice : �
 
 end Fcalc_round_fexp
 
+/-! ## truncate for FIX formats -/
+
+variable (beta : radix)
+
+/-- The FIX-specific truncate: shift to the fixed exponent `emin`. -/
+noncomputable def truncate_FIX (emin : ℤ) (t : ℤ × ℤ × location) : ℤ × ℤ × location :=
+  if 0 < emin - t.2.1
+    then (t.1 / beta.val ^ (emin - t.2.1).toNat, t.2.1 + (emin - t.2.1),
+          new_location (beta.val ^ (emin - t.2.1).toNat)
+            (t.1 % beta.val ^ (emin - t.2.1).toNat) t.2.2)
+    else t
+
+/-- Correctness of `truncate_FIX`: produces a triple bracketing `x` whose
+exponent is `cexp_FIX x` (or `x` is in FIX format). -/
+theorem truncate_FIX_correct (emin : ℤ) {x : ℝ} {m e : ℤ} {l : location}
+    (H1 : inbetween_float beta m e x l)
+    (H2 : e ≤ emin ∨ l = location.Exact) :
+    let t' := truncate_FIX beta emin (m, e, l)
+    inbetween_float beta t'.1 t'.2.1 x t'.2.2 ∧
+    (t'.2.1 = cexp beta (FIX_exp emin) x ∨
+     (t'.2.2 = location.Exact ∧ generic_format beta (FIX_exp emin) x)) := by
+  show inbetween_float beta (truncate_FIX beta emin (m, e, l)).1
+        (truncate_FIX beta emin (m, e, l)).2.1 x (truncate_FIX beta emin (m, e, l)).2.2 ∧
+      _
+  by_cases hk : 0 < emin - e
+  · -- shift case
+    have h_truncate_eq : truncate_FIX beta emin (m, e, l) =
+        (m / beta.val ^ (emin - e).toNat, e + (emin - e),
+         new_location (beta.val ^ (emin - e).toNat)
+           (m % beta.val ^ (emin - e).toNat) l) := by
+      unfold truncate_FIX
+      simp only [if_pos hk]
+    rw [h_truncate_eq]
+    refine ⟨?_, ?_⟩
+    · exact inbetween_float_new_location m e x l _ hk H1
+    · left
+      show e + (emin - e) = cexp beta (FIX_exp emin) x
+      unfold cexp FIX_exp; ring
+  · -- no shift
+    have h_truncate_eq : truncate_FIX beta emin (m, e, l) = (m, e, l) := by
+      unfold truncate_FIX
+      simp only [if_neg hk]
+    rw [h_truncate_eq]
+    push_neg at hk
+    have h_e_ge_emin : emin ≤ e := by omega
+    refine ⟨H1, ?_⟩
+    rcases H2 with H2 | H2
+    · have h_e_eq : e = emin := by omega
+      left
+      show e = cexp beta (FIX_exp emin) x
+      simp [cexp, FIX_exp, h_e_eq]
+    · right
+      refine ⟨H2, ?_⟩
+      rcases H1 with hExact | _
+      · rw [show x = F2R (beta := beta) ⟨m, e⟩ from hExact]
+        apply generic_format_FIX
+        refine ⟨⟨m * beta.val ^ (e - emin).toNat, emin⟩, ?_, rfl⟩
+        exact F2R_change_exp emin m e h_e_ge_emin
+      · exact location.noConfusion H2
+
 end LeanFlocq
