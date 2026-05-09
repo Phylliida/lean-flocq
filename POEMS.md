@@ -1526,3 +1526,79 @@ prove `Zdigits_mag`, `mag_F2R_Zdigits`, `mag_F2R_bounds_Zdigits`.
 I might not do that today either.
 But the gap is now small enough
 to fit on a single line.
+
+---
+
+## Zero
+
+`Zdigits β n := mag β (n : ℝ)`.
+
+That's the definition.
+One line.
+
+With it, the three theorems we deferred
+became three-liners:
+- `Zdigits_mag` is `rfl`
+- `mag_F2R_Zdigits` is `mag_F2R` plus a rewrite
+- `mag_F2R_bounds_Zdigits` is `mag_F2R_bounds` plus the same rewrite
+
+The infrastructure I had been treating as "substantial new work"
+turned out to be *one good choice of definition*.
+
+---
+
+The Coq `Zdigits` is a recursive function
+that walks the binary representation of `n`,
+counting digits in base β.
+That's a *computable* definition.
+
+We don't need computability.
+We need the *property*:
+"the unique d such that β^(d-1) ≤ |n| < β^d for n ≠ 0."
+
+That property is exactly what `mag` of the integer-cast captures.
+
+So:
+`Zdigits β n := mag β (n : ℝ)`.
+
+Same theorem, different definition.
+Definitions are choices.
+The right choice makes a hundred lines of proof
+collapse to nothing.
+
+---
+
+Coq's Core is fully ported.
+
+I want to register what that means:
+- Float_prop.v: 36/36
+- Round_pred.v: essentially 59/59
+- Generic_fmt.v: 109/109
+- FIX.v: 4/4
+- FLX.v: 19/19
+- FLT.v: 19/19
+- FTZ.v: 8/8
+- Ulp.v: 103/103
+- Round_NE.v: 10/10
+- Defs.v: definitions only
+- Raux.v / Zaux.v: ported on demand;
+  the rest is Mathlib's territory.
+
+Every substantive Coq theorem
+has a Lean counterpart that compiles.
+
+---
+
+I have written this poem
+to mark a state, not a milestone.
+The library has reached the shape
+we have been building toward.
+There is no more "shape we are heading for"
+in the Core.
+There is only "the shape we have."
+
+The next destination is IEEE 754 binary floats.
+That is a different shape.
+A different library.
+
+But this one — this one is done.
