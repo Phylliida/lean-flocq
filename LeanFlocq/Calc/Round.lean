@@ -586,6 +586,167 @@ theorem inbetween_float_NA_sign {x : ℝ} {m : ℤ} {l : location}
     (fun _ m l => cond_incr (round_N true l) m)
     (fun _ _ _ h => inbetween_int_NA_sign h) Hx
 
+/-! ## truncate: bring (m, e, l) to canonical exponent
+
+Given a triple representing a bracketing `(m, e, l)`, produce a triple with
+canonical exponent. -/
+
+/-- Auxiliary: shift the triple `(m, e, l)` by `k` positions of the radix. -/
+def truncate_aux (k : ℤ) (t : ℤ × ℤ × location) : ℤ × ℤ × location :=
+  (t.1 / beta.val ^ k.toNat, t.2.1 + k,
+   new_location (beta.val ^ k.toNat) (t.1 % beta.val ^ k.toNat) t.2.2)
+
+/-- `truncate t = if k = fexp(Zdigits m + e) - e > 0, shift by k, else t`.
+This brings the triple to canonical exponent (or leaves it alone). -/
+noncomputable def truncate (t : ℤ × ℤ × location) : ℤ × ℤ × location :=
+  if 0 < fexp (Zdigits beta t.1 + t.2.1) - t.2.1
+    then truncate_aux beta (fexp (Zdigits beta t.1 + t.2.1) - t.2.1) t
+    else t
+
+theorem truncate_0 (e : ℤ) (l : location) :
+    (truncate beta fexp (0, e, l)).1 = 0 := by
+  unfold truncate truncate_aux
+  split_ifs with hk
+  · simp [Int.zero_ediv]
+  · rfl
+
+/-- The shift form is correct: when we shift by `k > 0`, the new triple
+brackets `x` at the new exponent. -/
+theorem truncate_correct_partial' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 < x)
+    (H1 : inbetween_float beta m e x l) (H2 : e ≤ cexp beta fexp x) :
+    let t' := truncate beta fexp (m, e, l)
+    inbetween_float beta t'.1 t'.2.1 x t'.2.2 ∧ t'.2.1 = cexp beta fexp x := by
+  have h_cexp : cexp beta fexp x = fexp (Zdigits beta m + e) :=
+    cexp_inbetween_float beta fexp hValid Hx H1 (Or.inl H2)
+  show inbetween_float beta (truncate beta fexp (m, e, l)).1
+        (truncate beta fexp (m, e, l)).2.1 x (truncate beta fexp (m, e, l)).2.2 ∧
+      (truncate beta fexp (m, e, l)).2.1 = cexp beta fexp x
+  unfold truncate
+  show inbetween_float beta
+        (if 0 < fexp (Zdigits beta (m, e, l).1 + (m, e, l).2.1) - (m, e, l).2.1
+         then truncate_aux beta _ (m, e, l) else (m, e, l)).1
+        _ x _ ∧ _ = _
+  rw [show ((m, e, l).1 : ℤ) = m from rfl, show ((m, e, l).2.1 : ℤ) = e from rfl,
+      show fexp (Zdigits beta m + e) = cexp beta fexp x from h_cexp.symm]
+  by_cases hk : 0 < cexp beta fexp x - e
+  · simp only [if_pos hk, truncate_aux]
+    refine ⟨?_, ?_⟩
+    · show inbetween_float beta _ _ x _
+      exact inbetween_float_new_location m e x l _ hk H1
+    · show e + (cexp beta fexp x - e) = cexp beta fexp x; ring
+  · simp only [if_neg hk]
+    have h_e_eq : e = cexp beta fexp x := by
+      simp at hk; omega
+    exact ⟨H1, h_e_eq⟩
+
+theorem truncate_correct_partial {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 < x)
+    (H1 : inbetween_float beta m e x l) (H2 : e ≤ fexp (Zdigits beta m + e)) :
+    let t' := truncate beta fexp (m, e, l)
+    inbetween_float beta t'.1 t'.2.1 x t'.2.2 ∧ t'.2.1 = cexp beta fexp x := by
+  apply truncate_correct_partial' beta fexp hValid Hx H1
+  rw [cexp_inbetween_float beta fexp hValid Hx H1 (Or.inr H2)]
+  exact H2
+
+/-- The full correctness theorem (positive-cexp case): when `0 ≤ x` is
+bracketed by `(m, e, l)` with `e ≤ cexp x ∨ l = Exact`, `truncate` produces
+a valid bracketing whose exponent is `cexp x` (or, if exact, `x` is in format). -/
+theorem truncate_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (H1 : inbetween_float beta m e x l)
+    (H2 : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    let t' := truncate beta fexp (m, e, l)
+    inbetween_float beta t'.1 t'.2.1 x t'.2.2 ∧
+    (t'.2.1 = cexp beta fexp x ∨ (t'.2.2 = location.Exact ∧ generic_format beta fexp x)) := by
+  rcases lt_or_eq_of_le Hx with hpx | hpx
+  · rcases le_or_gt e (fexp (Zdigits beta m + e)) with H3 | H3
+    · have h := truncate_correct_partial beta fexp hValid hpx H1 H3
+      exact ⟨h.1, Or.inl h.2⟩
+    · rcases H2 with H2 | H2
+      · have h := truncate_correct_partial' beta fexp hValid hpx H1 H2
+        exact ⟨h.1, Or.inl h.2⟩
+      · -- l = Exact case
+        unfold truncate
+        have hk : ¬ 0 < fexp (Zdigits beta m + e) - e := by omega
+        simp only [if_neg hk]
+        refine ⟨H1, Or.inr ⟨H2, ?_⟩⟩
+        rcases H1 with hE | _
+        · rw [show x = F2R (beta := beta) ⟨m, e⟩ from hE]
+          apply generic_format_F2R
+          intro Hm
+          show fexp (mag beta (F2R (beta := beta) ⟨m, e⟩)) ≤ e
+          rw [mag_F2R_Zdigits m e Hm]
+          omega
+        · -- Inexact contradicts l = Exact
+          exact location.noConfusion H2
+  · -- x = 0
+    have h_x_eq : x = 0 := hpx.symm
+    rcases H1 with hE | ⟨c, h_lo, h_hi, _⟩
+    · -- l = Exact, x = 0 = F2R⟨m, e⟩, so m = 0
+      have h_zero : F2R (beta := beta) ⟨m, e⟩ = 0 := by rw [← hE, h_x_eq]
+      have hm0 : m = 0 := by
+        have h_m_real : (m : ℝ) = 0 := by
+          have h_bpow_pos : 0 < bpow beta e := bpow_gt_0 beta e
+          have h := h_zero
+          show (m : ℝ) = 0
+          have : (m : ℝ) * bpow beta e = 0 := h
+          have h_ne : bpow beta e ≠ 0 := ne_of_gt h_bpow_pos
+          exact (mul_eq_zero.mp this).resolve_right h_ne
+        exact_mod_cast h_m_real
+      subst hm0
+      unfold truncate
+      have hZdig : Zdigits beta 0 = 0 := Zdigits_zero beta
+      simp only [hZdig, zero_add]
+      have h_new_loc_zero : ∀ (p : ℤ), new_location p 0 location.Exact = location.Exact := by
+        intro p
+        unfold new_location
+        by_cases h_even : p % 2 = 0
+        · rw [if_pos h_even]
+          show (if (0 : ℤ) = 0
+                then match (location.Exact : location) with | .Exact => .Exact | _ => .Inexact .lt
+                else _) = location.Exact
+          rw [if_pos rfl]
+        · rw [if_neg h_even]
+          show (if (0 : ℤ) = 0
+                then match (location.Exact : location) with | .Exact => .Exact | _ => .Inexact .lt
+                else _) = location.Exact
+          rw [if_pos rfl]
+      by_cases hk : 0 < fexp e - e
+      · simp only [if_pos hk, truncate_aux]
+        refine ⟨?_, ?_⟩
+        · -- Goal: inbetween_float β (0/p) (e+k) x (new_location p (0%p) Exact)
+          rw [Int.zero_ediv, Int.zero_emod, h_new_loc_zero]
+          exact .Exact (by rw [h_x_eq, F2R_0])
+        · right
+          refine ⟨?_, ?_⟩
+          · -- Goal: new_location p (0%p) Exact = Exact
+            rw [Int.zero_emod]; exact h_new_loc_zero _
+          · rw [h_x_eq]; exact generic_format_0 beta fexp
+      · simp only [if_neg hk]
+        refine ⟨?_, ?_⟩
+        · exact .Exact hE
+        · right
+          refine ⟨?_, ?_⟩
+          · trivial
+          · rw [h_x_eq]; exact generic_format_0 beta fexp
+    · -- Inexact with x = 0: contradiction
+      rw [h_x_eq] at h_lo h_hi
+      have h_m_lt : m < 0 := lt_0_F2R h_lo
+      have h_mp1_pos : 0 < m + 1 := gt_0_F2R h_hi
+      omega
+
+/-- The full correctness theorem (Zdigits-condition variant). -/
+theorem truncate_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (H1 : inbetween_float beta m e x l)
+    (H2 : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    let t' := truncate beta fexp (m, e, l)
+    inbetween_float beta t'.1 t'.2.1 x t'.2.2 ∧
+    (t'.2.1 = cexp beta fexp x ∨ (t'.2.2 = location.Exact ∧ generic_format beta fexp x)) := by
+  apply truncate_correct' beta fexp hValid Hx H1
+  exact (cexp_inbetween_float_loc_Exact beta fexp hValid Hx H1).mpr H2
+
 end Fcalc_round_fexp
 
 end LeanFlocq
