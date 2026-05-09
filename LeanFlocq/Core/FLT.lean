@@ -350,4 +350,105 @@ theorem ulp_FLT_exact_shift (beta : radix) (emin prec : ℤ) {x : ℝ} (hx_ne : 
       show mag beta x + e - prec = (mag beta x - prec) + e from by ring,
       bpow_plus]
 
+/-- The FLT format has a smallest representable nonzero value: there is some
+`n ≤ emin` with `negligible_exp = some n`. -/
+theorem negligible_exp_FLT (beta : radix) (emin prec : ℤ) (hp : 0 < prec) :
+    ∃ n, negligible_exp (FLT_exp emin prec) = some n ∧ n ≤ emin := by
+  classical
+  unfold negligible_exp
+  have h_exists : ∃ n : ℤ, n ≤ FLT_exp emin prec n :=
+    ⟨emin, by unfold FLT_exp; exact le_max_right _ _⟩
+  rw [dif_pos h_exists]
+  refine ⟨Classical.choose h_exists, rfl, ?_⟩
+  have h_spec := Classical.choose_spec h_exists
+  set n := Classical.choose h_exists with hn_def
+  show n ≤ emin
+  unfold FLT_exp at h_spec
+  rcases le_or_gt (n - prec) emin with h | h
+  · rw [max_eq_right h] at h_spec; exact h_spec
+  · rw [max_eq_left (le_of_lt h)] at h_spec; linarith
+
+/-- For positive `x` above the gradual-underflow threshold, succ commutes
+with multiplication by `β^e`. -/
+theorem succ_FLT_exact_shift_pos (beta : radix) (emin prec : ℤ)
+    {x : ℝ} (Px : 0 < x) (Hmx : emin + prec ≤ mag beta x)
+    {e : ℤ} (He : emin + prec - mag beta x ≤ e) :
+    succ beta (FLT_exp emin prec) (x * bpow beta e)
+      = succ beta (FLT_exp emin prec) x * bpow beta e := by
+  have h_xe_pos : 0 ≤ x * bpow beta e :=
+    mul_nonneg (le_of_lt Px) (bpow_ge_0 _ _)
+  rw [succ_eq_pos beta (FLT_exp emin prec) h_xe_pos,
+      succ_eq_pos beta (FLT_exp emin prec) (le_of_lt Px),
+      ulp_FLT_exact_shift beta emin prec (ne_of_gt Px) Hmx He]
+  ring
+
+/-- General version of `succ_FLT_exact_shift` for any sign of `x`, with
+slightly tighter magnitude bounds to handle the negative-side `bpow` boundary. -/
+theorem succ_FLT_exact_shift (beta : radix) (emin prec : ℤ) (hp : 0 < prec)
+    {x : ℝ} (Nzx : x ≠ 0) (Hmx : emin + prec + 1 ≤ mag beta x)
+    {e : ℤ} (He : emin + prec - mag beta x + 1 ≤ e) :
+    succ beta (FLT_exp emin prec) (x * bpow beta e)
+      = succ beta (FLT_exp emin prec) x * bpow beta e := by
+  rcases lt_trichotomy 0 x with hx_pos | hx_zero | hx_neg
+  · -- x > 0: reduce to _pos.
+    apply succ_FLT_exact_shift_pos beta emin prec hx_pos
+    · linarith
+    · linarith
+  · exact absurd hx_zero.symm Nzx
+  · -- x < 0: pred_pos branching, similar to FLX.
+    have h_bpow_pos : 0 < bpow beta e := bpow_gt_0 _ _
+    have h_xe_neg : x * bpow beta e < 0 := mul_neg_of_neg_of_pos hx_neg h_bpow_pos
+    have h_neg_x_pos : 0 < -x := by linarith
+    have h_succ_xe :
+        succ beta (FLT_exp emin prec) (x * bpow beta e)
+          = -(pred_pos beta (FLT_exp emin prec) (-x * bpow beta e)) := by
+      unfold succ; rw [if_neg (not_le.mpr h_xe_neg)]
+      rw [show -(x * bpow beta e) = -x * bpow beta e from by ring]
+    have h_succ_x : succ beta (FLT_exp emin prec) x
+        = -(pred_pos beta (FLT_exp emin prec) (-x)) := by
+      unfold succ; rw [if_neg (not_le.mpr hx_neg)]
+    rw [h_succ_xe, h_succ_x]
+    have h_pred_eq :
+        pred_pos beta (FLT_exp emin prec) (-x * bpow beta e)
+          = pred_pos beta (FLT_exp emin prec) (-x) * bpow beta e := by
+      have h_neg_x_ne : -x ≠ 0 := ne_of_gt h_neg_x_pos
+      have h_mag_xe : mag beta (-x * bpow beta e) = mag beta (-x) + e :=
+        mag_mult_bpow beta h_neg_x_ne e
+      have h_mag_neg_x : mag beta (-x) = mag beta x := mag_opp beta x
+      by_cases h_bnd : -x = bpow beta (mag beta (-x) - 1)
+      · -- Boundary case
+        have h_xe_bnd : -x * bpow beta e
+            = bpow beta (mag beta (-x * bpow beta e) - 1) := by
+          rw [h_mag_xe,
+              show mag beta (-x) + e - 1 = (mag beta (-x) - 1) + e from by ring,
+              bpow_plus]
+          conv_lhs => rw [h_bnd]
+        unfold pred_pos
+        rw [if_pos h_bnd, if_pos h_xe_bnd, h_mag_xe, h_mag_neg_x]
+        unfold FLT_exp
+        have h_max_e1 : max (mag beta x + e - 1 - prec) emin
+            = mag beta x + e - 1 - prec :=
+          max_eq_left (by linarith)
+        have h_max_e2 : max (mag beta x - 1 - prec) emin = mag beta x - 1 - prec :=
+          max_eq_left (by linarith)
+        rw [h_max_e1, h_max_e2,
+            show mag beta x + e - 1 - prec
+                = (mag beta x - 1 - prec) + e from by ring, bpow_plus]
+        ring
+      · -- Non-boundary
+        have h_xe_not_bnd : ¬ (-x * bpow beta e
+            = bpow beta (mag beta (-x * bpow beta e) - 1)) := by
+          intro heq
+          apply h_bnd
+          rw [h_mag_xe,
+              show mag beta (-x) + e - 1 = (mag beta (-x) - 1) + e from by ring,
+              bpow_plus] at heq
+          exact mul_right_cancel₀ (ne_of_gt h_bpow_pos) heq
+        unfold pred_pos
+        rw [if_neg h_xe_not_bnd, if_neg h_bnd]
+        rw [ulp_FLT_exact_shift beta emin prec h_neg_x_ne (h_mag_neg_x ▸ by linarith)
+            (h_mag_neg_x ▸ by linarith)]
+        ring
+    rw [h_pred_eq]; ring
+
 end LeanFlocq

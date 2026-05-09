@@ -19,6 +19,8 @@ ceil) when `⌊x⌋` is odd. -/
 noncomputable def ZnearestE : ℝ → ℤ :=
   Znearest (fun n => decide (¬ Even n))
 
+instance valid_rnd_NE : Valid_rnd ZnearestE := valid_rnd_N _
+
 /-- `round_NE β fexp x` is the round-to-nearest-even of `x` in the given format. -/
 noncomputable def round_NE (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) : ℝ :=
   round beta fexp ZnearestE x
@@ -418,6 +420,57 @@ theorem Rnd_NE_pt_monotone (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_e
 theorem Rnd_NE_pt_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     [Exists_NE beta fexp] : round_pred (Rnd_NE_pt beta fexp) :=
   ⟨Rnd_NE_pt_total beta fexp hValid, Rnd_NE_pt_monotone beta fexp hValid⟩
+
+/-! ### Closure properties of round_NE -/
+
+/-- Round-to-nearest-even is invariant under negation: `round_NE (-x) = -round_NE x`.
+The proof uses `round_N_opp` and shows that the negated tie-breaker
+choice agrees with the original (both pick the even side). -/
+theorem round_NE_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    round beta fexp ZnearestE (-x) = -(round beta fexp ZnearestE x) := by
+  unfold ZnearestE
+  rw [round_N_opp]
+  classical
+  have h_choice_eq :
+      (fun t : ℤ => !decide (¬ Even (-(t + 1))))
+        = (fun n : ℤ => decide (¬ Even n)) := by
+    funext t
+    have h_even_iff : Even (-(t + 1)) ↔ ¬ Even t := by
+      constructor
+      · intro h
+        have h_pos : Even (t + 1) := by
+          have := h
+          rcases this with ⟨k, hk⟩
+          exact ⟨-k, by linarith⟩
+        rw [Int.even_add_one] at h_pos
+        exact h_pos
+      · intro h
+        have h_succ : Even (t + 1) := Int.even_add_one.mpr h
+        rcases h_succ with ⟨k, hk⟩
+        exact ⟨-k, by linarith⟩
+    by_cases h : Even t
+    · have h_neg_neg : ¬ Even (-(t+1)) := fun he => (h_even_iff.mp he) h
+      rw [decide_eq_true h_neg_neg, Bool.not_true,
+          decide_eq_false (fun hne => hne h)]
+    · have h_pos : Even (-(t+1)) := h_even_iff.mpr h
+      rw [decide_eq_false (fun hne => hne h_pos), Bool.not_false,
+          decide_eq_true h]
+  rw [h_choice_eq]
+
+/-- `round_NE` commutes with `|·|`. -/
+theorem round_NE_abs (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    round beta fexp ZnearestE |x| = |round beta fexp ZnearestE x| := by
+  rcases le_or_gt 0 x with hx | hx
+  · rw [abs_of_nonneg hx]
+    have h_round_nn : 0 ≤ round beta fexp ZnearestE x := by
+      have := round_le beta fexp hValid ZnearestE hx
+      rwa [round_0] at this
+    rw [abs_of_nonneg h_round_nn]
+  · rw [abs_of_neg hx]
+    have h_round_le : round beta fexp ZnearestE x ≤ 0 := by
+      have := round_le beta fexp hValid ZnearestE (le_of_lt hx)
+      rwa [round_0] at this
+    rw [abs_of_nonpos h_round_le, round_NE_opp]
 
 /-! ### `Exists_NE` instances for FLX and FLT -/
 

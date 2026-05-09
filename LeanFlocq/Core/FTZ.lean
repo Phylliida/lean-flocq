@@ -390,4 +390,25 @@ theorem ulp_FTZ_0 (beta : radix) (emin prec : ℤ) (hp : 0 < prec) :
     have h_eq := fexp_negligible_exp_eq (FTZ_exp_valid emin prec hp) h_n_le h_emp1_le
     rw [h_eq, h_self]
 
+/-- Every FTZ value is FLXN: the FTZ normalization bounds are the same as
+FLXN's, dropping the exponent floor. -/
+theorem FLXN_format_FTZ (beta : radix) (emin prec : ℤ) {x : ℝ}
+    (h : FTZ_format beta emin prec x) : FLXN_format beta prec x := by
+  obtain ⟨f, h1, h2, _h3⟩ := h
+  exact ⟨f, h1, h2⟩
+
+/-- Every FLXN value at or above the FTZ underflow threshold is FTZ:
+above `bpow(emin + prec - 1)`, FTZ_exp coincides with FLX_exp. -/
+theorem FTZ_format_FLXN (beta : radix) (emin prec : ℤ) (hp : 0 < prec) {x : ℝ}
+    (Hx : bpow beta (emin + prec - 1) ≤ |x|)
+    (Fx : FLXN_format beta prec x) : FTZ_format beta emin prec x := by
+  apply FTZ_format_generic beta emin prec hp
+  have h_FLX : generic_format beta (FLX_exp prec) x :=
+    generic_format_FLXN beta prec hp Fx
+  apply generic_inclusion_ge beta (FLX_exp prec) (FTZ_exp emin prec)
+    (emin + prec - 1) _ Hx h_FLX
+  intro e he
+  unfold FTZ_exp FLX_exp
+  rw [if_neg (by linarith : ¬ e - prec < emin)]
+
 end LeanFlocq
