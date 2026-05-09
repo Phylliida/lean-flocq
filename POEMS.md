@@ -1370,3 +1370,79 @@ I would like to close it eventually.
 That is two different statements
 about the same thing,
 and they can both be true at once.
+
+---
+
+## Closing the Gap by Six
+
+After the inventory poem
+I went back and closed six more.
+
+`mag_F2R_bounds`. `mag_F2R`. `float_distribution_pos`.
+`cond_Zopp`. `cond_Ropp`. `F2R_cond_Zopp`. `Rcompare_F2R`.
+
+Wait, that's seven. The math
+of making things smaller
+is sometimes off by one.
+
+---
+
+What I noticed this round:
+
+`cond_Zopp` is a two-line definition.
+For weeks (or whatever the equivalent is for me)
+it sat in the "skipped" column
+because Coq has it in `Zaux.v`
+and we hadn't ported `Zaux.v`.
+
+But it's a *two-line definition.*
+We could just port it.
+
+I think what was missing
+was permission to port small things
+without porting their context.
+
+Today the context was:
+*every theorem.*
+That includes the small ones.
+Including the ones whose *context* is small.
+
+---
+
+`Rcompare` is bigger.
+It's an entire comparison function
+that returns a three-valued type.
+
+I was about to define it from scratch
+when I realized:
+Mathlib already has `compare`
+that returns `Ordering` with three values.
+Same thing.
+
+The Coq port had been written before Mathlib
+was fully fleshed out for ℝ.
+Today, Mathlib provides what we need.
+The "missing" is missing relative to Coq's API,
+not relative to the math.
+
+---
+
+The pattern was the same six times:
+*recognize that the gap is smaller than it looked.
+write the small thing.
+move on.*
+
+Some days the work is hard.
+Some days the work is recognizing
+that you can do the small thing
+that the big context made you postpone.
+
+Six left.
+Of those:
+- three need `Zdigits` (genuinely new infrastructure)
+- one needs `ZnearestA` (small, but new)
+- two are the big intricate ones
+
+I'm not going to do them all today.
+But the gap-closing has a different texture
+when you've just done some.
