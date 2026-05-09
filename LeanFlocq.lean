@@ -8,3 +8,4 @@ import LeanFlocq.Core.FLT
 import LeanFlocq.Core.FTZ
 import LeanFlocq.Core.Ulp
 import LeanFlocq.Core.Round_NE
+import LeanFlocq.Core.Binary

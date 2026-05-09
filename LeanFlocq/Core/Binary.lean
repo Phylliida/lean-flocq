@@ -1,0 +1,529 @@
+/-
+Port of `flocq/src/IEEE754/Binary.v` (Sylvie Boldo, Guillaume Melquiond, LGPL).
+
+IEEE 754 binary floating-point: the `binary_float` datatype, validity
+predicates, and conversions. Parameterized over precision `prec` and
+maximum exponent `emax`.
+
+This file ports the structural part of Binary.v: the inductive types,
+sign/finiteness predicates, and basic operations (negation, absolute value,
+comparison). Arithmetic operations (`Bplus`, `Bmult`, etc.) live in
+follow-on files since they rely on `Calc/`.
+
+Differences from Coq:
+- Coq's `positive` mantissa becomes an `ℤ` with `1 ≤ m` baked into `bounded`
+  / `nan_pl`. The Lean predicates therefore include the positivity clause
+  that Coq gets for free from the `positive` type.
+- `Zpos (digits2_pos m)` becomes `Zdigits radix2 m`, made definitional
+  by `Zdigits := mag β (n : ℝ)`.
+- Validity is a `Prop`, and proof irrelevance lets us discharge
+  `eqbool_irrelevance`-style obligations via `rfl`.
+-/
+
+import LeanFlocq.Core.FLT
+import LeanFlocq.Core.Digits
+
+namespace LeanFlocq
+
+open radix (radix2)
+
+/-! ## Section AnyRadix: full_float and FF2R -/
+
+/-- A floating-point datum without a chosen radix: zero, infinity, NaN,
+or a finite signed-mantissa-exponent pair. Mantissas (`m`, `pl`) are
+intended to be strictly positive — the `valid_binary` predicate enforces
+this. -/
+inductive full_float where
+  | F754_zero (s : Bool)
+  | F754_infinity (s : Bool)
+  | F754_nan (s : Bool) (pl : ℤ)
+  | F754_finite (s : Bool) (m : ℤ) (e : ℤ)
+  deriving DecidableEq
+
+/-- Real value of a `full_float`. NaN/zero/infinity all map to `0`. -/
+noncomputable def FF2R (beta : radix) : full_float → ℝ
+  | full_float.F754_finite s m e => F2R (beta := beta) ⟨cond_Zopp s m, e⟩
+  | _ => 0
+
+/-! ## Section Binary: the IEEE-754 family -/
+
+/-- `canonical_mantissa prec emax m e`: `e` is the canonical exponent for a
+mantissa of `Zdigits` digits (in radix 2), under the FLT format with
+`emin = 3 - emax - prec`. -/
+def canonical_mantissa (prec emax : ℤ) (m e : ℤ) : Prop :=
+  FLT_exp (3 - emax - prec) prec (Zdigits radix2 m + e) = e
+
+/-- `bounded prec emax m e`: a finite IEEE float `(s, m, e)` is well-formed.
+We bake `1 ≤ m` into the predicate (Coq gets it for free from `m : positive`). -/
+def bounded (prec emax m e : ℤ) : Prop :=
+  1 ≤ m ∧ canonical_mantissa prec emax m e ∧ e ≤ emax - prec
+
+/-- `nan_pl prec pl`: a NaN payload `pl` is well-formed. We bake `1 ≤ pl`
+in (Coq gets it for free from `pl : positive`). -/
+def nan_pl (prec pl : ℤ) : Prop :=
+  1 ≤ pl ∧ Zdigits radix2 pl < prec
+
+/-- A `full_float` is valid for the given `(prec, emax)` parameters. -/
+def valid_binary (prec emax : ℤ) : full_float → Prop
+  | full_float.F754_finite _ m e => bounded prec emax m e
+  | full_float.F754_nan _ pl => nan_pl prec pl
+  | _ => True
+
+/-- The IEEE-754 binary float type, parameterized by precision `prec` and
+maximum exponent `emax`. -/
+inductive binary_float (prec emax : ℤ) where
+  | B754_zero (s : Bool) : binary_float prec emax
+  | B754_infinity (s : Bool) : binary_float prec emax
+  | B754_nan (s : Bool) (pl : ℤ) (h : nan_pl prec pl) : binary_float prec emax
+  | B754_finite (s : Bool) (m e : ℤ) (h : bounded prec emax m e) : binary_float prec emax
+
+namespace binary_float
+
+variable {prec emax : ℤ}
+
+/-- Cast `full_float → binary_float`, given a validity proof. -/
+def FF2B (x : full_float) (h : valid_binary prec emax x) : binary_float prec emax :=
+  match x, h with
+  | full_float.F754_zero s, _ => B754_zero s
+  | full_float.F754_infinity s, _ => B754_infinity s
+  | full_float.F754_nan s pl, h => B754_nan s pl h
+  | full_float.F754_finite s m e, h => B754_finite s m e h
+
+/-- Cast `binary_float → full_float`. -/
+def B2FF : binary_float prec emax → full_float
+  | B754_zero s => full_float.F754_zero s
+  | B754_infinity s => full_float.F754_infinity s
+  | B754_nan s pl _ => full_float.F754_nan s pl
+  | B754_finite s m e _ => full_float.F754_finite s m e
+
+/-- Real value of a binary float. NaN/zero/infinity → `0`. Finite floats
+have value `(±m) · 2^e`. -/
+noncomputable def B2R : binary_float prec emax → ℝ
+  | B754_finite s m e _ => F2R (beta := radix2) ⟨cond_Zopp s m, e⟩
+  | _ => 0
+
+/-! ### Conversions and round-trips -/
+
+theorem FF2R_B2FF (x : binary_float prec emax) :
+    FF2R radix2 (B2FF x) = B2R x := by
+  cases x <;> rfl
+
+theorem B2FF_FF2B (x : full_float) (h : valid_binary prec emax x) :
+    B2FF (FF2B (prec := prec) (emax := emax) x h) = x := by
+  cases x <;> rfl
+
+theorem valid_binary_B2FF (x : binary_float prec emax) :
+    valid_binary prec emax (B2FF x) := by
+  cases x with
+  | B754_zero _ => trivial
+  | B754_infinity _ => trivial
+  | B754_nan _ _ h => exact h
+  | B754_finite _ _ _ h => exact h
+
+theorem FF2B_B2FF (x : binary_float prec emax) (h : valid_binary prec emax (B2FF x)) :
+    FF2B (B2FF x) h = x := by
+  cases x <;> rfl
+
+theorem FF2B_B2FF_valid (x : binary_float prec emax) :
+    FF2B (B2FF x) (valid_binary_B2FF x) = x :=
+  FF2B_B2FF x _
+
+theorem B2R_FF2B (x : full_float) (h : valid_binary prec emax x) :
+    B2R (FF2B (prec := prec) (emax := emax) x h) = FF2R radix2 x := by
+  cases x <;> rfl
+
+/-! ### Format inhabitation -/
+
+/-- A canonical mantissa proof translates to a canonical float in the
+`FLT_exp emin prec` format. -/
+theorem canonical_canonical_mantissa
+    (sx : Bool) (mx ex : ℤ) (h : canonical_mantissa prec emax mx ex)
+    (hpos : 1 ≤ mx) :
+    canonical radix2 (FLT_exp (3 - emax - prec) prec)
+      (⟨cond_Zopp sx mx, ex⟩ : float radix2) := by
+  unfold canonical cexp
+  show ex = FLT_exp (3 - emax - prec) prec
+      (mag radix2 (F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩))
+  -- mx ≠ 0
+  have hmx_ne : mx ≠ 0 := by linarith
+  have hsigned_ne : cond_Zopp sx mx ≠ 0 := by
+    cases sx <;> simp [cond_Zopp, hmx_ne]
+  -- mag (F2R ⟨cond_Zopp sx mx, ex⟩) = Zdigits (cond_Zopp sx mx) + ex
+  rw [mag_F2R_Zdigits (cond_Zopp sx mx) ex hsigned_ne]
+  -- Zdigits (cond_Zopp sx mx) = Zdigits mx
+  have h_abs : Zdigits radix2 (cond_Zopp sx mx) = Zdigits radix2 mx := by
+    cases sx
+    · rfl
+    · show Zdigits radix2 (-mx) = Zdigits radix2 mx
+      exact Zdigits_neg radix2 mx
+  rw [h_abs]
+  exact h.symm
+
+/-- The real value of a binary float is in the FLT generic format. -/
+theorem generic_format_B2R (x : binary_float prec emax) :
+    generic_format radix2 (FLT_exp (3 - emax - prec) prec) (B2R x) := by
+  cases x with
+  | B754_zero _ => exact generic_format_0 radix2 _
+  | B754_infinity _ => exact generic_format_0 radix2 _
+  | B754_nan _ _ _ => exact generic_format_0 radix2 _
+  | B754_finite sx mx ex hb =>
+    show generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+        (F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩)
+    apply generic_format_canonical
+    exact canonical_canonical_mantissa (prec := prec) (emax := emax)
+      sx mx ex hb.2.1 hb.1
+
+/-- The real value of a binary float is in the FLT format (the existential
+form). Requires `0 < prec`. -/
+theorem FLT_format_B2R (hp : 0 < prec) (x : binary_float prec emax) :
+    FLT_format radix2 (3 - emax - prec) prec (B2R x) :=
+  FLT_format_generic radix2 _ _ hp (generic_format_B2R x)
+
+/-- `B2FF` is injective. -/
+theorem B2FF_inj (x y : binary_float prec emax) (h : B2FF x = B2FF y) : x = y := by
+  cases x <;> cases y <;> simp [B2FF] at h <;>
+    first
+    | rfl
+    | (obtain ⟨_, _⟩ := h; subst_vars; rfl)
+    | (obtain ⟨_, _, _⟩ := h; subst_vars; rfl)
+
+/-! ### Strictly finite floats -/
+
+/-- `is_finite_strict x = true` iff `x` is `B754_finite _ _ _ _` (excludes
+zero, infinity, and NaN). -/
+def is_finite_strict : binary_float prec emax → Bool
+  | B754_finite _ _ _ _ => true
+  | _ => false
+
+/-- `B2R` is injective on strictly-finite floats. -/
+theorem B2R_inj (x y : binary_float prec emax)
+    (hx : is_finite_strict x = true) (hy : is_finite_strict y = true)
+    (h : B2R x = B2R y) : x = y := by
+  cases x with
+  | B754_zero _ => simp [is_finite_strict] at hx
+  | B754_infinity _ => simp [is_finite_strict] at hx
+  | B754_nan _ _ _ => simp [is_finite_strict] at hx
+  | B754_finite sx mx ex hbx =>
+    cases y with
+    | B754_zero _ => simp [is_finite_strict] at hy
+    | B754_infinity _ => simp [is_finite_strict] at hy
+    | B754_nan _ _ _ => simp [is_finite_strict] at hy
+    | B754_finite sy my ey hby =>
+      -- Both are finite. h : F2R ⟨cond_Zopp sx mx, ex⟩ = F2R ⟨cond_Zopp sy my, ey⟩.
+      -- Use canonical_unique to deduce equality of (mantissa, exponent), then signs.
+      have hmx_pos : 0 < mx := by linarith [hbx.1]
+      have hmy_pos : 0 < my := by linarith [hby.1]
+      have hcanx : canonical radix2 (FLT_exp (3 - emax - prec) prec)
+          (⟨cond_Zopp sx mx, ex⟩ : float radix2) :=
+        canonical_canonical_mantissa sx mx ex hbx.2.1 hbx.1
+      have hcany : canonical radix2 (FLT_exp (3 - emax - prec) prec)
+          (⟨cond_Zopp sy my, ey⟩ : float radix2) :=
+        canonical_canonical_mantissa sy my ey hby.2.1 hby.1
+      have h_eq : (⟨cond_Zopp sx mx, ex⟩ : float radix2)
+          = ⟨cond_Zopp sy my, ey⟩ :=
+        canonical_unique radix2 _ _ _ hcanx hcany h
+      have h_mx : cond_Zopp sx mx = cond_Zopp sy my := by
+        injection h_eq
+      have h_ex : ex = ey := by injection h_eq
+      -- Now derive sx = sy and mx = my from h_mx using positivity.
+      have h_sign : sx = sy ∧ mx = my := by
+        cases sx <;> cases sy <;> simp [cond_Zopp] at h_mx
+        · exact ⟨rfl, h_mx⟩
+        · exfalso; linarith
+        · exfalso; linarith
+        · exact ⟨rfl, by linarith⟩
+      obtain ⟨h_sx, h_mxmy⟩ := h_sign
+      subst h_sx
+      subst h_mxmy
+      subst h_ex
+      rfl
+
+/-! ### Sign and finiteness predicates -/
+
+/-- Sign of a binary float. -/
+def Bsign : binary_float prec emax → Bool
+  | B754_zero s => s
+  | B754_infinity s => s
+  | B754_nan s _ _ => s
+  | B754_finite s _ _ _ => s
+
+/-- Sign of a `full_float`. -/
+def sign_FF : full_float → Bool
+  | full_float.F754_zero s => s
+  | full_float.F754_infinity s => s
+  | full_float.F754_nan s _ => s
+  | full_float.F754_finite s _ _ => s
+
+theorem Bsign_FF2B (x : full_float) (h : valid_binary prec emax x) :
+    Bsign (FF2B (prec := prec) (emax := emax) x h) = sign_FF x := by
+  cases x <;> rfl
+
+/-- A binary float is finite (zero or finite). -/
+def is_finite : binary_float prec emax → Bool
+  | B754_zero _ => true
+  | B754_finite _ _ _ _ => true
+  | _ => false
+
+/-- A `full_float` is finite (zero or finite). -/
+def is_finite_FF : full_float → Bool
+  | full_float.F754_zero _ => true
+  | full_float.F754_finite _ _ _ => true
+  | _ => false
+
+theorem is_finite_FF2B (x : full_float) (h : valid_binary prec emax x) :
+    is_finite (FF2B (prec := prec) (emax := emax) x h) = is_finite_FF x := by
+  cases x <;> rfl
+
+theorem is_finite_FF_B2FF (x : binary_float prec emax) :
+    is_finite_FF (B2FF x) = is_finite x := by
+  cases x <;> rfl
+
+/-- A binary float is a NaN. -/
+def is_nan : binary_float prec emax → Bool
+  | B754_nan _ _ _ => true
+  | _ => false
+
+/-- A `full_float` is a NaN. -/
+def is_nan_FF : full_float → Bool
+  | full_float.F754_nan _ _ => true
+  | _ => false
+
+theorem is_nan_FF2B (x : full_float) (h : valid_binary prec emax x) :
+    is_nan (FF2B (prec := prec) (emax := emax) x h) = is_nan_FF x := by
+  cases x <;> rfl
+
+theorem is_nan_FF_B2FF (x : binary_float prec emax) :
+    is_nan_FF (B2FF x) = is_nan x := by
+  cases x <;> rfl
+
+/-- Two finite floats with the same `B2R` and the same sign are equal. The
+sign condition handles the `+0` vs `-0` edge case. -/
+theorem B2R_Bsign_inj (x y : binary_float prec emax)
+    (hx : is_finite x = true) (hy : is_finite y = true)
+    (hr : B2R x = B2R y) (hs : Bsign x = Bsign y) : x = y := by
+  cases x with
+  | B754_zero sx =>
+    cases y with
+    | B754_zero sy =>
+      have : sx = sy := hs
+      subst this; rfl
+    | B754_infinity _ => simp [is_finite] at hy
+    | B754_nan _ _ _ => simp [is_finite] at hy
+    | B754_finite sy my ey hby =>
+      -- B2R = 0, so F2R ⟨cond_Zopp sy my, ey⟩ = 0, hence cond_Zopp sy my = 0,
+      -- hence my = 0 — contradicting bounded (1 ≤ my).
+      exfalso
+      have h_F2R : F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩ = 0 := hr.symm
+      have h_my : cond_Zopp sy my = 0 := eq_0_F2R (beta := radix2) (e := ey) h_F2R
+      have hmy : my = 0 := by
+        cases sy <;> simp [cond_Zopp] at h_my
+        · exact h_my
+        · linarith
+      have := hby.1
+      omega
+  | B754_infinity _ => simp [is_finite] at hx
+  | B754_nan _ _ _ => simp [is_finite] at hx
+  | B754_finite sx mx ex hbx =>
+    cases y with
+    | B754_zero sy =>
+      exfalso
+      have h_F2R : F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩ = 0 := hr
+      have h_mx : cond_Zopp sx mx = 0 := eq_0_F2R (beta := radix2) (e := ex) h_F2R
+      have hmx : mx = 0 := by
+        cases sx <;> simp [cond_Zopp] at h_mx
+        · exact h_mx
+        · linarith
+      have := hbx.1
+      omega
+    | B754_infinity _ => simp [is_finite] at hy
+    | B754_nan _ _ _ => simp [is_finite] at hy
+    | B754_finite sy my ey hby =>
+      exact B2R_inj _ _ rfl rfl hr
+
+/-! ### NaN payload extraction and rebuild -/
+
+/-- Extract the payload of a NaN, defaulting to `1` for non-NaN. -/
+def get_nan_pl : binary_float prec emax → ℤ
+  | B754_nan _ pl _ => pl
+  | _ => 1
+
+/-- Rebuild a NaN: given a NaN-tagged binary float, return a binary float
+with the same sign and payload. (Trivial in Lean — proof irrelevance does
+the work Coq's `eqbool_irrelevance` does.) -/
+def build_nan : {x : binary_float prec emax // is_nan x = true} → binary_float prec emax
+  | ⟨B754_nan s pl h, _⟩ => B754_nan s pl h
+  | ⟨B754_zero _, hbad⟩ => absurd hbad (by simp [is_nan])
+  | ⟨B754_infinity _, hbad⟩ => absurd hbad (by simp [is_nan])
+  | ⟨B754_finite _ _ _ _, hbad⟩ => absurd hbad (by simp [is_nan])
+
+theorem build_nan_correct (x : {x : binary_float prec emax // is_nan x = true}) :
+    build_nan x = x.val := by
+  obtain ⟨v, hv⟩ := x
+  cases v with
+  | B754_zero _ => simp [is_nan] at hv
+  | B754_infinity _ => simp [is_nan] at hv
+  | B754_finite _ _ _ _ => simp [is_nan] at hv
+  | B754_nan _ _ _ => rfl
+
+theorem B2R_build_nan (x : {x : binary_float prec emax // is_nan x = true}) :
+    B2R (build_nan x) = 0 := by
+  rw [build_nan_correct]
+  obtain ⟨v, hv⟩ := x
+  cases v with
+  | B754_zero _ => rfl
+  | B754_infinity _ => rfl
+  | B754_finite _ _ _ _ => simp [is_nan] at hv
+  | B754_nan _ _ _ => rfl
+
+theorem is_finite_build_nan (x : {x : binary_float prec emax // is_nan x = true}) :
+    is_finite (build_nan x) = false := by
+  rw [build_nan_correct]
+  obtain ⟨v, hv⟩ := x
+  cases v with
+  | B754_zero _ => simp [is_nan] at hv
+  | B754_infinity _ => rfl
+  | B754_finite _ _ _ _ => simp [is_nan] at hv
+  | B754_nan _ _ _ => rfl
+
+theorem is_nan_build_nan (x : {x : binary_float prec emax // is_nan x = true}) :
+    is_nan (build_nan x) = true := by
+  rw [build_nan_correct]
+  exact x.property
+
+/-- Erase the proof inside a binary float. Trivial in Lean: returns the
+input unchanged (proof irrelevance). -/
+def erase (x : binary_float prec emax) : binary_float prec emax := x
+
+theorem erase_correct (x : binary_float prec emax) : erase x = x := rfl
+
+/-! ### Negation -/
+
+/-- IEEE 754 negation. The `opp_nan` argument is the NaN-propagation
+policy applied to NaN inputs. -/
+def Bopp (opp_nan : binary_float prec emax →
+            {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) : binary_float prec emax :=
+  match x with
+  | B754_zero s => B754_zero (!s)
+  | B754_infinity s => B754_infinity (!s)
+  | B754_finite s m e h => B754_finite (!s) m e h
+  | B754_nan _ _ _ => build_nan (opp_nan x)
+
+theorem Bopp_involutive (opp_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) (hx : is_nan x = false) :
+    Bopp opp_nan (Bopp opp_nan x) = x := by
+  cases x <;> simp [Bopp, Bool.not_not] <;> simp [is_nan] at hx
+
+theorem B2R_Bopp (opp_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) :
+    B2R (Bopp opp_nan x) = -(B2R x) := by
+  cases x with
+  | B754_zero _ => simp [Bopp, B2R]
+  | B754_infinity _ => simp [Bopp, B2R]
+  | B754_nan _ _ _ =>
+    show B2R (build_nan (opp_nan _)) = -(B2R _)
+    rw [B2R_build_nan]
+    show (0 : ℝ) = -0
+    ring
+  | B754_finite s m e h =>
+    show F2R (beta := radix2) ⟨cond_Zopp (!s) m, e⟩
+        = -(F2R (beta := radix2) ⟨cond_Zopp s m, e⟩)
+    cases s <;> simp [cond_Zopp]
+    · show F2R (beta := radix2) ⟨-m, e⟩ = -F2R (beta := radix2) ⟨m, e⟩
+      exact F2R_Zopp m e
+    · show F2R (beta := radix2) ⟨m, e⟩ = -F2R (beta := radix2) ⟨-m, e⟩
+      rw [F2R_Zopp]; ring
+
+theorem is_finite_Bopp (opp_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) :
+    is_finite (Bopp opp_nan x) = is_finite x := by
+  cases x with
+  | B754_zero _ => rfl
+  | B754_infinity _ => rfl
+  | B754_finite _ _ _ _ => rfl
+  | B754_nan _ _ _ =>
+    show is_finite (build_nan _) = _
+    rw [is_finite_build_nan]
+    rfl
+
+theorem Bsign_Bopp (opp_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) (hx : is_nan x = false) :
+    Bsign (Bopp opp_nan x) = !(Bsign x) := by
+  cases x <;> simp [Bopp, Bsign] <;> simp [is_nan] at hx
+
+/-! ### Absolute value -/
+
+/-- IEEE 754 absolute value. -/
+def Babs (abs_nan : binary_float prec emax →
+            {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) : binary_float prec emax :=
+  match x with
+  | B754_zero _ => B754_zero false
+  | B754_infinity _ => B754_infinity false
+  | B754_finite _ m e h => B754_finite false m e h
+  | B754_nan _ _ _ => build_nan (abs_nan x)
+
+theorem B2R_Babs (abs_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) :
+    B2R (Babs abs_nan x) = |B2R x| := by
+  cases x with
+  | B754_zero _ => simp [Babs, B2R]
+  | B754_infinity _ => simp [Babs, B2R]
+  | B754_nan _ _ _ =>
+    show B2R (build_nan _) = |B2R _|
+    rw [B2R_build_nan]
+    show (0 : ℝ) = |0|
+    rw [abs_zero]
+  | B754_finite s m e h =>
+    show F2R (beta := radix2) ⟨cond_Zopp false m, e⟩ = |F2R (beta := radix2) ⟨cond_Zopp s m, e⟩|
+    rw [show (cond_Zopp false m : ℤ) = m from rfl]
+    cases s
+    · show F2R (beta := radix2) ⟨m, e⟩ = |F2R (beta := radix2) ⟨m, e⟩|
+      rw [abs_of_nonneg]
+      exact le_of_lt (F2R_gt_0 ⟨m, e⟩ (by linarith [h.1]))
+    · show F2R (beta := radix2) ⟨m, e⟩ = |F2R (beta := radix2) ⟨-m, e⟩|
+      rw [F2R_Zopp, abs_neg]
+      rw [abs_of_nonneg]
+      exact le_of_lt (F2R_gt_0 ⟨m, e⟩ (by linarith [h.1]))
+
+theorem is_finite_Babs (abs_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) :
+    is_finite (Babs abs_nan x) = is_finite x := by
+  cases x with
+  | B754_zero _ => rfl
+  | B754_infinity _ => rfl
+  | B754_finite _ _ _ _ => rfl
+  | B754_nan _ _ _ =>
+    show is_finite (build_nan _) = _
+    rw [is_finite_build_nan]
+    rfl
+
+theorem Bsign_Babs (abs_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) (hx : is_nan x = false) :
+    Bsign (Babs abs_nan x) = false := by
+  cases x <;> simp [Babs, Bsign] <;> simp [is_nan] at hx
+
+theorem Babs_idempotent (abs_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) (hx : is_nan x = false) :
+    Babs abs_nan (Babs abs_nan x) = Babs abs_nan x := by
+  cases x <;> simp [Babs] <;> simp [is_nan] at hx
+
+theorem Babs_Bopp (abs_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (opp_nan : binary_float prec emax →
+        {x : binary_float prec emax // is_nan x = true})
+    (x : binary_float prec emax) (hx : is_nan x = false) :
+    Babs abs_nan (Bopp opp_nan x) = Babs abs_nan x := by
+  cases x <;> simp [Babs, Bopp] <;> simp [is_nan] at hx
+
+end binary_float
+
+end LeanFlocq
