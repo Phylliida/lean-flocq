@@ -22,6 +22,7 @@ Differences from Coq:
 
 import LeanFlocq.Core.FLT
 import LeanFlocq.Core.Digits
+import LeanFlocq.Core.Round_NE
 
 namespace LeanFlocq
 
@@ -763,6 +764,49 @@ theorem bounded_canonical_lt_emax (hp : 0 < prec) (hmax : prec < emax)
     apply max_le
     · linarith
     · linarith
+
+/-! ### Rounding modes
+
+The five IEEE 754 rounding modes. `choice_mode` and `binary_round_aux` —
+which require the `loc_of_shr_record` / `Bracket` infrastructure — are
+deferred until after `Calc/` is ported. -/
+
+inductive mode where
+  | mode_NE  -- round to nearest, ties to even
+  | mode_ZR  -- round toward zero (truncation)
+  | mode_DN  -- round toward −∞ (floor)
+  | mode_UP  -- round toward +∞ (ceil)
+  | mode_NA  -- round to nearest, ties away from zero
+  deriving DecidableEq
+
+/-- The integer-valued rounding function for each mode. -/
+noncomputable def round_mode (m : mode) : ℝ → ℤ :=
+  match m with
+  | .mode_NE => ZnearestE
+  | .mode_ZR => Ztrunc
+  | .mode_DN => fun x => ⌊x⌋
+  | .mode_UP => fun x => ⌈x⌉
+  | .mode_NA => ZnearestA
+
+/-- Every IEEE rounding mode gives a `Valid_rnd`. -/
+instance valid_rnd_round_mode (m : mode) : Valid_rnd (round_mode m) := by
+  cases m <;> unfold round_mode <;> infer_instance
+
+/-- `overflow_to_inf m s`: under mode `m` and sign `s`, does an overflow round
+to `±∞` (`true`) or saturate to the maximum finite (`false`)? -/
+def overflow_to_inf (m : mode) (s : Bool) : Bool :=
+  match m with
+  | .mode_NE => true
+  | .mode_NA => true
+  | .mode_ZR => false
+  | .mode_UP => !s
+  | .mode_DN => s
+
+/-- `binary_overflow prec emax m s`: the `full_float` produced by an overflow
+under mode `m` with sign `s`. Either `±∞` or `±max_float = ±(2^prec−1)·2^(emax−prec)`. -/
+def binary_overflow (prec emax : ℤ) (m : mode) (s : Bool) : full_float :=
+  if overflow_to_inf m s then full_float.F754_infinity s
+  else full_float.F754_finite s (2 ^ prec.toNat - 1) (emax - prec)
 
 end binary_float
 
