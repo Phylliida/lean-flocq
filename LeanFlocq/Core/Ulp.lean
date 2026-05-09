@@ -2078,4 +2078,126 @@ theorem pred_lt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
   rw [succ_pred beta fexp hValid Fy, succ_pred beta fexp hValid Fx] at h_succ_le
   linarith
 
+/-! ### Round-to-nearest in terms of midpoints -/
+
+/-- For `u ∈ F` and `v` strictly below the midpoint of `[u, succ u]`,
+`round_N v ≤ u`. The proof folds two regimes: if `succ u = u` (only at
+`u = 0` with `negligible_exp = none`), then `v < u` and `round_le_generic`
+applies; otherwise `Rnd_N_pt_monotone` carries the round-to-nearest of `v`
+under the round-to-nearest of the midpoint, which equals `u`. -/
+theorem round_N_le_midp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (choice : ℤ → Bool) {u v : ℝ} (Fu : generic_format beta fexp u)
+    (h : v < (u + succ beta fexp u) / 2) :
+    round beta fexp (Znearest choice) v ≤ u := by
+  rcases lt_or_eq_of_le (succ_ge_id beta fexp u) with h_lt | h_eq
+  · -- u < succ u: midpoint argument.
+    set mp := (u + succ beta fexp u) / 2 with hmp_def
+    have hmp_lo : u < mp := by simp [hmp_def]; linarith
+    have hmp_hi : mp < succ beta fexp u := by simp [hmp_def]; linarith
+    have F_succ_u : generic_format beta fexp (succ beta fexp u) :=
+      generic_format_succ beta fexp hValid Fu
+    have h_dn_mp : round beta fexp (fun y : ℝ => ⌊y⌋) mp = u :=
+      round_DN_eq beta fexp hValid Fu (le_of_lt hmp_lo) hmp_hi
+    have h_up_mp : round beta fexp (fun y : ℝ => ⌈y⌉) mp = succ beta fexp u :=
+      round_UP_eq beta fexp hValid F_succ_u
+        (by rw [pred_succ beta fexp hValid Fu]; exact hmp_lo)
+        (le_of_lt hmp_hi)
+    have h_dn_pt : Rnd_DN_pt (generic_format beta fexp) mp u := by
+      rw [← h_dn_mp]; exact round_DN_pt beta fexp hValid mp
+    have h_up_pt : Rnd_UP_pt (generic_format beta fexp) mp (succ beta fexp u) := by
+      rw [← h_up_mp]; exact round_UP_pt beta fexp hValid mp
+    have h_dist : mp - u ≤ succ beta fexp u - mp := by
+      simp [hmp_def]; linarith
+    have h_N_pt_u : Rnd_N_pt (generic_format beta fexp) mp u :=
+      Rnd_N_pt_DN _ h_dn_pt h_up_pt h_dist
+    have h_N_v : Rnd_N_pt (generic_format beta fexp) v
+        (round beta fexp (Znearest choice) v) :=
+      round_N_pt beta fexp hValid choice v
+    exact Rnd_N_pt_monotone _ h_N_v h_N_pt_u h
+  · -- succ u = u: only at u = 0. Then midpoint = u, so v < u ⟹ round_N v ≤ u.
+    have hvu : v < u := by linarith
+    exact round_le_generic beta fexp hValid _ Fu (le_of_lt hvu)
+
+/-- For `u ∈ F` and `v` strictly above the midpoint of `[pred u, u]`,
+`u ≤ round_N v`. Mirror of `round_N_le_midp` using `pred` and `Rnd_N_pt_UP`. -/
+theorem round_N_ge_midp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (choice : ℤ → Bool) {u v : ℝ} (Fu : generic_format beta fexp u)
+    (h : (u + pred beta fexp u) / 2 < v) :
+    u ≤ round beta fexp (Znearest choice) v := by
+  rcases lt_or_eq_of_le (pred_le_id beta fexp u) with h_lt | h_eq
+  · -- pred u < u: midpoint argument with [pred u, u].
+    set mp := (u + pred beta fexp u) / 2 with hmp_def
+    have hmp_lo : pred beta fexp u < mp := by simp [hmp_def]; linarith
+    have hmp_hi : mp < u := by simp [hmp_def]; linarith
+    have F_pred_u : generic_format beta fexp (pred beta fexp u) :=
+      generic_format_pred beta fexp hValid Fu
+    have h_dn_mp : round beta fexp (fun y : ℝ => ⌊y⌋) mp = pred beta fexp u :=
+      round_DN_eq beta fexp hValid F_pred_u (le_of_lt hmp_lo)
+        (by rw [succ_pred beta fexp hValid Fu]; exact hmp_hi)
+    have h_up_mp : round beta fexp (fun y : ℝ => ⌈y⌉) mp = u :=
+      round_UP_eq beta fexp hValid Fu hmp_lo (le_of_lt hmp_hi)
+    have h_dn_pt : Rnd_DN_pt (generic_format beta fexp) mp (pred beta fexp u) := by
+      rw [← h_dn_mp]; exact round_DN_pt beta fexp hValid mp
+    have h_up_pt : Rnd_UP_pt (generic_format beta fexp) mp u := by
+      rw [← h_up_mp]; exact round_UP_pt beta fexp hValid mp
+    have h_dist : u - mp ≤ mp - pred beta fexp u := by
+      simp [hmp_def]; linarith
+    have h_N_pt_u : Rnd_N_pt (generic_format beta fexp) mp u :=
+      Rnd_N_pt_UP _ h_dn_pt h_up_pt h_dist
+    have h_N_v : Rnd_N_pt (generic_format beta fexp) v
+        (round beta fexp (Znearest choice) v) :=
+      round_N_pt beta fexp hValid choice v
+    exact Rnd_N_pt_monotone _ h_N_pt_u h_N_v h
+  · -- pred u = u: only at u = 0 with ulp 0 = 0. Then midpoint = u, v > u.
+    have hvu : u < v := by linarith
+    exact round_ge_generic beta fexp hValid _ Fu (le_of_lt hvu)
+
+/-- `round_N x = round_DN x` whenever `x` is below the midpoint of
+`[round_DN x, round_UP x]`. -/
+theorem round_N_eq_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (choice : ℤ → Bool) {x : ℝ}
+    (h : x < (round beta fexp (fun y : ℝ => ⌊y⌋) x
+              + round beta fexp (fun y : ℝ => ⌈y⌉) x) / 2) :
+    round beta fexp (Znearest choice) x = round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+  set d := round beta fexp (fun y : ℝ => ⌊y⌋) x with hd_def
+  set u := round beta fexp (fun y : ℝ => ⌈y⌉) x with hu_def
+  apply le_antisymm
+  · rcases generic_format_EM beta fexp hValid x with Fx | Fx
+    · -- x ∈ F: round_N x = x, and d = x, so equality.
+      rw [round_generic beta fexp _ Fx]
+      have h_dn_eq : d = x := round_generic beta fexp _ Fx
+      linarith
+    · -- x ∉ F: round_N_le_midp at d, with succ d = u.
+      apply round_N_le_midp beta fexp hValid choice
+        (generic_format_round beta fexp hValid _ x)
+      have h_succ_DN : succ beta fexp d = u := succ_DN_eq_UP beta fexp hValid Fx
+      rw [h_succ_DN]
+      exact h
+  · have h_dn := round_DN_pt beta fexp hValid x
+    exact round_ge_generic beta fexp hValid _ h_dn.1 h_dn.2.1
+
+/-- `round_N x = round_UP x` whenever `x` is above the midpoint of
+`[round_DN x, round_UP x]`. -/
+theorem round_N_eq_UP (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (choice : ℤ → Bool) {x : ℝ}
+    (h : (round beta fexp (fun y : ℝ => ⌊y⌋) x
+          + round beta fexp (fun y : ℝ => ⌈y⌉) x) / 2 < x) :
+    round beta fexp (Znearest choice) x = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+  set d := round beta fexp (fun y : ℝ => ⌊y⌋) x with hd_def
+  set u := round beta fexp (fun y : ℝ => ⌈y⌉) x with hu_def
+  apply le_antisymm
+  · have h_up := round_UP_pt beta fexp hValid x
+    exact round_le_generic beta fexp hValid _ h_up.1 h_up.2.1
+  · rcases generic_format_EM beta fexp hValid x with Fx | Fx
+    · -- x ∈ F: round_N x = x, and u = x.
+      rw [round_generic beta fexp _ Fx]
+      have h_up_eq : u = x := round_generic beta fexp _ Fx
+      linarith
+    · -- x ∉ F: round_N_ge_midp at u, with pred u = d.
+      apply round_N_ge_midp beta fexp hValid choice
+        (generic_format_round beta fexp hValid _ x)
+      have h_pred_UP : pred beta fexp u = d := pred_UP_eq_DN beta fexp hValid Fx
+      rw [h_pred_UP, add_comm]
+      exact h
+
 end LeanFlocq
