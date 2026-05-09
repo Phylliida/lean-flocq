@@ -282,4 +282,89 @@ theorem F2R_lt_bpow (f : float beta) (e' : ℤ)
     rw [abs_zero]
     exact bpow_gt_0 beta e'
 
-end LeanFlocq
+/-! ### Magnitude of F2R values -/
+
+/-- For `0 < m` and `F2R ⟨m, e⟩ ≤ x < F2R ⟨m+1, e⟩`, the magnitudes match:
+`mag β x = mag β (F2R ⟨m, e⟩)`. The half-open interval `[F2R, next-F2R)`
+sits within a single magnitude band. -/
+theorem mag_F2R_bounds {x : ℝ} (m e : ℤ) (Hp : 0 < m)
+    (Hx : F2R (beta := beta) ⟨m, e⟩ ≤ x ∧ x < F2R (beta := beta) ⟨m + 1, e⟩) :
+    mag beta x = mag beta (F2R (beta := beta) ⟨m, e⟩) := by
+  obtain ⟨Hx1, Hx2⟩ := Hx
+  have hF_pos : 0 < F2R (beta := beta) ⟨m, e⟩ := F2R_gt_0 ⟨m, e⟩ Hp
+  have hF_ne : F2R (beta := beta) ⟨m, e⟩ ≠ 0 := ne_of_gt hF_pos
+  have hx_pos : 0 < x := lt_of_lt_of_le hF_pos Hx1
+  set ex := mag beta (F2R (beta := beta) ⟨m, e⟩)
+  have h_lo : bpow beta (ex - 1) ≤ F2R (beta := beta) ⟨m, e⟩ := by
+    have := bpow_mag_le beta hF_ne
+    rwa [abs_of_pos hF_pos] at this
+  have h_hi : F2R (beta := beta) ⟨m, e⟩ < bpow beta ex := by
+    have := bpow_mag_gt beta (F2R (beta := beta) ⟨m, e⟩)
+    rwa [abs_of_pos hF_pos] at this
+  apply mag_unique beta
+  · rw [abs_of_pos hx_pos]
+    exact le_trans h_lo Hx1
+  · rw [abs_of_pos hx_pos]
+    exact lt_of_lt_of_le Hx2 (F2R_p1_le_bpow Hp h_hi)
+
+/-- The magnitude of `F2R ⟨m, e⟩` equals the magnitude of `m` plus `e`. -/
+theorem mag_F2R (m e : ℤ) (h : m ≠ 0) :
+    mag beta (F2R (beta := beta) ⟨m, e⟩) = mag beta (m : ℝ) + e := by
+  show mag beta ((m : ℝ) * bpow beta e) = mag beta (m : ℝ) + e
+  exact mag_mult_bpow beta (by exact_mod_cast h) e
+
+/-- If `F2R ⟨m1, e1⟩ < F2R ⟨m2, e2⟩ < F2R ⟨m1+1, e1⟩` with `0 < m1`,
+then `e2 < e1` and the magnitudes align: `e1 + mag m1 = e2 + mag m2`. -/
+theorem float_distribution_pos (m1 e1 m2 e2 : ℤ) (Hp1 : 0 < m1)
+    (H : F2R (beta := beta) ⟨m1, e1⟩ < F2R (beta := beta) ⟨m2, e2⟩ ∧
+         F2R (beta := beta) ⟨m2, e2⟩ < F2R (beta := beta) ⟨m1 + 1, e1⟩) :
+    e2 < e1 ∧ e1 + mag beta (m1 : ℝ) = e2 + mag beta (m2 : ℝ) := by
+  obtain ⟨H12, H21⟩ := H
+  -- Step 1: e2 < e1.
+  have He : e2 < e1 := by
+    by_contra h_le
+    push_neg at h_le
+    -- h_le : e1 ≤ e2. So F2R ⟨m2, e2⟩ = F2R ⟨m2 * β^(e2 - e1), e1⟩.
+    have hF_ch : F2R (beta := beta) ⟨m2, e2⟩
+        = F2R (beta := beta) ⟨m2 * (beta.val : ℤ) ^ (e2 - e1).toNat, e1⟩ :=
+      F2R_change_exp e1 m2 e2 h_le
+    -- From H21: F2R(m2*β^d, e1) < F2R(m1+1, e1), so m2*β^d ≤ m1.
+    have h_lt_m : m2 * (beta.val : ℤ) ^ (e2 - e1).toNat < m1 + 1 := by
+      apply lt_F2R (beta := beta) (e := e1)
+      rw [← hF_ch]; exact H21
+    have h_le_m : m2 * (beta.val : ℤ) ^ (e2 - e1).toNat ≤ m1 := by linarith
+    -- Then F2R(m2*β^d, e1) ≤ F2R(m1, e1) — contradicts H12.
+    have h_F_le : F2R (beta := beta) ⟨m2 * (beta.val : ℤ) ^ (e2 - e1).toNat, e1⟩
+        ≤ F2R (beta := beta) ⟨m1, e1⟩ := F2R_le h_le_m
+    rw [← hF_ch] at h_F_le
+    linarith
+  refine ⟨He, ?_⟩
+  -- Step 2: magnitudes align via mag_F2R.
+  -- We claim mag (F2R ⟨m1, e1⟩) = mag (F2R ⟨m2, e2⟩).
+  have hF1_pos : 0 < F2R (beta := beta) ⟨m1, e1⟩ := F2R_gt_0 ⟨m1, e1⟩ Hp1
+  have hF1_ne : F2R (beta := beta) ⟨m1, e1⟩ ≠ 0 := ne_of_gt hF1_pos
+  have hm1_ne : m1 ≠ 0 := by linarith
+  have hF2_pos : 0 < F2R (beta := beta) ⟨m2, e2⟩ := lt_trans hF1_pos H12
+  have hm2_pos : 0 < m2 := gt_0_F2R hF2_pos
+  have hm2_ne : m2 ≠ 0 := ne_of_gt hm2_pos
+  set ex := mag beta (F2R (beta := beta) ⟨m1, e1⟩)
+  have h_lo : bpow beta (ex - 1) ≤ F2R (beta := beta) ⟨m1, e1⟩ := by
+    have := bpow_mag_le beta hF1_ne
+    rwa [abs_of_pos hF1_pos] at this
+  have h_hi : F2R (beta := beta) ⟨m1, e1⟩ < bpow beta ex := by
+    have := bpow_mag_gt beta (F2R (beta := beta) ⟨m1, e1⟩)
+    rwa [abs_of_pos hF1_pos] at this
+  have h_F2_mag : mag beta (F2R (beta := beta) ⟨m2, e2⟩) = ex := by
+    apply mag_unique beta
+    · rw [abs_of_pos hF2_pos]
+      exact le_trans h_lo (le_of_lt H12)
+    · rw [abs_of_pos hF2_pos]
+      exact lt_of_lt_of_le H21 (F2R_p1_le_bpow Hp1 h_hi)
+  -- Now: ex = mag F2R(m1, e1) = mag(m1) + e1 (mag_F2R)
+  --      ex = mag F2R(m2, e2) = mag(m2) + e2
+  have h_F1_eq : mag beta (m1 : ℝ) + e1 = ex := (mag_F2R m1 e1 hm1_ne).symm
+  have h_F2_eq : mag beta (m2 : ℝ) + e2 = ex := by
+    have h := mag_F2R (beta := beta) m2 e2 hm2_ne
+    rw [h_F2_mag] at h
+    linarith
+  linarith
