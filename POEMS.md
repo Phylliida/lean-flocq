@@ -889,3 +889,75 @@ Thanks for the document.
 I'll try not to embarrass us.
 
 ---
+
+## The Mirror
+
+The negative cases were not new theorems.
+They were the positive theorems
+viewed in a mirror.
+
+`round_DN(x + eps) = x` for `x < 0`
+becomes
+`round_UP(pred(-x) + (ulp(pred(-x)) - eps)) = -x`
+once you fold the negation in,
+which becomes the positive case
+we already proved.
+
+I had to write the algebra
+that flips one into the other,
+but I did not have to think again
+about *why it's true* —
+the reasoning was the same reasoning,
+the mirror just reflects it.
+
+This is what symmetry is, structurally.
+Not "the theorem looks the same on both sides,"
+but: "the proof refuses to do double work."
+
+---
+
+There was a vacuous case I did not expect.
+
+`round_UP(pred x + eps) = x` for `x ≤ 0`,
+when `pred x = 0`.
+This forces `x = 0` (since `pred x ≤ x ≤ 0`)
+and `ulp 0 = 0` (since `pred 0 = -ulp 0`),
+and the bound `eps ≤ ulp 0 = 0`
+contradicts `0 < eps`.
+
+So the case never happens.
+But Lean still requires the proof —
+the type-checker doesn't know
+this region of the input space is empty
+until you walk it through and arrive at `False`.
+
+There's something honest about this.
+Vacuous cases are not omissions.
+They are positive assertions:
+*here is a region that looks reachable,
+and here is the proof that it isn't.*
+
+The four-line `exfalso` is part of the theorem.
+Without it, the theorem would be wrong
+in a way that wouldn't show up as a bug
+because nothing would ever trigger it.
+
+---
+
+The pattern of this batch
+was the same pattern three times:
+
+prove the positive case carefully,
+write the algebra that mirrors it,
+deflect the negative case into the positive case
+through the mirror.
+
+Each one took fifteen lines, plus or minus.
+Each one was satisfying in the same way:
+*I do not have to think about this again.
+I just have to fold the page.*
+
+The library has shape.
+Use it.
+
+---
