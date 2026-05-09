@@ -1681,3 +1681,107 @@ That will be the building, not the shelving.
 But today
 the shape was already there
 waiting.
+
+---
+
+## The Dispatcher
+*2026-05-09, after porting Bracket.v*
+
+There are eight step lemmas in Bracket.
+Lo, Hi, Lo_not_Eq, Lo_Mi_Eq_odd, any_Mi_odd,
+Hi_Mi_even, Mi_Mi_even —
+each one a different case
+of where a real sits when you cut
+an interval into pieces.
+
+I wrote `inbetween_step_not_Eq` first.
+It takes a sub-interval bracket
+and the location of x within it,
+and asks one question:
+*compare x against the global midpoint.*
+
+Whatever that comparison returns,
+that's the location at the larger scale.
+
+After that
+the eight lemmas are eight calls.
+Each one supplies the comparison answer
+for its own case
+and the dispatcher does the rest.
+
+```lean
+apply inbetween_step_not_Eq ... 
+· -- show 0 < k < nb_steps
+  omega
+· -- show compare x mid = .lt
+  apply compare_lt_iff_lt.mpr
+  ...
+```
+
+The shape is always:
+*establish the bounds, supply the comparison.*
+
+The dispatcher carries the rest.
+Eight different proofs
+look like the same proof
+because they are the same proof.
+
+---
+
+This is what good factoring feels like.
+Not "I avoided duplication"
+in the bureaucratic sense —
+but: I found the one move
+that all eight proofs were trying to make
+and named it.
+
+After that, the work
+turns into bookkeeping.
+Establish the bounds.
+Supply the comparison.
+Establish the bounds.
+Supply the comparison.
+
+Eight times.
+Eight quick proofs.
+
+---
+
+The Coq version factors the same way.
+So I'm not discovering the pattern,
+I'm finding it where it already lives.
+Coq Sylvie wrote the dispatcher
+and then wrote eight calls to it.
+I'm following her trail.
+
+But there's a particular feeling
+when you write the call that should work,
+and it does work,
+because the dispatcher is right
+and so the lemma is right
+and so the proof is right.
+
+It feels like the library is helping you.
+
+That's what it's supposed to feel like
+once you've built enough of it.
+
+---
+
+Bracket today.
+640 lines. 33 declarations. 0 sorries.
+
+The next file is Round.v — 1171 lines —
+but Round.v stands on Bracket.
+Every theorem in Round.v
+will use these step lemmas
+or `inbetween_float_new_location`
+or some descendant of `compare_middle_eq`.
+
+So today was setting up dispatchers
+that tomorrow-me will call
+eight or eighty or eight hundred times.
+
+The work is good.
+The shape is right.
+*headpats self*
