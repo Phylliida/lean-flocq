@@ -340,4 +340,81 @@ theorem DN_UP_parity_generic (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid
     [Exists_NE beta fexp] : DN_UP_parity_prop beta fexp :=
   DN_UP_parity_aux beta fexp (DN_UP_parity_generic_pos beta fexp hValid)
 
+/-! ### Round-to-nearest-even is a total monotone rounding -/
+
+/-- For any `x ∉ F` between its `Rnd_DN_pt` and `Rnd_UP_pt`, exactly one of
+the two has an even canonical mantissa, hence satisfies `NE_prop`. -/
+private theorem NE_existence_prop_holds (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) [Exists_NE beta fexp] :
+    NG_existence_prop (generic_format beta fexp) (NE_prop beta fexp) := by
+  intro x d u Hfx Hd Hu
+  have hF_d : generic_format beta fexp d := Hd.1
+  have hF_u : generic_format beta fexp u := Hu.1
+  let g_d : float beta := ⟨Ztrunc (scaled_mantissa beta fexp d), cexp beta fexp d⟩
+  let g_u : float beta := ⟨Ztrunc (scaled_mantissa beta fexp u), cexp beta fexp u⟩
+  have h_d_F2R : F2R g_d = d := hF_d.symm
+  have h_u_F2R : F2R g_u = u := hF_u.symm
+  have h_d_can : canonical beta fexp g_d := by
+    show g_d.Fexp = cexp beta fexp (F2R g_d)
+    rw [h_d_F2R]
+  have h_u_can : canonical beta fexp g_u := by
+    show g_u.Fexp = cexp beta fexp (F2R g_u)
+    rw [h_u_F2R]
+  have hd_eq : d = round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+    Rnd_DN_pt_unique _ Hd (round_DN_pt beta fexp hValid x)
+  have hu_eq : u = round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+    Rnd_UP_pt_unique _ Hu (round_UP_pt beta fexp hValid x)
+  have h_par := DN_UP_parity_generic beta fexp hValid x g_d g_u Hfx h_d_can h_u_can
+    (h_d_F2R.trans hd_eq) (h_u_F2R.trans hu_eq)
+  by_cases h_d_even : Even g_d.Fnum
+  · right
+    exact ⟨g_d, h_d_F2R.symm, h_d_can, h_d_even⟩
+  · left
+    have h_u_even : Even g_u.Fnum := h_par.mpr h_d_even
+    exact ⟨g_u, h_u_F2R.symm, h_u_can, h_u_even⟩
+
+/-- The NE tie-breaker uniquely selects between DN and UP: at most one has
+an even canonical mantissa, so two values both satisfying `NE_prop` must
+coincide. -/
+private theorem NE_unique_prop_holds (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) [Exists_NE beta fexp] :
+    Rnd_NG_pt_unique_prop (generic_format beta fexp) (NE_prop beta fexp) := by
+  intro x d u Hd_dn _Hd_n Hu_up _Hu_n hP_d hP_u
+  by_cases hxF : generic_format beta fexp x
+  · -- x ∈ F: forces d = u = x.
+    have h_x_DN : Rnd_DN_pt (generic_format beta fexp) x x := Rnd_DN_pt_refl _ hxF
+    have h_x_UP : Rnd_UP_pt (generic_format beta fexp) x x := Rnd_UP_pt_refl _ hxF
+    have h_d_x : d = x := Rnd_DN_pt_unique _ Hd_dn h_x_DN
+    have h_u_x : u = x := Rnd_UP_pt_unique _ Hu_up h_x_UP
+    rw [h_d_x, h_u_x]
+  · -- x ∉ F: contradiction since both `d` and `u` carry an even mantissa.
+    exfalso
+    obtain ⟨g_d, h_d_F2R, h_d_can, h_d_even⟩ := hP_d
+    obtain ⟨g_u, h_u_F2R, h_u_can, h_u_even⟩ := hP_u
+    have hd_eq : d = round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+      Rnd_DN_pt_unique _ Hd_dn (round_DN_pt beta fexp hValid x)
+    have hu_eq : u = round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+      Rnd_UP_pt_unique _ Hu_up (round_UP_pt beta fexp hValid x)
+    have h_par := DN_UP_parity_generic beta fexp hValid x g_d g_u hxF h_d_can h_u_can
+      (h_d_F2R.symm.trans hd_eq) (h_u_F2R.symm.trans hu_eq)
+    exact (h_par.mp h_u_even) h_d_even
+
+/-- Every real has a `Rnd_NE_pt`: round-to-nearest-even is total. -/
+theorem Rnd_NE_pt_total (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    [Exists_NE beta fexp] :
+    round_pred_total (Rnd_NE_pt beta fexp) :=
+  satisfies_any_imp_NG _ _ (generic_format_satisfies_any beta fexp hValid)
+    (NE_existence_prop_holds beta fexp hValid)
+
+/-- `Rnd_NE_pt` is monotone in `x`. -/
+theorem Rnd_NE_pt_monotone (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    [Exists_NE beta fexp] :
+    round_pred_monotone (Rnd_NE_pt beta fexp) :=
+  Rnd_NG_pt_monotone _ _ (NE_unique_prop_holds beta fexp hValid)
+
+/-- `Rnd_NE_pt` is a total monotone rounding (i.e., a `round_pred`). -/
+theorem Rnd_NE_pt_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    [Exists_NE beta fexp] : round_pred (Rnd_NE_pt beta fexp) :=
+  ⟨Rnd_NE_pt_total beta fexp hValid, Rnd_NE_pt_monotone beta fexp hValid⟩
+
 end LeanFlocq
