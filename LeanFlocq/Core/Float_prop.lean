@@ -72,6 +72,17 @@ theorem F2R_cond_Zopp (b : Bool) (m e : ℤ) :
   · show F2R (beta := beta) ⟨-m, e⟩ = -F2R (beta := beta) ⟨m, e⟩
     exact F2R_Zopp m e
 
+/-- Comparison of two F2R values at the same exponent reduces to comparison
+of their mantissas. -/
+theorem Rcompare_F2R (e m1 m2 : ℤ) :
+    compare (F2R (beta := beta) ⟨m1, e⟩) (F2R (beta := beta) ⟨m2, e⟩)
+      = compare m1 m2 := by
+  rcases lt_trichotomy m1 m2 with h | h | h
+  · rw [compare_lt_iff_lt.mpr h, compare_lt_iff_lt.mpr (F2R_lt h)]
+  · subst h
+    rw [compare_eq_iff_eq.mpr rfl, compare_eq_iff_eq.mpr rfl]
+  · rw [compare_gt_iff_gt.mpr h, compare_gt_iff_gt.mpr (F2R_lt h)]
+
 /-! ### Sign facts -/
 
 @[simp]
