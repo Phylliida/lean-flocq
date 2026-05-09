@@ -1680,4 +1680,48 @@ theorem round_UP_eq (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp
       (round_UP_pt beta fexp hValid x).2.1
     linarith
 
+/-- If `y ∈ F` and `round_DN x < y`, then `round_UP x ≤ y`. -/
+theorem round_UP_le_DN_lt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fy : generic_format beta fexp y)
+    (h : round beta fexp (fun z : ℝ => ⌊z⌋) x < y) :
+    round beta fexp (fun z : ℝ => ⌈z⌉) x ≤ y := by
+  apply (round_UP_pt beta fexp hValid x).2.2 y Fy
+  by_contra hxy
+  push_neg at hxy
+  have h_dn_ge : y ≤ round beta fexp (fun z : ℝ => ⌊z⌋) x :=
+    (round_DN_pt beta fexp hValid x).2.2 y Fy (le_of_lt hxy)
+  linarith
+
+/-- Dual: if `y ∈ F` and `y < round_UP x`, then `y ≤ round_DN x`. -/
+theorem round_DN_ge_UP_gt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fy : generic_format beta fexp y)
+    (h : y < round beta fexp (fun z : ℝ => ⌈z⌉) x) :
+    y ≤ round beta fexp (fun z : ℝ => ⌊z⌋) x := by
+  apply (round_DN_pt beta fexp hValid x).2.2 y Fy
+  by_contra hxy
+  push_neg at hxy
+  have h_up_le : round beta fexp (fun z : ℝ => ⌈z⌉) x ≤ y :=
+    (round_UP_pt beta fexp hValid x).2.2 y Fy (le_of_lt hxy)
+  linarith
+
+/-- The "spread" between round_UP and succ(round_DN): always
+`round_UP x ≤ succ(round_DN x)`. (Equality when `x ∉ F`; otherwise both
+equal `x` and the inequality holds via succ_ge_id.) -/
+theorem UP_le_succ_DN (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (x : ℝ) :
+    round beta fexp (fun z : ℝ => ⌈z⌉) x
+      ≤ succ beta fexp (round beta fexp (fun z : ℝ => ⌊z⌋) x) := by
+  by_cases Fx : generic_format beta fexp x
+  · rw [round_generic beta fexp _ Fx, round_generic beta fexp _ Fx]
+    exact succ_ge_id beta fexp x
+  · rw [succ_DN_eq_UP beta fexp hValid Fx]
+
+/-- Contrapositive of `eq_0_round_0_negligible_exp`: when `negligible_exp = none`,
+`x ≠ 0` implies `round x ≠ 0`. -/
+theorem round_neq_0_negligible_exp (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_neg : negligible_exp fexp = none) (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x : ℝ} (hx : x ≠ 0) :
+    round beta fexp rnd x ≠ 0 := by
+  intro h_round_zero
+  exact hx (eq_0_round_0_negligible_exp beta fexp hValid h_neg rnd h_round_zero)
+
 end LeanFlocq
