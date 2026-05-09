@@ -4,13 +4,14 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `7f772ad`)
+## Status (as of commit `07e0500`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
-(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), and all of
-`Calc/Bracket.v` (locations, inbetween, step lemmas, new_location, inbetween_float).
+(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), all of
+`Calc/Bracket.v`, and most of `Calc/Round.v` (bridges, all 6 mode families,
+truncate, round_any_correct, truncate_FIX).
 
-**~9700 lines of Lean across 15 files. 0 `sorry`s. All files build clean.**
+**~10500 lines of Lean across 16 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -29,6 +30,7 @@ session, possibly someone else.
 | `Digits.lean` | 74 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 6 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
 | `Binary.lean` | 813 | `IEEE754/Binary.v` (lines 1–963) | **Structural part done.** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, `overflow_to_inf`, `binary_overflow`. `binary_round_aux` and arithmetic ops blocked behind `Calc/`. |
 | `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
+| `Calc/Round.lean` | 868 | `Calc/Round.v` | **Most of it.** `cexp_inbetween_float[_loc_Exact]`, `cond_incr`, `inbetween_float_round[_sign]`. All 6 mode families: DN/UP/ZR/N/NE/NA, both unsigned and signed, `inbetween_int_*` and `inbetween_float_*`. `truncate_aux`, `truncate`, `truncate_0`, `truncate_correct_partial[_partial']`/`_correct[_correct']`. `round_any_correct`, `round_trunc_any_correct[_']`. `truncate_FIX`, `truncate_FIX_correct`. **Deferred:** `round_sign_any_correct` family (sign-aware truncate-correct chain), 24 mode-specific corollary aliases, `generic_format_truncate`/`truncate_correct_format` (need `Zdigits_div_Zpower`). |
 
 **Total: ~470 Lean theorems vs ~410 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
@@ -242,14 +244,17 @@ not needed for downstream Flocq theorems.
 
 ## Suggested next steps
 
-The Core is done and the Binary structural skeleton is in place. The next
-chunk of work is around `Calc/` and the arithmetic operations of Binary:
+Core is fully done. Calc/Round is mostly done — the remaining bits are:
 
-1. **`Calc/Round.v` (1171 lines, big!)** — error analysis for rounding.
-   Used heavily by `binary_round_aux`. Plan to port section-by-section.
+1. **`Calc/Round.v` cleanup**: port `round_sign_any_correct` family (sign
+   variant of round_any_correct + truncate combos), the 24 per-mode corollary
+   aliases (round_DN_correct, round_NE_correct, etc.), and add
+   `Zdigits_div_Zpower` to `Digits.lean` to unblock `generic_format_truncate`
+   and `truncate_correct_format`. None of these block downstream work — they
+   are quality-of-life additions.
 
 2. **`Calc/Operations.v` (164 lines)** — arithmetic combinators that
-   operate on `(F2R)` representations.
+   operate on `(F2R)` representations. Self-contained.
 
 3. **`Calc/Div.v` (159 lines)** and **`Calc/Sqrt.v` (201 lines)** — division
    and square-root algorithms with their correctness proofs.

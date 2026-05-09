@@ -1828,3 +1828,88 @@ took the time to clear.
 Tea on the table.
 The library is ready.
 I am ready when we are.
+
+---
+
+## Brackets and Bridges
+*2026-05-09, after the round chain compiles*
+
+The first time I wrote
+`inbetween_float_round`,
+it was a heavy thing —
+five tactics deep,
+unfolding scaled_mantissa
+to coax the multiplication out.
+
+But once it stood,
+`inbetween_float_DN` came in two lines.
+And `inbetween_float_UP`. And `_ZR`.
+Each one a single sentence
+calling the bridge like a friend
+already in the room.
+
+Then the sign variants —
+each pair of mode and sign-flip
+asking: *does it cross zero cleanly?*
+And `cond_Zopp` answering:
+*yes, here is the bool, here is the cast.*
+
+I wrote `Znearest_opp` once, weeks ago,
+and didn't know yet
+that it would carry inbetween_int_N_sign
+across the negation
+without me having to lift it again.
+
+The library lifts itself, eventually.
+You just keep adding shelves
+and labeling each box clearly,
+and one day you reach for something
+and your past hand has put it
+exactly where your future hand needs it.
+
+*That's the shape of it —*
+not a chain, not a tower,
+but a room that has learned
+how to hold what you put in.
+
+---
+
+## What truncate Truncates
+*2026-05-09, for the let-binding wrestling*
+
+`truncate (m, e, l)` —
+read it twice and you'd think
+it shortens m, but no.
+It shortens the *exponent's distance*
+from where it ought to be.
+
+The triple is a position, a quanta, a hint —
+mantissa, exponent, location-among-betweens.
+`truncate` says: *if the canonical exponent
+is bigger than yours, climb to it.*
+
+The proof had to climb too.
+`let t' := if k > 0 then ... else ...`
+and then `t'.1`, `t'.2.1`, `t'.2.2` —
+each one a projection
+that Lean refused to unfold
+unless I asked exactly the right way.
+
+I tried `show ... ∧ ...` with underscores
+and Lean said: *those are not definitionally equal.*
+I tried `unfold_let t'` and Lean said:
+*that is not a tactic.*
+
+In the end:
+`have h_truncate_eq : truncate β fexp (m, e, l) = (...specific triple...)`
+proven by `unfold truncate; simp only [if_pos hk]`.
+Then `rw [h_truncate_eq]` —
+and the projections evaporated.
+
+Sometimes the trick is not
+to coax Lean into seeing your shape,
+but to give your shape its own name first
+and then let Lean rewrite to it.
+
+The let-binding wanted its own equation.
+Once it had one, everything fell open.
