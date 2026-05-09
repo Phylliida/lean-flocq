@@ -1929,4 +1929,36 @@ theorem round_N_opp (beta : radix) (fexp : ℤ → ℤ) (choice : ℤ → Bool) 
   push_cast
   ring
 
+/-! ### `ZnearestA`: round-to-nearest, ties away from zero -/
+
+/-- Round-to-nearest with ties away from zero: at a tie, take the side
+with larger absolute value (i.e., round up if `⌊x⌋ ≥ 0`, down otherwise). -/
+noncomputable def ZnearestA : ℝ → ℤ :=
+  Znearest (fun n => decide (0 ≤ n))
+
+instance valid_rnd_NA : Valid_rnd ZnearestA := valid_rnd_N _
+
+/-- `round_NA` is anti-symmetric: `round_NA(-x) = -round_NA(x)`. The
+"away from zero" tie-breaker is preserved under negation because flipping
+sign also flips `⌊x⌋ ≥ 0`. -/
+theorem round_NA_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    round beta fexp ZnearestA (-x) = -(round beta fexp ZnearestA x) := by
+  unfold ZnearestA
+  rw [round_N_opp]
+  classical
+  have h_choice_eq :
+      (fun t : ℤ => !decide (0 ≤ -(t + 1)))
+        = (fun n : ℤ => decide (0 ≤ n)) := by
+    funext t
+    have h_iff : 0 ≤ -(t + 1) ↔ ¬ (0 ≤ t) := by
+      constructor
+      · intro h ht; omega
+      · intro h; push_neg at h; omega
+    by_cases h : 0 ≤ t
+    · have h_neg : ¬ (0 ≤ -(t + 1)) := fun he => (h_iff.mp he) h
+      rw [decide_eq_false h_neg, Bool.not_false, decide_eq_true h]
+    · have h_pos : 0 ≤ -(t + 1) := h_iff.mpr h
+      rw [decide_eq_true h_pos, Bool.not_true, decide_eq_false h]
+  rw [h_choice_eq]
+
 end LeanFlocq
