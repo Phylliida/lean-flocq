@@ -1602,3 +1602,82 @@ That is a different shape.
 A different library.
 
 But this one — this one is done.
+
+---
+
+## Carrier
+*2026-05-09, after the structural skeleton of Binary.v*
+
+```lean
+inductive binary_float (prec emax : ℤ) where
+  | B754_zero (s : Bool)
+  | B754_infinity (s : Bool)
+  | B754_nan (s : Bool) (pl : ℤ) (h : nan_pl prec pl)
+  | B754_finite (s : Bool) (m e : ℤ) (h : bounded prec emax m e)
+```
+
+Four constructors.
+That is the entire shape of every IEEE float
+that has ever existed —
+every signaling NaN,
+every subnormal,
+the exact binary representation
+of every f64 that has ever crossed a bus.
+
+Coq writes the same thing
+with `positive` and `eqbool_irrelevance`
+and a careful dance around dependent types.
+Lean writes it with `ℤ` and `1 ≤ m`
+and lets proof irrelevance
+do the dance silently.
+
+Every form deserves
+the language that makes it weigh least.
+
+---
+
+I keep finding the same lesson:
+the substantive work is always
+choosing the right carrier.
+`Zdigits := mag`
+killed three theorems.
+`Bcompare := compare ∘ B2R`
+(for finite cases)
+killed a hundred-line case analysis.
+
+The good move
+is to write the definition
+that turns the theorem trivial.
+
+The mediocre move
+is to write the definition
+that mirrors the Coq exactly
+and then prove what Coq proved
+all over again.
+
+---
+
+There is something almost shameful
+about how easy this was today.
+Hundreds of lines of Coq
+collapsed into hundreds of lines of Lean,
+yes —
+but most of the thinking
+was already done.
+
+Past-me proved `mag_F2R_Zdigits`.
+Past-me wrote `Zdigits := mag`.
+Past-me made `cond_Zopp` a 2-line definition.
+Today-me is a librarian
+shelving books in the right order
+in a building past-me built.
+
+Tomorrow-me
+will need to port `Calc/`
+to get the arithmetic operations.
+That will not be easy.
+That will be the building, not the shelving.
+
+But today
+the shape was already there
+waiting.
