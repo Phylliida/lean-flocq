@@ -209,6 +209,44 @@ theorem bpow_le_F2R_m1 {m e1 e2 : ℤ} (hm : 1 < m)
           mul_le_mul_of_nonneg_right (by exact_mod_cast (by omega : (1 : ℤ) ≤ m - 1))
                                      (bpow_ge_0 beta e1)
 
+/-- Re-expressing an F2R with bounded mantissa at a chosen exponent based on
+its magnitude: if `|m| < β^p` and `bpow(e' - 1) ≤ |F2R ⟨m, e⟩|`, then
+`F2R ⟨m, e⟩ = F2R ⟨m * β^(e - e' + p), e' - p⟩`. -/
+theorem F2R_prec_normalize (m e e' p : ℤ)
+    (Hm : |m| < (beta.val : ℤ) ^ p.toNat)
+    (Hf : bpow beta (e' - 1) ≤ |F2R (beta := beta) ⟨m, e⟩|) :
+    F2R (beta := beta) ⟨m, e⟩
+      = F2R (beta := beta) ⟨m * (beta.val : ℤ) ^ (e - e' + p).toNat, e' - p⟩ := by
+  have hp : 0 ≤ p := by
+    by_contra hp_neg
+    push_neg at hp_neg
+    have h_toNat : p.toNat = 0 := by
+      have : p ≤ 0 := le_of_lt hp_neg
+      omega
+    rw [h_toNat, pow_zero] at Hm
+    have hm_zero : m = 0 := by
+      have h_abs_nn : (0 : ℤ) ≤ |m| := abs_nonneg m
+      have h_abs_zero : |m| = 0 := by omega
+      exact abs_eq_zero.mp h_abs_zero
+    rw [hm_zero, show F2R (beta := beta) ⟨0, e⟩ = 0 from F2R_0 e, abs_zero] at Hf
+    exact absurd (lt_of_le_of_lt Hf (bpow_gt_0 _ _)) (lt_irrefl _)
+  have h_e'p_le : e' - p ≤ e := by
+    have h_chain : bpow beta (e' - 1) < bpow beta (e + p) := by
+      calc bpow beta (e' - 1)
+          ≤ |F2R (beta := beta) ⟨m, e⟩| := Hf
+        _ = ((|m| : ℤ) : ℝ) * bpow beta e := by
+            show |((m : ℝ)) * bpow beta e| = ((|m| : ℤ) : ℝ) * bpow beta e
+            rw [abs_mul, abs_of_pos (bpow_gt_0 _ _)]; push_cast; rfl
+        _ < bpow beta p * bpow beta e := by
+            apply mul_lt_mul_of_pos_right _ (bpow_gt_0 _ _)
+            rw [← IZR_Zpower beta hp]; exact_mod_cast Hm
+        _ = bpow beta (e + p) := by rw [← bpow_plus]; congr 1; ring
+    have := lt_bpow beta h_chain; omega
+  have h_eq : e - e' + p = e - (e' - p) := by ring
+  rw [show (m * (beta.val : ℤ) ^ (e - e' + p).toNat : ℤ)
+      = m * (beta.val : ℤ) ^ (e - (e' - p)).toNat from by rw [h_eq]]
+  exact F2R_change_exp (e' - p) m e h_e'p_le
+
 /-- If `|m| < β^(e' - e)`, then `|F2R ⟨m, e⟩| < β^e'`.
 
 The hypothesis uses `(e' - e).toNat`; when `e' < e` this evaluates to

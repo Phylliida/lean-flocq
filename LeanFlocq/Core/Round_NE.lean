@@ -8,6 +8,8 @@ the floor is odd," which produces an even canonical mantissa.
 
 import LeanFlocq.Core.Generic_fmt
 import LeanFlocq.Core.Ulp
+import LeanFlocq.Core.FLX
+import LeanFlocq.Core.FLT
 
 namespace LeanFlocq
 
@@ -416,5 +418,48 @@ theorem Rnd_NE_pt_monotone (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_e
 theorem Rnd_NE_pt_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     [Exists_NE beta fexp] : round_pred (Rnd_NE_pt beta fexp) :=
   ⟨Rnd_NE_pt_total beta fexp hValid, Rnd_NE_pt_monotone beta fexp hValid⟩
+
+/-! ### `Exists_NE` instances for FLX and FLT -/
+
+/-- FLX admits round-to-nearest-even when either β is odd or `prec > 1`. -/
+theorem exists_NE_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (NE_prop : Odd beta.val ∨ 1 < prec) :
+    Exists_NE beta (FLX_exp prec) := by
+  refine ⟨?_⟩
+  rcases NE_prop with h_odd | h_prec
+  · left; exact h_odd
+  · right
+    intro e
+    refine ⟨?_, ?_⟩
+    · intro _; unfold FLX_exp; linarith
+    · intro h_le
+      unfold FLX_exp at h_le
+      exfalso; linarith
+
+/-- FLT admits round-to-nearest-even when either β is odd or `prec > 1`. -/
+theorem exists_NE_FLT (beta : radix) (emin prec : ℤ) (hp : 0 < prec)
+    (NE_prop : Odd beta.val ∨ 1 < prec) :
+    Exists_NE beta (FLT_exp emin prec) := by
+  refine ⟨?_⟩
+  rcases NE_prop with h_odd | h_prec
+  · left; exact h_odd
+  · right
+    intro e
+    refine ⟨?_, ?_⟩
+    · intro h_lt
+      unfold FLT_exp at h_lt ⊢
+      have h2 : emin < e := lt_of_le_of_lt (le_max_right _ _) h_lt
+      exact max_lt (by linarith) (by linarith)
+    · intro h_le
+      unfold FLT_exp at h_le ⊢
+      have h_emin_ge : emin ≥ e := by
+        rcases le_or_gt (e - prec) emin with h | h
+        · rw [max_eq_right h] at h_le; exact h_le
+        · rw [max_eq_left (le_of_lt h)] at h_le; linarith
+      have h_max_eq_emin : max (e - prec) emin = emin :=
+        max_eq_right (by linarith)
+      rw [h_max_eq_emin]
+      have h_lt_emin : emin + 1 - prec < emin := by linarith
+      exact max_eq_right (le_of_lt h_lt_emin)
 
 end LeanFlocq
