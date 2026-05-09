@@ -64,6 +64,14 @@ theorem F2R_Zabs (m e : ℤ) :
   push_cast
   rfl
 
+/-- F2R distributes over conditional negation. -/
+theorem F2R_cond_Zopp (b : Bool) (m e : ℤ) :
+    F2R (beta := beta) ⟨cond_Zopp b m, e⟩ = cond_Ropp b (F2R (beta := beta) ⟨m, e⟩) := by
+  cases b
+  · rfl
+  · show F2R (beta := beta) ⟨-m, e⟩ = -F2R (beta := beta) ⟨m, e⟩
+    exact F2R_Zopp m e
+
 /-! ### Sign facts -/
 
 @[simp]

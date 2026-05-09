@@ -31,4 +31,10 @@ def radix2 : radix := ⟨2, by omega⟩
 
 end radix
 
+/-- Conditional integer negation: `cond_Zopp true m = -m`, `false → m`. -/
+def cond_Zopp (b : Bool) (m : ℤ) : ℤ := if b then -m else m
+
+@[simp] theorem cond_Zopp_true (m : ℤ) : cond_Zopp true m = -m := rfl
+@[simp] theorem cond_Zopp_false (m : ℤ) : cond_Zopp false m = m := rfl
+
 end LeanFlocq

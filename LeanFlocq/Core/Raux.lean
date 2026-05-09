@@ -22,6 +22,12 @@ open radix
 noncomputable def bpow (beta : radix) (e : ℤ) : ℝ :=
   (beta.val : ℝ) ^ e
 
+/-- Conditional real negation: `cond_Ropp true x = -x`, `false → x`. -/
+def cond_Ropp (b : Bool) (x : ℝ) : ℝ := if b then -x else x
+
+@[simp] theorem cond_Ropp_true (x : ℝ) : cond_Ropp true x = -x := rfl
+@[simp] theorem cond_Ropp_false (x : ℝ) : cond_Ropp false x = x := rfl
+
 /-- The radix is positive in ℝ. -/
 theorem radix_pos (r : radix) : (0 : ℝ) < (r.val : ℝ) := by
   exact_mod_cast r.radix_gt_0
