@@ -524,6 +524,91 @@ theorem Babs_Bopp (abs_nan : binary_float prec emax →
     Babs abs_nan (Bopp opp_nan x) = Babs abs_nan x := by
   cases x <;> simp [Babs, Bopp] <;> simp [is_nan] at hx
 
+/-! ### Comparison
+
+`Bcompare` returns `none` if either input is NaN. For `±∞` we use IEEE
+ordering (`+∞ > everything finite, -∞ < everything finite`). For finite/
+zero pairs we delegate to `compare` on the real values, which makes
+`Bcompare_correct` essentially trivial. -/
+
+noncomputable def Bcompare : binary_float prec emax → binary_float prec emax → Option Ordering
+  | B754_nan _ _ _, _ => none
+  | _, B754_nan _ _ _ => none
+  | B754_infinity true, B754_infinity true => some .eq
+  | B754_infinity false, B754_infinity false => some .eq
+  | B754_infinity true, B754_infinity false => some .lt
+  | B754_infinity false, B754_infinity true => some .gt
+  | B754_infinity true, _ => some .lt
+  | B754_infinity false, _ => some .gt
+  | _, B754_infinity true => some .gt
+  | _, B754_infinity false => some .lt
+  | f1, f2 => some (compare (B2R f1) (B2R f2))
+
+/-- Helper: real-valued `compare` is antisymmetric in this concrete sense. -/
+private theorem compare_swap_real (a b : ℝ) : (compare a b).swap = compare b a := by
+  rcases lt_trichotomy a b with h | h | h
+  · rw [compare_lt_iff_lt.mpr h, compare_gt_iff_gt.mpr h]; rfl
+  · subst h
+    rw [compare_eq_iff_eq.mpr (rfl : a = a)]; rfl
+  · rw [compare_gt_iff_gt.mpr h, compare_lt_iff_lt.mpr h]; rfl
+
+/-- For finite arguments, `Bcompare` agrees with `compare` on real values. -/
+theorem Bcompare_correct (f1 f2 : binary_float prec emax)
+    (h1 : is_finite f1 = true) (h2 : is_finite f2 = true) :
+    Bcompare f1 f2 = some (compare (B2R f1) (B2R f2)) := by
+  cases f1 with
+  | B754_zero _ =>
+    cases f2 with
+    | B754_zero _ => rfl
+    | B754_infinity _ => simp [is_finite] at h2
+    | B754_nan _ _ _ => simp [is_finite] at h2
+    | B754_finite _ _ _ _ => rfl
+  | B754_infinity _ => simp [is_finite] at h1
+  | B754_nan _ _ _ => simp [is_finite] at h1
+  | B754_finite _ _ _ _ =>
+    cases f2 with
+    | B754_zero _ => rfl
+    | B754_infinity _ => simp [is_finite] at h2
+    | B754_nan _ _ _ => simp [is_finite] at h2
+    | B754_finite _ _ _ _ => rfl
+
+/-- Swapping arguments swaps the resulting `Ordering`. -/
+theorem Bcompare_swap (x y : binary_float prec emax) :
+    Bcompare y x = (Bcompare x y).map Ordering.swap := by
+  cases x with
+  | B754_zero _ =>
+    cases y with
+    | B754_zero _ =>
+      show some (compare _ _) = (some (compare _ _)).map Ordering.swap
+      simp [compare_swap_real]
+    | B754_infinity s => cases s <;> rfl
+    | B754_nan _ _ _ => rfl
+    | B754_finite _ _ _ _ =>
+      show some (compare _ _) = (some (compare _ _)).map Ordering.swap
+      simp [compare_swap_real]
+  | B754_infinity sx =>
+    cases y with
+    | B754_zero _ => cases sx <;> rfl
+    | B754_infinity sy => cases sx <;> cases sy <;> rfl
+    | B754_nan _ _ _ => cases sx <;> rfl
+    | B754_finite _ _ _ _ => cases sx <;> rfl
+  | B754_nan _ _ _ =>
+    cases y with
+    | B754_zero _ => rfl
+    | B754_infinity s => cases s <;> rfl
+    | B754_nan _ _ _ => rfl
+    | B754_finite _ _ _ _ => rfl
+  | B754_finite _ _ _ _ =>
+    cases y with
+    | B754_zero _ =>
+      show some (compare _ _) = (some (compare _ _)).map Ordering.swap
+      simp [compare_swap_real]
+    | B754_infinity s => cases s <;> rfl
+    | B754_nan _ _ _ => rfl
+    | B754_finite _ _ _ _ =>
+      show some (compare _ _) = (some (compare _ _)).map Ordering.swap
+      simp [compare_swap_real]
+
 /-! ### Boundedness theorems -/
 
 /-- A bounded float satisfies `F2R ⟨m, e⟩ < β^emax`. -/
