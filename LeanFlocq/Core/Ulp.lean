@@ -1724,26 +1724,54 @@ theorem round_neq_0_negligible_exp (beta : radix) (fexp : ℤ → ℤ) (hValid :
   intro h_round_zero
   exact hx (eq_0_round_0_negligible_exp beta fexp hValid h_neg rnd h_round_zero)
 
+/-- Helper: under `Monotone_exp` and `Exp_not_FTZ`, `ulp x ≤ ulp(round x)` for `x ≠ 0`. -/
+private theorem ulp_le_ulp_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (hMon : Monotone_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} (hx : x ≠ 0) :
+    ulp beta fexp x ≤ ulp beta fexp (round beta fexp rnd x) := by
+  rcases ulp_round beta fexp hValid h_NotFTZ rnd x with h_eq | h_abs
+  · linarith
+  · have h_ulp_round : ulp beta fexp (round beta fexp rnd x)
+        = bpow beta (fexp (mag beta x + 1)) := by
+      rw [← ulp_abs beta fexp (round beta fexp rnd x), h_abs, ulp_bpow]
+    rw [h_ulp_round, ulp_neq_0 beta fexp hx]
+    show bpow beta (cexp beta fexp x) ≤ bpow beta (fexp (mag beta x + 1))
+    apply bpow_le
+    unfold cexp
+    exact hMon (mag beta x) (mag beta x + 1) (by linarith)
+
 /-- Stronger error bound: under `Monotone_exp` and `Exp_not_FTZ`, the rounding
 error is strictly less than the ulp *of the rounded value*. -/
 theorem error_lt_ulp_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
     (h_NotFTZ : Exp_not_FTZ fexp) (hMon : Monotone_exp fexp)
     (rnd : ℝ → ℤ) [Valid_rnd rnd] {x : ℝ} (hx : x ≠ 0) :
-    |round beta fexp rnd x - x| < ulp beta fexp (round beta fexp rnd x) := by
-  -- Key: `ulp x ≤ ulp(round x)` always, then chain with error_lt_ulp.
-  have h_ulp_le : ulp beta fexp x ≤ ulp beta fexp (round beta fexp rnd x) := by
-    rcases ulp_round beta fexp hValid h_NotFTZ rnd x with h_eq | h_abs
-    · linarith
-    · -- |round x| = bpow(mag x), so ulp(round x) = bpow(fexp(mag x + 1)).
-      -- Under Monotone_exp, fexp(mag x) ≤ fexp(mag x + 1).
-      have h_ulp_round : ulp beta fexp (round beta fexp rnd x)
-          = bpow beta (fexp (mag beta x + 1)) := by
-        rw [← ulp_abs beta fexp (round beta fexp rnd x), h_abs, ulp_bpow]
-      rw [h_ulp_round, ulp_neq_0 beta fexp hx]
-      show bpow beta (cexp beta fexp x) ≤ bpow beta (fexp (mag beta x + 1))
-      apply bpow_le
-      unfold cexp
-      exact hMon (mag beta x) (mag beta x + 1) (by linarith)
-  exact lt_of_lt_of_le (error_lt_ulp beta fexp hValid rnd hx) h_ulp_le
+    |round beta fexp rnd x - x| < ulp beta fexp (round beta fexp rnd x) :=
+  lt_of_lt_of_le (error_lt_ulp beta fexp hValid rnd hx)
+    (ulp_le_ulp_round beta fexp hValid h_NotFTZ hMon rnd hx)
+
+/-- Non-strict version: rounding error at most ulp(round x). -/
+theorem error_le_ulp_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (hMon : Monotone_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) :
+    |round beta fexp rnd x - x| ≤ ulp beta fexp (round beta fexp rnd x) := by
+  by_cases hx : x = 0
+  · rw [hx, round_0, sub_zero, abs_zero]
+    exact ulp_ge_0 beta fexp _
+  · exact le_of_lt (error_lt_ulp_round beta fexp hValid h_NotFTZ hMon rnd hx)
+
+/-- For round-to-nearest under `Monotone_exp + Exp_not_FTZ`: the error is at
+most `ulp(round x) / 2` — the "half-ulp" bound but with the rounded ulp. -/
+theorem error_le_half_ulp_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp) (hMon : Monotone_exp fexp)
+    (choice : ℤ → Bool) (x : ℝ) :
+    |round beta fexp (Znearest choice) x - x|
+      ≤ (1 / 2) * ulp beta fexp (round beta fexp (Znearest choice) x) := by
+  have h_err := error_le_half_ulp beta fexp hValid choice x
+  by_cases hx : x = 0
+  · rw [hx, round_0, sub_zero, abs_zero]
+    have : 0 ≤ ulp beta fexp 0 := ulp_ge_0 _ _ _
+    linarith
+  · have h_ulp_le := ulp_le_ulp_round beta fexp hValid h_NotFTZ hMon (Znearest choice) hx
+    linarith
 
 end LeanFlocq
