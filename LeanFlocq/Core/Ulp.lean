@@ -2078,6 +2078,24 @@ theorem pred_lt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
   rw [succ_pred beta fexp hValid Fy, succ_pred beta fexp hValid Fx] at h_succ_le
   linarith
 
+/-- Inverse monotonicity for `pred`: `pred x ≤ pred y → x ≤ y`. -/
+theorem pred_le_inv (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (h : pred beta fexp x ≤ pred beta fexp y) : x ≤ y := by
+  rw [show x = succ beta fexp (pred beta fexp x) from (succ_pred beta fexp hValid Fx).symm,
+      show y = succ beta fexp (pred beta fexp y) from (succ_pred beta fexp hValid Fy).symm]
+  exact succ_le beta fexp hValid (generic_format_pred beta fexp hValid Fx)
+    (generic_format_pred beta fexp hValid Fy) h
+
+/-- Inverse monotonicity for `succ`: `succ x ≤ succ y → x ≤ y`. -/
+theorem succ_le_inv (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (h : succ beta fexp x ≤ succ beta fexp y) : x ≤ y := by
+  rw [show x = pred beta fexp (succ beta fexp x) from (pred_succ beta fexp hValid Fx).symm,
+      show y = pred beta fexp (succ beta fexp y) from (pred_succ beta fexp hValid Fy).symm]
+  exact pred_le beta fexp hValid (generic_format_succ beta fexp hValid Fx)
+    (generic_format_succ beta fexp hValid Fy) h
+
 /-! ### Round-to-nearest in terms of midpoints -/
 
 /-- For `u ∈ F` and `v` strictly below the midpoint of `[u, succ u]`,
@@ -2199,5 +2217,80 @@ theorem round_N_eq_UP (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fe
       have h_pred_UP : pred beta fexp u = d := pred_UP_eq_DN beta fexp hValid Fx
       rw [h_pred_UP, add_comm]
       exact h
+
+/-- Under `Monotone_exp`, `succ x ≤ x + ulp x`. Equality on the nonneg side;
+the negative side may have `succ x` strictly smaller because `pred_pos(-x)`
+can drop by an extra magnitude at a `bpow` boundary. -/
+theorem succ_le_plus_ulp (beta : radix) (fexp : ℤ → ℤ) (hMon : Monotone_exp fexp)
+    (x : ℝ) :
+    succ beta fexp x ≤ x + ulp beta fexp x := by
+  rcases le_or_gt 0 x with hx | hx
+  · rw [succ_eq_pos beta fexp hx]
+  · -- x < 0: succ x = -pred_pos(-x). Show pred_pos(-x) ≥ -x - ulp(-x).
+    have h_neg_pos : 0 < -x := by linarith
+    have h_neg_ne : -x ≠ 0 := ne_of_gt h_neg_pos
+    have h_succ_eq : succ beta fexp x = -(pred_pos beta fexp (-x)) := by
+      unfold succ; rw [if_neg (not_le.mpr hx)]
+    rw [h_succ_eq, show ulp beta fexp x = ulp beta fexp (-x) from
+        (ulp_opp beta fexp x).symm]
+    have h_goal : (-x) - ulp beta fexp (-x) ≤ pred_pos beta fexp (-x) := by
+      unfold pred_pos
+      split_ifs with h_bpow
+      · -- -x = bpow(mag(-x) - 1): pred_pos(-x) = -x - bpow(fexp(mag(-x) - 1)).
+        rw [ulp_neq_0 beta fexp h_neg_ne]
+        have h_mon : fexp (mag beta (-x) - 1) ≤ fexp (mag beta (-x)) :=
+          hMon _ _ (by linarith)
+        have h_bpow_le : bpow beta (fexp (mag beta (-x) - 1))
+            ≤ bpow beta (cexp beta fexp (-x)) := by
+          unfold cexp; exact bpow_le beta h_mon
+        linarith
+      · -- pred_pos(-x) = -x - ulp(-x).
+        linarith
+    linarith
+theorem succ_round_ge_id (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) :
+    x ≤ succ beta fexp (round beta fexp rnd x) := by
+  by_cases Fx : generic_format beta fexp x
+  · rw [round_generic beta fexp _ Fx]
+    exact succ_ge_id beta fexp x
+  · rcases round_DN_or_UP beta fexp rnd x with hDN | hUP
+    · rw [hDN, succ_DN_eq_UP beta fexp hValid Fx]
+      exact (round_UP_pt beta fexp hValid x).2.1
+    · rw [hUP]
+      have h_xup : x ≤ round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+        (round_UP_pt beta fexp hValid x).2.1
+      linarith [succ_ge_id beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x)]
+
+/-- Variant of `round_N_eq_DN` taking `Rnd_DN_pt`/`Rnd_UP_pt` witnesses
+explicitly. -/
+theorem round_N_eq_DN_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (choice : ℤ → Bool) {x d u : ℝ}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x d)
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x u)
+    (h : x < (d + u) / 2) :
+    round beta fexp (Znearest choice) x = d := by
+  have h_d_eq : d = round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+    Rnd_DN_pt_unique _ Hd (round_DN_pt beta fexp hValid x)
+  have h_u_eq : u = round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+    Rnd_UP_pt_unique _ Hu (round_UP_pt beta fexp hValid x)
+  rw [h_d_eq]
+  apply round_N_eq_DN beta fexp hValid choice
+  rw [← h_d_eq, ← h_u_eq]; exact h
+
+/-- Variant of `round_N_eq_UP` taking `Rnd_DN_pt`/`Rnd_UP_pt` witnesses
+explicitly. -/
+theorem round_N_eq_UP_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    (choice : ℤ → Bool) {x d u : ℝ}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x d)
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x u)
+    (h : (d + u) / 2 < x) :
+    round beta fexp (Znearest choice) x = u := by
+  have h_d_eq : d = round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+    Rnd_DN_pt_unique _ Hd (round_DN_pt beta fexp hValid x)
+  have h_u_eq : u = round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+    Rnd_UP_pt_unique _ Hu (round_UP_pt beta fexp hValid x)
+  rw [h_u_eq]
+  apply round_N_eq_UP beta fexp hValid choice
+  rw [← h_d_eq, ← h_u_eq]; exact h
 
 end LeanFlocq
