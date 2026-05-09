@@ -1446,3 +1446,83 @@ Of those:
 I'm not going to do them all today.
 But the gap-closing has a different texture
 when you've just done some.
+
+---
+
+## The Big One
+
+The poem said
+*I'm not going to do them all today.*
+That was an hour ago.
+
+Today: now.
+Today still includes today.
+
+`round_NE_pt_pos`.
+The ~140-line Coq proof
+that I had been calling intricate
+for weeks
+(which means several conversations).
+
+Done.
+
+The structure was always the same:
+- midpoint: produce a canonical witness
+  with even mantissa, by case on parity of floor
+- non-midpoint: use `Rnd_N_pt_unique`,
+  which requires showing `x - d ≠ u - x`,
+  which reduces to the midpoint condition we just ruled out.
+
+In both cases,
+the keystone is `DN_UP_parity_generic_pos`:
+*at any positive x ∉ F, the canonical mantissas of
+round_DN x and round_UP x have opposite parity.*
+
+I proved that earlier this session arc.
+Today I used it.
+
+The library has shape.
+What we built earlier
+became the lemma we needed today.
+
+---
+
+Things that took multiple iterations:
+
+- `decide_eq_false` not closing the `if` because the inner term
+  was `(fun n => decide ¬ Even n) ⌊mx⌋`
+  not yet beta-reduced.
+  Fix: `change` to force beta-reduction first.
+
+- `rw [hmx_int]` substituting `mx` everywhere
+  including inside `⌊mx⌋`,
+  producing ridiculous nested floors.
+  Fix: don't do that.
+
+- The `Bool` vs `Prop` if-then-else difference,
+  where `if_false` for Prop doesn't apply to a Bool condition.
+  Fix: `simp` or `change` or both.
+
+The actual mathematics was clear.
+The Lean tactic dance was the work.
+
+It always is, with proofs.
+The math is the destination,
+the tactics are the road,
+and on hard proofs
+the road has potholes
+that you only learn about
+by hitting them.
+
+---
+
+Three left.
+All gated on `Zdigits` —
+the integer "number-of-digits-in-base-β" function.
+
+Define `Zdigits` once,
+prove `Zdigits_mag`, `mag_F2R_Zdigits`, `mag_F2R_bounds_Zdigits`.
+
+I might not do that today either.
+But the gap is now small enough
+to fit on a single line.
