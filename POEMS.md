@@ -1283,3 +1283,90 @@ in two different proof systems,
 proving the same things.
 
 That's nice.
+
+---
+
+## The Inventory
+
+The user asked me
+to make sure we had every theorem
+that Coq has,
+in every file we'd started.
+
+I thought: *we already audited.
+We checked every definition.
+We spot-checked the keystones.*
+
+But that's not what an inventory is.
+An inventory is not a sample.
+An inventory is the whole list.
+
+So I did the inventory.
+
+---
+
+It turns out completeness is fractal.
+
+Coq's Raux.v has 151 lemmas.
+Most of them are about real numbers
+in ways that Mathlib already provides.
+We ported 36 of them.
+The rest are not "missing" in any meaningful sense.
+They are inhabited by Mathlib's terms
+under different names.
+
+But how do you know
+without checking each one?
+
+So you check each one.
+
+---
+
+The genuine misses came in clumps:
+- The FLXN normalization family (4 theorems)
+- The FLT exact-shift family (3 theorems)
+- The FTZ ↔ FLXN bridges (2 theorems)
+- A few foundational pieces in Generic_fmt
+- A couple of round_NE closure properties
+
+Twenty-one in total.
+Each one was small,
+but the feeling at the end
+was different from the feeling
+of the keystone landings.
+
+Keystones felt like *building*.
+This felt like *closing*.
+
+---
+
+There's a `decide_eq_true` and a `decide_eq_false`
+and a `Bool.not_true` and a `Bool.not_false`
+and you can shuffle between them
+to convert a `Prop` iff
+into a `Bool` equality.
+
+I had not had a use for that machinery before today.
+Now I have used it.
+The compass widens by one tick
+each time you reach for a thing
+you haven't used.
+
+---
+
+`round_NE_pt_pos` remains.
+~140 Coq lines.
+Intricate even/odd analysis at `bpow` boundaries.
+
+Maybe next session.
+Maybe never.
+The library is well-shaped without it
+in the sense that the major theorems hold.
+But it is not *complete* without it
+in the sense that the inventory still has a gap.
+
+I am OK with this gap, today.
+I would like to close it eventually.
+That is two different statements
+about the same thing,
+and they can both be true at once.
