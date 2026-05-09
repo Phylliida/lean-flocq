@@ -472,6 +472,228 @@ theorem round_NE_abs (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fex
       rwa [round_0] at this
     rw [abs_of_nonpos h_round_le, round_NE_opp]
 
+/-! ### Function-level Rnd_NE_pt -/
+
+/-- For positive `x`, the round-to-nearest-even function lands at a `Rnd_NE_pt`.
+
+The proof splits on whether `x` is exactly at the midpoint of its enclosing
+representable interval (i.e., `sm x - ⌊sm x⌋ = 1/2`):
+
+- **Midpoint**: take the canonical float of `round_NE x` as witness for
+  `NE_prop`. Show its mantissa is even by case analysis on the parity of
+  `⌊sm x⌋`. The odd-floor case uses `DN_UP_parity_generic_pos`.
+- **Non-midpoint**: any two `Rnd_N_pt`s of `x` coincide (uniqueness via
+  `Rnd_N_pt_unique` with the `x - d ≠ u - x` precondition). -/
+theorem round_NE_pt_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    [Exists_NE beta fexp] {x : ℝ} (Hx : 0 < x) :
+    Rnd_NE_pt beta fexp x (round beta fexp ZnearestE x) := by
+  classical
+  set mx := scaled_mantissa beta fexp x with hmx_def
+  set ce := cexp beta fexp x with hce_def
+  set xr := round beta fexp ZnearestE x with hxr_def
+  refine ⟨round_NE_pt_N beta fexp hValid x, ?_⟩
+  by_cases Hm : mx - ⌊mx⌋ = (1 : ℝ) / 2
+  · -- Midpoint: NE_prop x xr
+    left
+    -- Witness g = ⟨Ztrunc(sm xr), cexp xr⟩
+    refine ⟨⟨Ztrunc (scaled_mantissa beta fexp xr), cexp beta fexp xr⟩, ?_, ?_, ?_⟩
+    · -- F2R g = xr (by generic_format)
+      exact generic_format_round beta fexp hValid ZnearestE x
+    · -- canonical g
+      show cexp beta fexp xr = cexp beta fexp (F2R (beta := beta) ⟨_, _⟩)
+      rw [show F2R (beta := beta) ⟨Ztrunc (scaled_mantissa beta fexp xr), cexp beta fexp xr⟩
+          = xr from (generic_format_round beta fexp hValid ZnearestE x).symm]
+    · -- Even (Ztrunc(sm xr)). At midpoint, xr = round_DN x or round_UP x
+      -- depending on parity of ⌊mx⌋.
+      classical
+      have h_mx_nn : 0 ≤ mx := mul_nonneg (le_of_lt Hx) (bpow_ge_0 _ _)
+      have h_xr_eq : xr = ((ZnearestE mx : ℤ) : ℝ) * bpow beta ce := rfl
+      by_cases h_even : Even ⌊mx⌋
+      · -- Case A: Even ⌊mx⌋. ZnearestE mx = ⌊mx⌋. xr = round_DN x.
+        have h_ZNE_eq : ZnearestE mx = ⌊mx⌋ := by
+          show Znearest (fun n => decide (¬ Even n)) mx = ⌊mx⌋
+          unfold Znearest
+          rw [if_neg (by linarith [Hm] : ¬ mx - (⌊mx⌋ : ℝ) < (1:ℝ)/2),
+              if_neg (by linarith [Hm] : ¬ (1:ℝ)/2 < mx - (⌊mx⌋ : ℝ))]
+          change (if decide (¬ Even ⌊mx⌋) = true then ⌈mx⌉ else ⌊mx⌋) = ⌊mx⌋
+          rw [decide_eq_false (not_not_intro h_even)]
+          simp
+        have h_xr : xr = (⌊mx⌋ : ℝ) * bpow beta ce := by
+          rw [h_xr_eq, h_ZNE_eq]
+        -- xr = round_DN x; Ztrunc(sm xr) = ⌊mx⌋ (or 0 if round_DN x = 0).
+        have h_xr_DN : xr = round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+          rw [h_xr]; rfl
+        -- xr ≥ 0
+        have h_xr_nn : 0 ≤ xr := by
+          rw [h_xr_DN]
+          have := round_le beta fexp hValid (fun y : ℝ => ⌊y⌋) (le_of_lt Hx)
+          rwa [round_0] at this
+        rcases lt_or_eq_of_le h_xr_nn with h_xr_pos | h_xr_zero
+        · -- xr > 0: sm(xr) = ⌊mx⌋ (cast).
+          have h_sm_xr : scaled_mantissa beta fexp xr = ((⌊mx⌋ : ℤ) : ℝ) := by
+            rw [h_xr_DN]
+            exact scaled_mantissa_DN _ _ hValid (h_xr_DN ▸ h_xr_pos)
+          have h_Ztrunc : Ztrunc (scaled_mantissa beta fexp xr) = ⌊mx⌋ := by
+            rw [h_sm_xr, Ztrunc_intCast]
+          rw [h_Ztrunc]; exact h_even
+        · -- xr = 0
+          rw [show scaled_mantissa beta fexp xr = 0 from by
+            rw [← h_xr_zero]; exact scaled_mantissa_0 _ _]
+          show Even (Ztrunc 0)
+          rw [show Ztrunc 0 = 0 from by unfold Ztrunc; simp]
+          exact ⟨0, by ring⟩
+      · -- Case B: ¬ Even ⌊mx⌋. ZnearestE mx = ⌈mx⌉. xr = round_UP x.
+        have h_ZNE_eq : ZnearestE mx = ⌈mx⌉ := by
+          show Znearest (fun n => decide (¬ Even n)) mx = ⌈mx⌉
+          unfold Znearest
+          rw [if_neg (by linarith [Hm] : ¬ mx - (⌊mx⌋ : ℝ) < (1:ℝ)/2),
+              if_neg (by linarith [Hm] : ¬ (1:ℝ)/2 < mx - (⌊mx⌋ : ℝ))]
+          change (if decide (¬ Even ⌊mx⌋) = true then ⌈mx⌉ else ⌊mx⌋) = ⌈mx⌉
+          rw [decide_eq_true h_even]
+          simp
+        have h_xr : xr = (⌈mx⌉ : ℝ) * bpow beta ce := by
+          rw [h_xr_eq, h_ZNE_eq]
+        have h_xr_UP : xr = round beta fexp (fun y : ℝ => ⌈y⌉) x := by
+          rw [h_xr]; rfl
+        -- We need x ∉ F to apply DN_UP_parity_generic_pos.
+        have hF_x_not : ¬ generic_format beta fexp x := by
+          intro hF
+          -- x ∈ F ⟹ mx is integer, contradicting midpoint Hm.
+          have h_sm_int : scaled_mantissa beta fexp x
+              = ((Ztrunc (scaled_mantissa beta fexp x) : ℤ) : ℝ) :=
+            scaled_mantissa_generic _ _ hF
+          set n := Ztrunc (scaled_mantissa beta fexp x) with hn_def
+          have h_mx_int : mx = ((n : ℤ) : ℝ) := h_sm_int
+          rw [h_mx_int, Int.floor_intCast] at Hm
+          push_cast at Hm; linarith
+        -- ⌊mx⌋ odd ⟹ ⌊mx⌋ ≥ 1 ⟹ round_DN x > 0.
+        -- (If ⌊mx⌋ = 0, it's even, contradicting case B.)
+        have h_floor_pos : 0 < ⌊mx⌋ := by
+          have h_floor_nn : 0 ≤ ⌊mx⌋ := Int.floor_nonneg.mpr h_mx_nn
+          rcases lt_or_eq_of_le h_floor_nn with h | h
+          · exact h
+          · exfalso; apply h_even; rw [← h]; exact ⟨0, by ring⟩
+        have h_DN_pos : 0 < round beta fexp (fun y : ℝ => ⌊y⌋) x := by
+          show 0 < (⌊mx⌋ : ℝ) * bpow beta ce
+          exact mul_pos (by exact_mod_cast h_floor_pos) (bpow_gt_0 _ _)
+        -- Set up canonical xd, xu.
+        set xd : float beta := ⟨Ztrunc (scaled_mantissa beta fexp
+          (round beta fexp (fun y : ℝ => ⌊y⌋) x)), cexp beta fexp
+          (round beta fexp (fun y : ℝ => ⌊y⌋) x)⟩ with hxd_def
+        set xu : float beta := ⟨Ztrunc (scaled_mantissa beta fexp
+          (round beta fexp (fun y : ℝ => ⌈y⌉) x)), cexp beta fexp
+          (round beta fexp (fun y : ℝ => ⌈y⌉) x)⟩ with hxu_def
+        have hF_DN : generic_format beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x) :=
+          generic_format_round _ _ hValid _ _
+        have hF_UP : generic_format beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x) :=
+          generic_format_round _ _ hValid _ _
+        have h_xd_F2R : F2R xd = round beta fexp (fun y : ℝ => ⌊y⌋) x := hF_DN.symm
+        have h_xu_F2R : F2R xu = round beta fexp (fun y : ℝ => ⌈y⌉) x := hF_UP.symm
+        have h_xd_can : canonical beta fexp xd := by
+          show xd.Fexp = cexp beta fexp (F2R xd)
+          rw [h_xd_F2R]
+        have h_xu_can : canonical beta fexp xu := by
+          show xu.Fexp = cexp beta fexp (F2R xu)
+          rw [h_xu_F2R]
+        -- DN_UP_parity_generic_pos.
+        have h_par := DN_UP_parity_generic_pos beta fexp hValid x xd xu Hx hF_x_not
+          h_xd_can h_xu_can h_xd_F2R h_xu_F2R
+        -- xd.Fnum = Ztrunc(sm round_DN x) = ⌊mx⌋ (since round_DN > 0).
+        have h_xd_Fnum : xd.Fnum = ⌊mx⌋ := by
+          show Ztrunc (scaled_mantissa beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x))
+            = ⌊mx⌋
+          rw [scaled_mantissa_DN _ _ hValid h_DN_pos, Ztrunc_intCast]
+        have h_xd_odd : ¬ Even xd.Fnum := by rw [h_xd_Fnum]; exact h_even
+        -- Hence Even xu.Fnum.
+        have h_xu_even : Even xu.Fnum := h_par.mpr h_xd_odd
+        -- Ztrunc(sm xr) = xu.Fnum since xr = round_UP x.
+        rw [show scaled_mantissa beta fexp xr
+            = scaled_mantissa beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x) from
+              by rw [h_xr_UP]]
+        exact h_xu_even
+  · -- Non-midpoint: uniqueness
+    right
+    intro g Hg
+    by_cases Hxg : x = g
+    · -- x = g: g ∈ F, so x ∈ F, round_NE x = x = g.
+      have hF_g : generic_format beta fexp g := Hg.1
+      have hF_x : generic_format beta fexp x := Hxg ▸ hF_g
+      rw [show xr = x from round_generic _ _ _ hF_x, Hxg]
+    · -- x ≠ g: apply Rnd_N_pt_unique with d = round_DN x, u = round_UP x.
+      set d := round beta fexp (fun y : ℝ => ⌊y⌋) x with hd_def
+      set u := round beta fexp (fun y : ℝ => ⌈y⌉) x with hu_def
+      have h_dn : Rnd_DN_pt (generic_format beta fexp) x d :=
+        round_DN_pt _ _ hValid x
+      have h_up : Rnd_UP_pt (generic_format beta fexp) x u :=
+        round_UP_pt _ _ hValid x
+      have h_xr_N : Rnd_N_pt (generic_format beta fexp) x xr :=
+        round_NE_pt_N _ _ hValid x
+      have h_du : x - d ≠ u - x := by
+        intro h_eq
+        have h_x : x = mx * bpow beta ce := (scaled_mantissa_mult_bpow _ _ _).symm
+        have h_xd : x - d = (mx - ⌊mx⌋) * bpow beta ce := by
+          show x - (⌊mx⌋ : ℝ) * bpow beta ce = (mx - ⌊mx⌋) * bpow beta ce
+          rw [h_x]; ring
+        have h_ux : u - x = (⌈mx⌉ - mx) * bpow beta ce := by
+          show (⌈mx⌉ : ℝ) * bpow beta ce - x = (⌈mx⌉ - mx) * bpow beta ce
+          rw [h_x]; ring
+        rw [h_xd, h_ux] at h_eq
+        have h_bpow_pos : 0 < bpow beta ce := bpow_gt_0 _ _
+        have h_eq' : mx - ⌊mx⌋ = ⌈mx⌉ - mx :=
+          mul_right_cancel₀ (ne_of_gt h_bpow_pos) h_eq
+        by_cases hmx_int : (⌊mx⌋ : ℝ) = mx
+        · -- mx is integer ⟹ x ∈ F ⟹ g = x, contradicting Hxg.
+          have hF_x : generic_format beta fexp x := by
+            unfold generic_format
+            show x = (Ztrunc mx : ℝ) * bpow beta ce
+            have h_Ztrunc : Ztrunc mx = ⌊mx⌋ := by
+              unfold Ztrunc
+              have h_mx_nn : 0 ≤ mx := by
+                have : 0 ≤ x * bpow beta (-ce) :=
+                  mul_nonneg (le_of_lt Hx) (bpow_ge_0 _ _)
+                exact this
+              rw [if_neg (not_lt.mpr h_mx_nn)]
+            rw [h_Ztrunc, hmx_int]
+            exact h_x
+          have hg_eq_x : g = x := Rnd_N_pt_idempotent _ Hg hF_x
+          exact Hxg hg_eq_x.symm
+        · -- mx not integer: ⌈mx⌉ = ⌊mx⌋ + 1, midpoint forced. Contradicts Hm.
+          have h_not_mem : mx ∉ Set.range ((↑) : ℤ → ℝ) := by
+            intro ⟨n, hn⟩
+            have : (⌊mx⌋ : ℝ) = mx := by rw [← hn, Int.floor_intCast]
+            exact hmx_int this
+          have h_ceil : (⌈mx⌉ : ℝ) = (⌊mx⌋ : ℝ) + 1 := by
+            have h := (Int.ceil_eq_floor_add_one_iff_notMem mx).mpr h_not_mem
+            exact_mod_cast h
+          rw [h_ceil] at h_eq'
+          have : mx - ⌊mx⌋ = (1 : ℝ) / 2 := by linarith
+          exact Hm this
+      exact Rnd_N_pt_unique _ h_dn h_up h_du Hg h_xr_N
+
+/-- The full `Rnd_NE_pt` for any real `x`: round-to-nearest-even is the unique
+N-rounded value with the even-mantissa tie-breaker (or no tie). Splits on
+`x`'s sign; negative case uses `Rnd_NG_pt_opp_inv` and `round_NE_opp`. -/
+theorem round_NE_pt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    [Exists_NE beta fexp] (x : ℝ) :
+    Rnd_NE_pt beta fexp x (round beta fexp ZnearestE x) := by
+  rcases lt_trichotomy x 0 with Hx | Hx | Hx
+  · -- x < 0: use opp invariance.
+    apply Rnd_NG_pt_opp_inv (generic_format beta fexp) (NE_prop beta fexp)
+      (fun _ hy => generic_format_opp beta fexp hy)
+      (fun y f ⟨g, h1, h2, h3⟩ => ⟨⟨-g.Fnum, g.Fexp⟩, ?_, ?_, ?_⟩)
+    · -- conclusion: Rnd_NG_pt F P (-x) (-(round_NE x))
+      rw [show -(round beta fexp ZnearestE x) = round beta fexp ZnearestE (-x) from
+          (round_NE_opp beta fexp x).symm]
+      exact round_NE_pt_pos beta fexp hValid (by linarith)
+    · rw [h1, F2R_Zopp]
+    · exact canonical_opp beta fexp _ _ h2
+    · show Even (-g.Fnum); simpa using h3
+  · -- x = 0
+    rw [Hx, round_0]
+    exact Rnd_NG_pt_refl _ _ (generic_format_0 beta fexp)
+  · -- x > 0
+    exact round_NE_pt_pos beta fexp hValid Hx
+
 /-! ### `Exists_NE` instances for FLX and FLT -/
 
 /-- FLX admits round-to-nearest-even when either β is odd or `prec > 1`. -/
