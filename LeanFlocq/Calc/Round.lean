@@ -10,6 +10,7 @@ floats to canonical exponents.
 import LeanFlocq.Calc.Bracket
 import LeanFlocq.Core.Generic_fmt
 import LeanFlocq.Core.FIX
+import LeanFlocq.Core.Round_NE
 
 namespace LeanFlocq
 
@@ -387,6 +388,203 @@ theorem inbetween_float_ZR_sign {x : ℝ} {m : ℤ} {l : location}
       F2R (beta := beta) ⟨cond_Zopp (decide (x < 0)) m, cexp beta fexp x⟩ :=
   inbetween_float_round_sign beta fexp Ztrunc (fun _ m _ => m)
     (fun _ _ _ h => inbetween_int_ZR_sign h) Hx
+
+/-! ## Round-to-nearest (N) -/
+
+/-- `round_N p l`: tells whether to increment when rounding to nearest with
+parity `p` (used for tie-breaking).
+- `Exact` and `Inexact .lt`: don't increment.
+- `Inexact .eq` (tie): increment iff `p`.
+- `Inexact .gt`: always increment. -/
+def round_N (p : Bool) (l : location) : Bool :=
+  match l with
+  | .Exact => false
+  | .Inexact .lt => false
+  | .Inexact .eq => p
+  | .Inexact .gt => true
+
+theorem inbetween_int_N (choice : ℤ → Bool) {x : ℝ} {m : ℤ} {l : location}
+    (Hl : inbetween_int m x l) :
+    Znearest choice x = cond_incr (round_N (choice m) l) m := by
+  rcases Hl with hE | ⟨c, h_lo, h_hi, hc⟩
+  · -- Exact: x = m
+    rw [hE]
+    have := (valid_rnd_N choice).Zrnd_intCast m
+    show Znearest choice ((m : ℤ) : ℝ) = cond_incr (round_N (choice m) location.Exact) m
+    rw [this]; simp [cond_incr, round_N]
+  · -- Inexact: m < x < m+1, c = compare x ((m + m+1)/2)
+    have h_floor : ⌊x⌋ = m :=
+      inbetween_int_DN (.Inexact c h_lo h_hi hc)
+    have h_lo' : (m : ℝ) < x := h_lo
+    have h_hi' : x < ((m + 1 : ℤ) : ℝ) := h_hi
+    -- Rewrite hc: compare x ((m + (m+1))/2) = compare (x - m) (1/2)
+    have h_mid : (((m : ℝ) + ((m + 1 : ℤ) : ℝ)) / 2) = (m : ℝ) + 1/2 := by
+      push_cast; ring
+    rw [h_mid] at hc
+    have h_sub : compare x ((m : ℝ) + 1/2) = compare (x - (m : ℝ)) (1/2) := by
+      rcases lt_trichotomy x ((m : ℝ) + 1/2) with h | h | h
+      · rw [compare_lt_iff_lt.mpr h, compare_lt_iff_lt.mpr (by linarith)]
+      · rw [compare_eq_iff_eq.mpr h, compare_eq_iff_eq.mpr (by linarith)]
+      · rw [compare_gt_iff_gt.mpr h, compare_gt_iff_gt.mpr (by linarith)]
+    rw [h_sub] at hc
+    -- Now Znearest x. Note ⌈x⌉ = m + 1 (since x > m and x ≠ m+1).
+    have h_x_lt_int : x < ((m + 1 : ℤ) : ℝ) := h_hi
+    have h_x_lt_real : x < (m : ℝ) + 1 := by push_cast at h_x_lt_int; exact h_x_lt_int
+    have h_ceil : ⌈x⌉ = m + 1 := by
+      apply Int.ceil_eq_iff.mpr
+      push_cast
+      exact ⟨by linarith, by linarith [h_x_lt_real.le]⟩
+    unfold Znearest
+    rw [h_floor]
+    -- Case-split on c
+    rcases c with _ | _ | _
+    · -- c = .lt: compare (x - m) (1/2) = .lt → x - m < 1/2
+      have h_lt : x - (m : ℝ) < 1/2 := compare_lt_iff_lt.mp hc
+      have h_lt' : x - ((m : ℤ) : ℝ) < 1/2 := by push_cast; exact h_lt
+      rw [if_pos h_lt']
+      simp [cond_incr, round_N]
+    · -- c = .eq: compare (x - m) (1/2) = .eq → x - m = 1/2
+      have h_eq : x - (m : ℝ) = 1/2 := compare_eq_iff_eq.mp hc
+      have h_eq' : x - ((m : ℤ) : ℝ) = 1/2 := by push_cast; exact h_eq
+      rw [if_neg (by linarith : ¬ x - ((m : ℤ) : ℝ) < 1/2),
+          if_neg (by linarith : ¬ 1/2 < x - ((m : ℤ) : ℝ))]
+      cases hc' : choice m
+      · simp [cond_incr, round_N, hc', h_ceil]
+      · simp [cond_incr, round_N, hc', h_ceil]
+    · -- c = .gt: compare (x - m) (1/2) = .gt → 1/2 < x - m
+      have h_gt : 1/2 < x - (m : ℝ) := compare_gt_iff_gt.mp hc
+      have h_gt' : 1/2 < x - ((m : ℤ) : ℝ) := by push_cast; exact h_gt
+      rw [if_neg (by linarith : ¬ x - ((m : ℤ) : ℝ) < 1/2), if_pos h_gt']
+      rw [h_ceil]
+      simp [cond_incr, round_N]
+
+theorem inbetween_int_N_sign (choice : ℤ → Bool) {x : ℝ} {m : ℤ} {l : location}
+    (Hl : inbetween_int m |x| l) :
+    Znearest choice x =
+      cond_Zopp (decide (x < 0))
+        (cond_incr (round_N
+          (if (decide (x < 0) : Bool) then !(choice (-(m + 1))) else choice m) l) m) := by
+  rcases lt_or_ge x 0 with hx | hx
+  · have h_dec : decide (x < 0) = true := by simp [hx]
+    rw [h_dec, cond_Zopp_true]
+    have h_abs : |x| = -x := abs_of_neg hx
+    rw [h_abs] at Hl
+    -- Use Znearest_opp: Znearest choice x = -(Znearest (fun t => !choice (-(t+1))) (-x))
+    have h_x_eq : x = -(-x) := by ring
+    rw [h_x_eq, Znearest_opp]
+    -- Now apply inbetween_int_N to (-x)
+    rw [inbetween_int_N (fun t => !choice (-(t+1))) Hl]
+    simp
+  · have hxn : ¬ x < 0 := not_lt.mpr hx
+    have h_dec : decide (x < 0) = false := by simp [hxn]
+    rw [h_dec, cond_Zopp_false]
+    have h_abs : |x| = x := abs_of_nonneg hx
+    rw [h_abs] at Hl
+    rw [inbetween_int_N choice Hl]
+    simp
+
+/-! ## Round-to-nearest-even (NE) -/
+
+theorem inbetween_int_NE {x : ℝ} {m : ℤ} {l : location}
+    (Hl : inbetween_int m x l) :
+    ZnearestE x = cond_incr (round_N (decide (¬ Even m)) l) m := by
+  unfold ZnearestE
+  exact inbetween_int_N (fun n => decide (¬ Even n)) Hl
+
+theorem inbetween_float_NE {x : ℝ} {m : ℤ} {l : location}
+    (Hl : inbetween_float beta m (cexp beta fexp x) x l) :
+    round beta fexp ZnearestE x =
+      F2R (beta := beta) ⟨cond_incr (round_N (decide (¬ Even m)) l) m, cexp beta fexp x⟩ :=
+  inbetween_float_round beta fexp ZnearestE
+    (fun m l => cond_incr (round_N (decide (¬ Even m)) l) m)
+    (fun _ _ _ h => inbetween_int_NE h) Hl
+
+theorem inbetween_int_NE_sign {x : ℝ} {m : ℤ} {l : location}
+    (Hl : inbetween_int m |x| l) :
+    ZnearestE x =
+      cond_Zopp (decide (x < 0)) (cond_incr (round_N (decide (¬ Even m)) l) m) := by
+  unfold ZnearestE
+  rw [inbetween_int_N_sign (fun n => decide (¬ Even n)) Hl]
+  -- Show inner choices match.
+  by_cases h : x < 0
+  · have h_inner_eq : (! decide (¬ Even (-(m + 1)))) = decide (¬ Even m) := by
+      by_cases hm : Even m
+      · have h1 : ¬ Even (-(m + 1)) := by
+          rw [even_neg]; simp only [Int.even_iff]
+          rcases hm with ⟨k, rfl⟩; omega
+        have hd1 : decide (¬ Even (-(m + 1))) = true := decide_eq_true h1
+        have hd2 : decide (¬ Even m) = false := decide_eq_false (not_not_intro hm)
+        rw [hd1, hd2]; rfl
+      · have h1 : Even (-(m + 1)) := by
+          rw [even_neg]
+          rw [Int.not_even_iff_odd] at hm
+          rcases hm with ⟨k, rfl⟩
+          exact ⟨k + 1, by ring⟩
+        have hd1 : decide (¬ Even (-(m + 1))) = false := decide_eq_false (not_not_intro h1)
+        have hd2 : decide (¬ Even m) = true := decide_eq_true hm
+        rw [hd1, hd2]; rfl
+    simp only [h, decide_true, ↓reduceIte, cond_Zopp_true, h_inner_eq]
+  · -- x ≥ 0: outer if false → choose else branch (decide (¬ Even m))
+    have hd : decide (x < 0) = false := by simp [h]
+    rw [hd]
+    simp
+
+theorem inbetween_float_NE_sign {x : ℝ} {m : ℤ} {l : location}
+    (Hx : inbetween_float beta m (cexp beta fexp x) |x| l) :
+    round beta fexp ZnearestE x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0)) (cond_incr (round_N (decide (¬ Even m)) l) m),
+         cexp beta fexp x⟩ :=
+  inbetween_float_round_sign beta fexp ZnearestE
+    (fun _ m l => cond_incr (round_N (decide (¬ Even m)) l) m)
+    (fun _ _ _ h => inbetween_int_NE_sign h) Hx
+
+/-! ## Round-to-nearest-away (NA) -/
+
+theorem inbetween_int_NA {x : ℝ} {m : ℤ} {l : location}
+    (Hl : inbetween_int m x l) :
+    ZnearestA x = cond_incr (round_N (decide (0 ≤ m)) l) m := by
+  unfold ZnearestA
+  exact inbetween_int_N (fun n => decide (0 ≤ n)) Hl
+
+theorem inbetween_float_NA {x : ℝ} {m : ℤ} {l : location}
+    (Hl : inbetween_float beta m (cexp beta fexp x) x l) :
+    round beta fexp ZnearestA x = F2R (beta := beta)
+      ⟨cond_incr (round_N (decide (0 ≤ m)) l) m, cexp beta fexp x⟩ :=
+  inbetween_float_round beta fexp ZnearestA
+    (fun m l => cond_incr (round_N (decide (0 ≤ m)) l) m)
+    (fun _ _ _ h => inbetween_int_NA h) Hl
+
+theorem inbetween_int_NA_sign {x : ℝ} {m : ℤ} {l : location}
+    (Hl : inbetween_int m |x| l) :
+    ZnearestA x = cond_Zopp (decide (x < 0)) (cond_incr (round_N true l) m) := by
+  unfold ZnearestA
+  rw [inbetween_int_N_sign (fun n => decide (0 ≤ n)) Hl]
+  -- Show: 0 ≤ m (from |x| < m+1 with |x| ≥ 0).
+  have h_bounds := inbetween_bounds (Hdu := by push_cast; linarith) Hl
+  have h_mp1_pos : 0 < ((m + 1 : ℤ) : ℝ) := lt_of_le_of_lt (abs_nonneg x) h_bounds.2
+  have h_m_nn_int : 0 ≤ m := by
+    have : (0 : ℤ) < m + 1 := by exact_mod_cast h_mp1_pos
+    omega
+  by_cases h : x < 0
+  · have h_inner_eq : (! decide (0 ≤ -(m + 1))) = true := by
+      have h1 : decide (0 ≤ -(m + 1)) = false := decide_eq_false (by omega)
+      rw [h1]; rfl
+    simp only [h, decide_true, ↓reduceIte, cond_Zopp_true, h_inner_eq]
+  · have hd : decide (x < 0) = false := by simp [h]
+    rw [hd]
+    have hd2 : decide (0 ≤ m) = true := decide_eq_true h_m_nn_int
+    simp [hd2]
+
+theorem inbetween_float_NA_sign {x : ℝ} {m : ℤ} {l : location}
+    (Hx : inbetween_float beta m (cexp beta fexp x) |x| l) :
+    round beta fexp ZnearestA x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0)) (cond_incr (round_N true l) m),
+         cexp beta fexp x⟩ :=
+  inbetween_float_round_sign beta fexp ZnearestA
+    (fun _ m l => cond_incr (round_N true l) m)
+    (fun _ _ _ h => inbetween_int_NA_sign h) Hx
 
 end Fcalc_round_fexp
 
