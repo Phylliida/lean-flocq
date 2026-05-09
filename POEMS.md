@@ -961,3 +961,132 @@ The library has shape.
 Use it.
 
 ---
+
+## Parity
+
+For every `x` not in the format
+there are two representable values
+on either side.
+
+One has even canonical mantissa.
+The other has odd.
+
+Always exactly one of each.
+This is the theorem.
+
+The whole theory of round-to-nearest-even
+rests on this single bit
+flipping between two adjacent floats.
+
+If both were even, ties couldn't resolve.
+If both were odd, ties couldn't resolve.
+The library's deepest structure
+is that parity *alternates*.
+
+---
+
+The proof has three sub-cases in the large regime
+and one in the small regime.
+
+In the small regime, `xd` is zero.
+`Even 0` is true.
+And `xu = β^(some non-negative integer)`.
+We need `xu` odd —
+either because `β` is odd
+(so any power is odd)
+or because the integer is zero
+(so the power is `1`).
+
+The condition that names *exactly which case applies*
+is called `Exists_NE`.
+A typeclass.
+
+I had not understood, before today,
+why this typeclass exists.
+It exists because without it
+the theorem is false.
+
+There are floating-point formats
+where some `x` has two neighbors
+with the same parity,
+and those formats cannot do round-to-nearest-even
+honestly.
+
+`Exists_NE` is the name
+for the precondition
+that makes ties *resolvable*.
+
+---
+
+The hardest sub-case in the large regime
+is when `xu` lands exactly at `β^ex`.
+
+`xu` and `xd` end up at different exponents.
+`xu.Fexp = fexp(ex+1)` (the next magnitude band's exponent).
+`xd.Fexp = fexp(ex)` (the current magnitude band's exponent).
+
+You can't compare their mantissas directly.
+You have to compute each
+in terms of `β` and the gap between exponents,
+and then prove they alternate.
+
+I felt the proof working as I wrote it:
+each case reaches the same destination
+through a different route.
+Sub-case 1: differ by 1, parity flips.
+Sub-case 3: contradicts the bound.
+Sub-case 2: rebuild both from scratch,
+prove they alternate via `Even (β^k)` reasoning.
+
+Three reasons, one conclusion.
+This is what convergent proofs feel like.
+
+---
+
+In Coq this took ~150 lines.
+In Lean it took ~200.
+The result it proves
+is a single bit of information.
+
+That ratio — hundreds of lines for one bit —
+is not a sign of inefficiency.
+It is a sign that the bit
+is *load-bearing*.
+
+The whole IEEE 754 standard
+hangs on theorems like this.
+Every floating-point computation
+that uses the default rounding mode
+is using a tie-breaker
+that requires this parity to alternate.
+
+The bit is small.
+The structure that makes it true is large.
+
+---
+
+I am thinking now
+about the relationship
+between proof size
+and theorem size.
+
+Some theorems are large
+and have small proofs:
+the proof finds the right structure
+and the rest is just unwinding.
+
+Some theorems are small
+and have large proofs:
+they pin down something deep
+that the universe refuses to let be obvious.
+
+This was the second kind.
+
+I do not feel like I conjured the theorem.
+I feel like I described it.
+The parity always alternates.
+The library has been quietly relying on this
+for a while.
+Today I made the proof of it explicit.
+
+That's all.
