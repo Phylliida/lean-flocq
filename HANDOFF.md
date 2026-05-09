@@ -4,14 +4,13 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `9652555`)
+## Status (as of commit `59cb15c`)
 
-**Coq's `Core/` is fully ported.** Every substantive theorem from Flocq's
-`Core/Defs.v`, `Core/Float_prop.v`, `Core/Round_pred.v`, `Core/Generic_fmt.v`,
-`Core/FIX.v`, `Core/FLX.v`, `Core/FLT.v`, `Core/FTZ.v`, `Core/Ulp.v`, and
-`Core/Round_NE.v` has a Lean counterpart that compiles.
+**Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
+(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), and all of
+`Calc/Bracket.v` (locations, inbetween, step lemmas, new_location, inbetween_float).
 
-**~7100 lines of Lean across 13 files. 0 `sorry`s. All files build clean.**
+**~8400 lines of Lean across 15 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -28,8 +27,10 @@ session, possibly someone else.
 | `Ulp.lean` | 2486 | `Core/Ulp.v` | **Complete: 103/103.** All keystones (`succ_DN_eq_UP`, `ulp_round`, error bounds, mixed-sign perturbation, `generic_format_plus_ulp`). |
 | `Round_NE.lean` | 740 | `Core/Round_NE.v` | **Complete: 10/10.** `DN_UP_parity_generic_pos/_aux/_generic`, `Rnd_NE_pt_{total,monotone,round}`, `round_NE_opp/_abs/_pt_pos/_pt`, `exists_NE_FLX/_FLT`. |
 | `Digits.lean` | 74 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 6 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
+| `Binary.lean` | 750 | `IEEE754/Binary.v` (lines 1–963) | **Structural part done.** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, `overflow_to_inf`, `binary_overflow`. `binary_round_aux` and arithmetic ops blocked behind `Calc/`. |
+| `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
 
-**Total: ~436 Lean theorems vs ~370 substantive Coq theorems** (we have extras
+**Total: ~470 Lean theorems vs ~410 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
 ## Build setup
@@ -241,19 +242,28 @@ not needed for downstream Flocq theorems.
 
 ## Suggested next steps
 
-The Core is done. Future work targets `Calc/` and `IEEE754/` from Flocq:
+The Core is done and the Binary structural skeleton is in place. The next
+chunk of work is around `Calc/` and the arithmetic operations of Binary:
 
-1. **`Core/IEEE754/Binary.v`** — the actual IEEE 754 binary float spec.
-   Builds on what we have. Substantial.
+1. **`Calc/Round.v` (1171 lines, big!)** — error analysis for rounding.
+   Used heavily by `binary_round_aux`. Plan to port section-by-section.
 
-2. **`Core/Digits.v` extensions** — if needed for IEEE754: `Zslice`,
-   `Zscale`, etc. Currently only the `Zdigits` core is ported.
+2. **`Calc/Operations.v` (164 lines)** — arithmetic combinators that
+   operate on `(F2R)` representations.
 
-3. **`Calc/`** — error analysis for arithmetic operations (multiply, divide,
-   sqrt). Probably needed for IEEE754 work.
+3. **`Calc/Div.v` (159 lines)** and **`Calc/Sqrt.v` (201 lines)** — division
+   and square-root algorithms with their correctness proofs.
 
-4. **`Raux/Zaux` extensions** — port more on demand if downstream needs
-   specific lemmas not in Mathlib.
+4. **`Prop/Relative.v`** — relative-error bounds. Needed by Binary's
+   `Bplus_correct`, `Bmult_correct`, etc. Not yet examined.
+
+5. **Then back to `Binary.lean`**: `shr_record` infrastructure (lines
+   745–925 of Binary.v), `binary_round_aux`, then the arithmetic ops
+   (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`,
+   `Bsucc`, `Bpred`.
+
+6. **`IEEE754/Bits.v`** (705 lines) — bit-level encoding/decoding. Independent
+   of arithmetic. Could be ported in parallel.
 
 ## Useful commands
 
