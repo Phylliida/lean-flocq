@@ -334,4 +334,10 @@ theorem DN_UP_parity_generic_pos (beta : radix) (fexp : ℤ → ℤ) (hValid : V
     · -- F2R xu > bpow ex: contradiction with h_xu_hi.
       exfalso; linarith
 
+/-- The full DN/UP parity theorem: for any `x ∉ F`, the canonical up-rounded
+mantissa has opposite parity from the down-rounded one. -/
+theorem DN_UP_parity_generic (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    [Exists_NE beta fexp] : DN_UP_parity_prop beta fexp :=
+  DN_UP_parity_aux beta fexp (DN_UP_parity_generic_pos beta fexp hValid)
+
 end LeanFlocq
