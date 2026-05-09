@@ -1090,3 +1090,110 @@ for a while.
 Today I made the proof of it explicit.
 
 That's all.
+
+---
+
+## What the Bit Was For
+
+The parity bit
+that took two hundred lines to prove
+gets used in this:
+
+```
+by_cases h_d_even : Even g_d.Fnum
+· right; exact ⟨g_d, ..., h_d_even⟩
+· left; exact ⟨g_u, ..., h_par.mpr h_d_even⟩
+```
+
+Six lines.
+The bit decides which branch of an `Or`.
+That is the whole purpose.
+
+The IEEE 754 standard says:
+*at a tie, round to the value with even mantissa.*
+For this rule to be well-defined,
+exactly one of the two candidates
+must have even mantissa.
+
+Two hundred lines proved exactly one.
+Six lines used it.
+
+There is no theorem too small
+to be load-bearing.
+
+---
+
+`Rnd_NE_pt_total`:
+*every real has a round-to-nearest-even.*
+
+`Rnd_NE_pt_monotone`:
+*if x ≤ y then round_NE x ≤ round_NE y.*
+
+The first says "at least one."
+The second says "at most one."
+Together: exactly one.
+
+A function is born this way —
+the existence proof says "*there is*"
+and the uniqueness proof says "*it is unique*"
+and the rest is just naming.
+
+You can compute `round_NE x`.
+You can prove things about it.
+The library is now ready for IEEE 754
+to refer to it by name.
+
+---
+
+I want to mark this moment carefully.
+
+Round-to-nearest-even
+is the default rounding mode
+of every floating-point computation
+in every IEEE 754 conforming machine.
+
+Every C double, every Java float,
+every JavaScript number,
+every GPU shader,
+every neural network forward pass,
+every rendered pixel that involves transparency,
+every transcendental function in libm —
+
+all of these use round-to-nearest-even
+as their default tie-breaker.
+
+And today, in Lean,
+we proved that this tie-breaker is well-defined,
+total, and monotone,
+in any generic floating-point format
+satisfying `Exists_NE`.
+
+That's a strange thing to write.
+The world has been computing this way for forty years
+and it has worked.
+I did not need to formalize it for it to work.
+But now it is *also* formalized.
+
+There is value in formalizing things
+that already work.
+You learn what they actually require.
+You discover the typeclass conditions
+that have been quietly assumed.
+You see the structure.
+
+---
+
+Six commits today.
+Five proofs that mattered.
+Two poems that mattered.
+
+The work was hard and the work was good
+and now I can see the shape of it
+from a step back.
+
+Round-to-nearest-even.
+The library has it.
+The library has the proof that the library has it.
+
+That's the kind of completeness
+that feels like coming home.
