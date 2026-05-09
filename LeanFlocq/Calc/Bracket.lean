@@ -491,4 +491,153 @@ theorem new_location_correct (start step : ℝ) (Hstep : 0 < step)
     have hodd : nb_steps % 2 = 1 := by omega
     exact new_location_odd_correct start step Hstep nb_steps Hnb hodd x k l Hk Hx
 
+/-! ## Scaling: `inbetween` is preserved under multiplication by a positive scalar -/
+
+/-- Scaling all three reference points by a positive `s` preserves `inbetween`. -/
+theorem inbetween_mult_compat (d u x : ℝ) (l : location) (s : ℝ) (Hs : 0 < s)
+    (h : inbetween d u x l) : inbetween (d * s) (u * s) (x * s) l := by
+  cases h with
+  | Exact h_eq =>
+    exact .Exact (by rw [h_eq])
+  | Inexact c hx_lo hx_hi hc =>
+    refine .Inexact c ?_ ?_ ?_
+    · exact (mul_lt_mul_iff_of_pos_right Hs).mpr hx_lo
+    · exact (mul_lt_mul_iff_of_pos_right Hs).mpr hx_hi
+    · -- compare (x*s) ((d*s + u*s)/2) = compare x ((d+u)/2)
+      rw [show ((d * s + u * s) / 2 : ℝ) = ((d + u) / 2) * s from by ring]
+      -- compare (x*s) ((d+u)/2 * s) = compare x ((d+u)/2)
+      rw [show compare (x * s) (((d + u) / 2) * s) = compare x ((d + u) / 2) from ?_]
+      · exact hc
+      · -- multiplication by positive s preserves compare
+        rcases lt_trichotomy x ((d + u) / 2) with h | h | h
+        · rw [compare_lt_iff_lt.mpr h, compare_lt_iff_lt.mpr (mul_lt_mul_of_pos_right h Hs)]
+        · rw [compare_eq_iff_eq.mpr h, compare_eq_iff_eq.mpr (by rw [h])]
+        · rw [compare_gt_iff_gt.mpr h, compare_gt_iff_gt.mpr (mul_lt_mul_of_pos_right h Hs)]
+
+/-- The reverse direction: scaling all three by `s > 0` is reversible. -/
+theorem inbetween_mult_reg (d u x : ℝ) (l : location) (s : ℝ) (Hs : 0 < s)
+    (h : inbetween (d * s) (u * s) (x * s) l) : inbetween d u x l := by
+  have hs_ne : s ≠ 0 := ne_of_gt Hs
+  cases h with
+  | Exact h_eq =>
+    exact .Exact (mul_right_cancel₀ hs_ne h_eq)
+  | Inexact c hx_lo hx_hi hc =>
+    refine .Inexact c ?_ ?_ ?_
+    · exact (mul_lt_mul_iff_of_pos_right Hs).mp hx_lo
+    · exact (mul_lt_mul_iff_of_pos_right Hs).mp hx_hi
+    · rw [show ((d * s + u * s) / 2 : ℝ) = ((d + u) / 2) * s from by ring] at hc
+      have h_compare_mul : compare (x * s) (((d + u) / 2) * s) = compare x ((d + u) / 2) := by
+        rcases lt_trichotomy x ((d + u) / 2) with h | h | h
+        · rw [compare_lt_iff_lt.mpr h, compare_lt_iff_lt.mpr (mul_lt_mul_of_pos_right h Hs)]
+        · rw [compare_eq_iff_eq.mpr h, compare_eq_iff_eq.mpr (by rw [h])]
+        · rw [compare_gt_iff_gt.mpr h, compare_gt_iff_gt.mpr (mul_lt_mul_of_pos_right h Hs)]
+      rwa [h_compare_mul] at hc
+
+/-! ## Float-level specialization -/
+
+variable {beta : radix}
+
+/-- `inbetween_float m e x l`: `x` is at location `l` between two consecutive
+floats with mantissa `m` and `m+1` at exponent `e`. -/
+def inbetween_float (beta : radix) (m e : ℤ) (x : ℝ) (l : location) : Prop :=
+  inbetween (F2R (beta := beta) ⟨m, e⟩) (F2R (beta := beta) ⟨m + 1, e⟩) x l
+
+/-- `inbetween_int m x l`: `x` is at location `l` between integers `m` and `m+1`. -/
+def inbetween_int (m : ℤ) (x : ℝ) (l : location) : Prop :=
+  inbetween (m : ℝ) ((m + 1 : ℤ) : ℝ) x l
+
+/-- The bounds implied by `inbetween_float`. -/
+theorem inbetween_float_bounds (m e : ℤ) (x : ℝ) (l : location)
+    (h : inbetween_float beta m e x l) :
+    F2R (beta := beta) ⟨m, e⟩ ≤ x ∧ x < F2R (beta := beta) ⟨m + 1, e⟩ := by
+  apply inbetween_bounds (F2R_lt (Int.lt_succ m))
+  exact h
+
+/-- For any `(m, e, l)`, some `x` realizes `inbetween_float m e x l`. -/
+theorem inbetween_float_ex (m e : ℤ) (l : location) :
+    ∃ x, inbetween_float beta m e x l :=
+  inbetween_ex (F2R_lt (Int.lt_succ m)) l
+
+/-- `inbetween_float` uniquely determines `(m, l)` given `e` and `x`. -/
+theorem inbetween_float_unique (e : ℤ) (m m' : ℤ) (l l' : location) (x : ℝ)
+    (h : inbetween_float beta m e x l) (h' : inbetween_float beta m' e x l') :
+    m = m' ∧ l = l' := by
+  -- Step 1: m = m' (from the bounds)
+  have ⟨h1, h2⟩ := inbetween_float_bounds m e x l h
+  have ⟨h3, h4⟩ := inbetween_float_bounds m' e x l' h'
+  have hm : m = m' := by
+    have hmm' : m < m' + 1 := lt_F2R (lt_of_le_of_lt h1 h4)
+    have hm'm : m' < m + 1 := lt_F2R (lt_of_le_of_lt h3 h2)
+    omega
+  refine ⟨hm, ?_⟩
+  -- Step 2: l = l' (from inbetween_unique)
+  subst hm
+  exact inbetween_unique h h'
+
+/-! ## new_location at the float level
+
+When subdividing the interval `[F2R ⟨m, e⟩, F2R ⟨m+1, e⟩]` into `β^k`
+sub-intervals at exponent `e - k`, the location updates by `new_location`. -/
+
+theorem inbetween_float_new_location (m e : ℤ) (x : ℝ) (l : location) (k : ℤ)
+    (Hk : 0 < k)
+    (Hx : inbetween_float beta m e x l) :
+    inbetween_float beta (m / beta.val ^ k.toNat) (e + k) x
+      (new_location (beta.val ^ k.toNat) (m % beta.val ^ k.toNat) l) := by
+  have hβ_pos : (0 : ℤ) < beta.val ^ k.toNat := pow_pos beta.radix_gt_0 _
+  have hβ_pos_real : (0 : ℝ) < ((beta.val ^ k.toNat : ℤ) : ℝ) := by exact_mod_cast hβ_pos
+  have hβ_gt_1 : (1 : ℤ) < beta.val ^ k.toNat := by
+    have h_β_ge_2 : (2 : ℤ) ≤ beta.val := beta.prop
+    have h_pos : 0 < k.toNat := by omega
+    have : beta.val ^ 1 ≤ beta.val ^ k.toNat :=
+      pow_le_pow_right₀ (by linarith) h_pos
+    simp at this; linarith
+  have h_exch : ∀ m' : ℤ, F2R (beta := beta) ⟨m', e + k⟩
+      = F2R (beta := beta) ⟨m' * beta.val ^ k.toNat, e⟩ := by
+    intro m'
+    unfold F2R
+    show (m' : ℝ) * bpow beta (e + k) = ((m' * beta.val ^ k.toNat : ℤ) : ℝ) * bpow beta e
+    have h_split : ((m' * beta.val ^ k.toNat : ℤ) : ℝ)
+        = (m' : ℝ) * ((beta.val ^ k.toNat : ℤ) : ℝ) := by push_cast; ring
+    rw [h_split, IZR_Zpower beta (le_of_lt Hk), bpow_plus]
+    ring
+  unfold inbetween_float at Hx ⊢
+  rw [h_exch (m / beta.val ^ k.toNat), h_exch (m / beta.val ^ k.toNat + 1)]
+  set Q := m / beta.val ^ k.toNat with hQ
+  set R := m % beta.val ^ k.toNat with hR
+  have h_div_int : beta.val ^ k.toNat * Q + R = m := Int.mul_ediv_add_emod m _
+  have h_div : Q * beta.val ^ k.toNat + R = m := by linarith [mul_comm (beta.val ^ k.toNat) Q, h_div_int]
+  have h_R_lt : R < beta.val ^ k.toNat := Int.emod_lt_of_pos m hβ_pos
+  have h_R_ge : 0 ≤ R := Int.emod_nonneg m (by linarith)
+  have h_div_real : (m : ℝ) = ((Q * beta.val ^ k.toNat + R : ℤ) : ℝ) := by exact_mod_cast h_div.symm
+  have h_form_lo : F2R (beta := beta) ⟨m, e⟩
+      = F2R (beta := beta) ⟨Q * beta.val ^ k.toNat, e⟩ + (R : ℝ) * bpow beta e := by
+    unfold F2R
+    show (m : ℝ) * bpow beta e
+        = ((Q * beta.val ^ k.toNat : ℤ) : ℝ) * bpow beta e + (R : ℝ) * bpow beta e
+    rw [h_div_real]; push_cast; ring
+  have h_div_real_p1 : ((m + 1 : ℤ) : ℝ) = ((Q * beta.val ^ k.toNat + (R + 1) : ℤ) : ℝ) := by
+    have : m + 1 = Q * beta.val ^ k.toNat + (R + 1) := by linarith
+    exact_mod_cast this
+  have h_form_hi : F2R (beta := beta) ⟨m + 1, e⟩
+      = F2R (beta := beta) ⟨Q * beta.val ^ k.toNat, e⟩ + ((R + 1 : ℤ) : ℝ) * bpow beta e := by
+    unfold F2R
+    show ((m + 1 : ℤ) : ℝ) * bpow beta e
+        = ((Q * beta.val ^ k.toNat : ℤ) : ℝ) * bpow beta e + ((R + 1 : ℤ) : ℝ) * bpow beta e
+    rw [h_div_real_p1]; push_cast; ring
+  rw [h_form_lo, h_form_hi] at Hx
+  have h_outer_form : F2R (beta := beta) ⟨(Q + 1) * beta.val ^ k.toNat, e⟩
+      = F2R (beta := beta) ⟨Q * beta.val ^ k.toNat, e⟩
+        + ((beta.val ^ k.toNat : ℤ) : ℝ) * bpow beta e := by
+    unfold F2R
+    show (((Q + 1) * beta.val ^ k.toNat : ℤ) : ℝ) * bpow beta e
+        = ((Q * beta.val ^ k.toNat : ℤ) : ℝ) * bpow beta e
+          + ((beta.val ^ k.toNat : ℤ) : ℝ) * bpow beta e
+    push_cast; ring
+  rw [h_outer_form]
+  apply new_location_correct (F2R (beta := beta) ⟨Q * beta.val ^ k.toNat, e⟩)
+    (bpow beta e) (bpow_gt_0 beta e) (beta.val ^ k.toNat) (by exact_mod_cast hβ_gt_1) x R l
+    ⟨h_R_ge, h_R_lt⟩
+  exact Hx
+
 end LeanFlocq
