@@ -1774,4 +1774,56 @@ theorem error_le_half_ulp_round (beta : radix) (fexp : ℤ → ℤ) (hValid : Va
   · have h_ulp_le := ulp_le_ulp_round beta fexp hValid h_NotFTZ hMon (Znearest choice) hx
     linarith
 
+/-! ### Monotonicity of `succ` and `pred` over the format -/
+
+/-- `succ` is non-decreasing on the format: `x ≤ y → succ x ≤ succ y`. -/
+theorem succ_le (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (h : x ≤ y) : succ beta fexp x ≤ succ beta fexp y := by
+  rcases lt_or_eq_of_le h with hlt | heq
+  · have h1 : succ beta fexp x ≤ y := succ_le_lt beta fexp hValid Fx Fy hlt
+    have h2 : y ≤ succ beta fexp y := succ_ge_id beta fexp y
+    linarith
+  · rw [heq]
+
+/-- `pred` is non-decreasing on the format: `x ≤ y → pred x ≤ pred y`. -/
+theorem pred_le (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (h : x ≤ y) : pred beta fexp x ≤ pred beta fexp y := by
+  have F_neg_x : generic_format beta fexp (-x) := generic_format_opp beta fexp Fx
+  have F_neg_y : generic_format beta fexp (-y) := generic_format_opp beta fexp Fy
+  have := succ_le beta fexp hValid F_neg_y F_neg_x (by linarith : -y ≤ -x)
+  unfold pred
+  linarith
+
+/-- `succ` is strictly increasing on the format: `x < y → succ x < succ y`. -/
+theorem succ_lt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (h : x < y) : succ beta fexp x < succ beta fexp y := by
+  by_contra hle
+  push_neg at hle
+  have F_succ_x : generic_format beta fexp (succ beta fexp x) :=
+    generic_format_succ beta fexp hValid Fx
+  have F_succ_y : generic_format beta fexp (succ beta fexp y) :=
+    generic_format_succ beta fexp hValid Fy
+  have h_pred_le : pred beta fexp (succ beta fexp y) ≤ pred beta fexp (succ beta fexp x) :=
+    pred_le beta fexp hValid F_succ_y F_succ_x hle
+  rw [pred_succ beta fexp hValid Fx, pred_succ beta fexp hValid Fy] at h_pred_le
+  linarith
+
+/-- `pred` is strictly increasing on the format: `x < y → pred x < pred y`. -/
+theorem pred_lt (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (h : x < y) : pred beta fexp x < pred beta fexp y := by
+  by_contra hle
+  push_neg at hle
+  have F_pred_x : generic_format beta fexp (pred beta fexp x) :=
+    generic_format_pred beta fexp hValid Fx
+  have F_pred_y : generic_format beta fexp (pred beta fexp y) :=
+    generic_format_pred beta fexp hValid Fy
+  have h_succ_le : succ beta fexp (pred beta fexp y) ≤ succ beta fexp (pred beta fexp x) :=
+    succ_le beta fexp hValid F_pred_y F_pred_x hle
+  rw [succ_pred beta fexp hValid Fy, succ_pred beta fexp hValid Fx] at h_succ_le
+  linarith
+
 end LeanFlocq
