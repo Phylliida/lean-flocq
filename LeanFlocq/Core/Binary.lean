@@ -524,6 +524,161 @@ theorem Babs_Bopp (abs_nan : binary_float prec emax →
     Babs abs_nan (Bopp opp_nan x) = Babs abs_nan x := by
   cases x <;> simp [Babs, Bopp] <;> simp [is_nan] at hx
 
+/-! ### Boundedness theorems -/
+
+/-- A bounded float satisfies `F2R ⟨m, e⟩ < β^emax`. -/
+theorem bounded_lt_emax (hp : 0 < prec) (hmax : prec < emax)
+    (mx ex : ℤ) (hb : bounded prec emax mx ex) :
+    F2R (beta := radix2) ⟨mx, ex⟩ < bpow radix2 emax := by
+  -- mx ≥ 1, so F2R is positive
+  have hmx_pos : 0 < mx := by linarith [hb.1]
+  have hmx_ne : mx ≠ 0 := by linarith
+  have h_F2R_pos : 0 < F2R (beta := radix2) ⟨mx, ex⟩ := F2R_gt_0 ⟨mx, ex⟩ hmx_pos
+  -- |F2R| < bpow (mag F2R)
+  have h_lt_mag : |F2R (beta := radix2) ⟨mx, ex⟩| < bpow radix2 (mag radix2 _) :=
+    bpow_mag_gt radix2 _
+  rw [abs_of_pos h_F2R_pos] at h_lt_mag
+  -- mag F2R = Zdigits mx + ex
+  rw [mag_F2R_Zdigits mx ex hmx_ne] at h_lt_mag
+  -- Need: bpow (Zdigits mx + ex) ≤ bpow emax, then linarith.
+  -- From canonical_mantissa: fexp(Zdigits mx + ex) = ex
+  --   → max(Zdigits mx + ex - prec, emin) = ex
+  -- From bounded: ex ≤ emax - prec
+  -- Case split on which max wins.
+  have hcm : FLT_exp (3 - emax - prec) prec (Zdigits radix2 mx + ex) = ex := hb.2.1
+  have hex_le : ex ≤ emax - prec := hb.2.2
+  have h_zd_pos : 0 < Zdigits radix2 mx := Zdigits_gt_0 radix2 hmx_ne
+  unfold FLT_exp at hcm
+  -- max(k - prec, emin) = ex, where k = Zdigits mx + ex
+  set k := Zdigits radix2 mx + ex with hk_def
+  have h_zde : Zdigits radix2 mx + ex ≤ emax := by
+    -- max (k - prec) emin = ex
+    rcases max_cases (k - prec) (3 - emax - prec) with ⟨h1, h2⟩ | ⟨h1, h2⟩
+    · -- k - prec is the max, equal to ex
+      rw [h1] at hcm
+      -- k - prec = ex, so k = ex + prec. With ex ≤ emax - prec: k ≤ emax.
+      omega
+    · -- emin is the max, equal to ex
+      rw [h1] at hcm
+      -- ex = emin = 3 - emax - prec; and k - prec ≤ emin (from h2 reversed).
+      -- So k ≤ emin + prec = 3 - emax. Hence k < emax.
+      -- Actually h2 is `k - prec ≤ 3 - emax - prec` (max_cases gives ≤ for non-winner).
+      omega
+  exact lt_of_lt_of_le h_lt_mag (bpow_le radix2 h_zde)
+
+/-- A bounded float satisfies `β^emin ≤ F2R ⟨m, e⟩` (where `emin = 3 - emax - prec`). -/
+theorem bounded_ge_emin (hp : 0 < prec)
+    (mx ex : ℤ) (hb : bounded prec emax mx ex) :
+    bpow radix2 (3 - emax - prec) ≤ F2R (beta := radix2) ⟨mx, ex⟩ := by
+  have hmx_pos : 0 < mx := by linarith [hb.1]
+  have hmx_ne : mx ≠ 0 := by linarith
+  have h_F2R_pos : 0 < F2R (beta := radix2) ⟨mx, ex⟩ := F2R_gt_0 ⟨mx, ex⟩ hmx_pos
+  have h_F2R_ne : F2R (beta := radix2) ⟨mx, ex⟩ ≠ 0 := ne_of_gt h_F2R_pos
+  -- bpow (mag F2R - 1) ≤ |F2R|
+  have h_low : bpow radix2 (mag radix2 _ - 1) ≤ |F2R (beta := radix2) ⟨mx, ex⟩| :=
+    bpow_mag_le radix2 h_F2R_ne
+  rw [abs_of_pos h_F2R_pos] at h_low
+  rw [mag_F2R_Zdigits mx ex hmx_ne] at h_low
+  -- Need: emin ≤ Zdigits mx + ex - 1
+  have hcm : FLT_exp (3 - emax - prec) prec (Zdigits radix2 mx + ex) = ex := hb.2.1
+  have h_zd_pos : 0 < Zdigits radix2 mx := Zdigits_gt_0 radix2 hmx_ne
+  unfold FLT_exp at hcm
+  set k := Zdigits radix2 mx + ex with hk_def
+  have h_emin_le : 3 - emax - prec ≤ k - 1 := by
+    rcases max_cases (k - prec) (3 - emax - prec) with ⟨h1, h2⟩ | ⟨h1, h2⟩
+    · -- k - prec wins, = ex. So ex ≥ emin (from h2: emin ≤ k - prec = ex).
+      -- k - 1 = ex + prec - 1 ≥ emin + prec - 1 ≥ emin.
+      omega
+    · -- emin wins, = ex. Zdigits mx ≥ 1 → k = Zd + emin ≥ 1 + emin > emin → k - 1 ≥ emin.
+      omega
+  exact le_trans (bpow_le radix2 h_emin_le) h_low
+
+/-- The absolute value of a binary float is bounded by `β^emax`. -/
+theorem abs_B2R_lt_emax (hp : 0 < prec) (hmax : prec < emax)
+    (x : binary_float prec emax) :
+    |B2R x| < bpow radix2 emax := by
+  cases x with
+  | B754_zero _ => simp [B2R, abs_zero]; exact bpow_gt_0 radix2 _
+  | B754_infinity _ => simp [B2R, abs_zero]; exact bpow_gt_0 radix2 _
+  | B754_nan _ _ _ => simp [B2R, abs_zero]; exact bpow_gt_0 radix2 _
+  | B754_finite sx mx ex hb =>
+    show |F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩| < bpow radix2 emax
+    have h_abs : |F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩|
+        = F2R (beta := radix2) ⟨mx, ex⟩ := by
+      cases sx
+      · show |F2R (beta := radix2) ⟨mx, ex⟩| = F2R (beta := radix2) ⟨mx, ex⟩
+        rw [abs_of_nonneg]
+        exact le_of_lt (F2R_gt_0 ⟨mx, ex⟩ (by linarith [hb.1]))
+      · show |F2R (beta := radix2) ⟨-mx, ex⟩| = F2R (beta := radix2) ⟨mx, ex⟩
+        rw [F2R_Zopp, abs_neg, abs_of_nonneg]
+        exact le_of_lt (F2R_gt_0 ⟨mx, ex⟩ (by linarith [hb.1]))
+    rw [h_abs]
+    exact bounded_lt_emax hp hmax mx ex hb
+
+/-- For a strictly-finite float, `|B2R x| ≥ β^emin`. -/
+theorem abs_B2R_ge_emin (hp : 0 < prec) (x : binary_float prec emax)
+    (h_finite : is_finite_strict x = true) :
+    bpow radix2 (3 - emax - prec) ≤ |B2R x| := by
+  cases x with
+  | B754_zero _ => simp [is_finite_strict] at h_finite
+  | B754_infinity _ => simp [is_finite_strict] at h_finite
+  | B754_nan _ _ _ => simp [is_finite_strict] at h_finite
+  | B754_finite sx mx ex hb =>
+    show bpow radix2 (3 - emax - prec) ≤ |F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩|
+    have h_abs : |F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩|
+        = F2R (beta := radix2) ⟨mx, ex⟩ := by
+      cases sx
+      · show |F2R (beta := radix2) ⟨mx, ex⟩| = F2R (beta := radix2) ⟨mx, ex⟩
+        rw [abs_of_nonneg]
+        exact le_of_lt (F2R_gt_0 ⟨mx, ex⟩ (by linarith [hb.1]))
+      · show |F2R (beta := radix2) ⟨-mx, ex⟩| = F2R (beta := radix2) ⟨mx, ex⟩
+        rw [F2R_Zopp, abs_neg, abs_of_nonneg]
+        exact le_of_lt (F2R_gt_0 ⟨mx, ex⟩ (by linarith [hb.1]))
+    rw [h_abs]
+    exact bounded_ge_emin hp mx ex hb
+
+/-- A canonical float with absolute value below `β^emax` is bounded. -/
+theorem bounded_canonical_lt_emax (hp : 0 < prec) (hmax : prec < emax)
+    (mx ex : ℤ) (hpos : 1 ≤ mx)
+    (hcan : canonical radix2 (FLT_exp (3 - emax - prec) prec)
+              (⟨mx, ex⟩ : float radix2))
+    (hlt : F2R (beta := radix2) ⟨mx, ex⟩ < bpow radix2 emax) :
+    bounded prec emax mx ex := by
+  refine ⟨hpos, ?_, ?_⟩
+  · -- canonical_mantissa: fexp(Zdigits mx + ex) = ex
+    unfold canonical_mantissa
+    unfold canonical at hcan
+    simp only at hcan
+    -- hcan : ex = cexp radix2 (FLT_exp ...) (F2R ⟨mx, ex⟩)
+    -- = FLT_exp ... (mag (F2R ⟨mx, ex⟩))
+    -- = FLT_exp ... (Zdigits mx + ex)
+    have hmx_ne : mx ≠ 0 := by linarith
+    rw [show cexp radix2 (FLT_exp (3 - emax - prec) prec)
+            (F2R (beta := radix2) ⟨mx, ex⟩)
+        = FLT_exp (3 - emax - prec) prec (Zdigits radix2 mx + ex) from by
+      unfold cexp
+      rw [mag_F2R_Zdigits mx ex hmx_ne]] at hcan
+    exact hcan.symm
+  · -- ex ≤ emax - prec
+    unfold canonical at hcan
+    simp only at hcan
+    -- ex = FLT_exp(mag F2R) = max(mag F2R - prec, emin)
+    unfold cexp FLT_exp at hcan
+    have hmx_ne : mx ≠ 0 := by linarith
+    have hmx_pos : 0 < mx := by linarith
+    have h_F2R_pos : 0 < F2R (beta := radix2) ⟨mx, ex⟩ := F2R_gt_0 ⟨mx, ex⟩ hmx_pos
+    have h_F2R_ne : F2R (beta := radix2) ⟨mx, ex⟩ ≠ 0 := ne_of_gt h_F2R_pos
+    -- |F2R| < bpow emax → mag F2R ≤ emax
+    have hmag_le : mag radix2 (F2R (beta := radix2) ⟨mx, ex⟩) ≤ emax := by
+      apply mag_le_bpow radix2 h_F2R_ne
+      rwa [abs_of_pos h_F2R_pos]
+    -- ex = max(mag - prec, emin) ≤ max(emax - prec, 3 - emax - prec)
+    -- = emax - prec (since emax - prec > 0 > 3 - emax - prec when prec < emax and emax ≥ 1)
+    rw [hcan]
+    apply max_le
+    · linarith
+    · linarith
+
 end binary_float
 
 end LeanFlocq
