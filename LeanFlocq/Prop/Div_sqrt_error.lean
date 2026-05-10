@@ -151,4 +151,157 @@ theorem div_error_FLX (beta : radix) (prec : ℤ) (Hp : 0 < prec)
         bpow_plus]
     nlinarith [h_err, h_y_lt, h_y_pos, h_pow_nn, h_err_nn]
 
+/-! ### Square root error in FLX (round-to-nearest) -/
+
+/-- Helper: under round-to-nearest in FLX with `prec ≥ 2`,
+`(1 + eps)^2 ≤ 2` where `|eps| ≤ (1/2) * β^(-prec+1)`. -/
+private theorem one_plus_eps_sq_le_two (beta : radix) (prec : ℤ) (Hp1 : 1 < prec)
+    {eps : ℝ} (Heps : |eps| ≤ (1/2) * bpow beta (-prec + 1)) :
+    (1 + eps)^2 ≤ 2 := by
+  have h_pow_le : bpow beta (-prec + 1) ≤ bpow beta (-1) :=
+    bpow_le beta (by omega)
+  have h_bpow_neg_1 : bpow beta (-1) ≤ 1/2 := by
+    have h_bpow_neg_1_eq : bpow beta (-1) = 1 / (beta.val : ℝ) := by
+      unfold bpow; simp
+    rw [h_bpow_neg_1_eq]
+    have h_beta_real : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+    have h_beta_pos : 0 < (beta.val : ℝ) := radix_pos beta
+    rw [div_le_iff₀ h_beta_pos]
+    linarith
+  have h_eps_bd : |eps| ≤ 1/4 := by
+    refine le_trans Heps ?_
+    have h_step : (1/2) * bpow beta (-prec + 1) ≤ (1/2) * (1/2) := by
+      apply mul_le_mul_of_nonneg_left _ (by norm_num : (0 : ℝ) ≤ 1/2)
+      exact le_trans h_pow_le h_bpow_neg_1
+    linarith
+  have h_eps_lb : -(1/4 : ℝ) ≤ eps := neg_le_of_abs_le h_eps_bd
+  have h_eps_ub : eps ≤ 1/4 := le_of_abs_le h_eps_bd
+  nlinarith
+
+/-- The FLX square root remainder `x - round(sqrt x)^2` is in FLX, given
+`prec > 1` and round-to-nearest. -/
+theorem sqrt_error_FLX_N (beta : radix) (prec : ℤ) (Hp1 : 1 < prec)
+    (choice : ℤ → Bool) {x : ℝ} (Fx : generic_format beta (FLX_exp prec) x) :
+    generic_format beta (FLX_exp prec)
+      (x - (round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x))^2) := by
+  have Hp : 0 < prec := by linarith
+  rcases lt_trichotomy x 0 with Hxz | Hxz | Hxz
+  · have h_sqrt_zero : Real.sqrt x = 0 := Real.sqrt_eq_zero'.mpr (le_of_lt Hxz)
+    rw [h_sqrt_zero, round_0, pow_two, mul_zero, sub_zero]; exact Fx
+  · rw [Hxz, Real.sqrt_zero, round_0, pow_two, mul_zero, sub_zero]
+    exact generic_format_0 _ _
+  · by_cases Hr : round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x) = 0
+    · rw [Hr, pow_two, mul_zero, sub_zero]; exact Fx
+    obtain ⟨fx, Hx1, Hx2⟩ := canonical_generic_format beta (FLX_exp prec) Fx
+    obtain ⟨fr, Hr1, Hr2⟩ := canonical_generic_format beta (FLX_exp prec)
+      (generic_format_round beta (FLX_exp prec) (FLX_exp_valid prec Hp)
+        (Znearest choice) (Real.sqrt x))
+    have h_sqrt_pos : 0 < Real.sqrt x := Real.sqrt_pos.mpr Hxz
+    refine generic_format_plus_prec beta (FLX_exp prec) prec
+      (fun _ => le_refl _) fx (Fopp (Fmult fr fr)) Hx1 ?_ ?_ ?_
+    · show -(round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x))^2
+          = F2R (Fopp (Fmult fr fr))
+      rw [F2R_opp, F2R_mult, ← Hr1]; ring
+    · show |x + -(round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x))^2|
+        < bpow beta (prec + fx.Fexp)
+      obtain ⟨eps, Heps1, Heps2⟩ :=
+        relative_error_N_FLX_ex beta prec Hp choice (Real.sqrt x)
+      rw [Heps2]
+      have h_sq : (Real.sqrt x * (1 + eps))^2 = x * (1 + eps)^2 := by
+        rw [mul_pow]
+        rw [show (Real.sqrt x)^2 = x from Real.sq_sqrt (le_of_lt Hxz)]
+      rw [h_sq]
+      have h_diff : x + -(x * (1 + eps)^2) = x * (1 - (1 + eps)^2) := by ring
+      rw [h_diff, abs_mul, abs_of_pos Hxz]
+      have h_eps_sq_le : (1 + eps)^2 ≤ 2 :=
+        one_plus_eps_sq_le_two beta prec Hp1 Heps1
+      have h_eps_sq_nn : 0 ≤ (1 + eps)^2 := sq_nonneg _
+      have h_abs_le : |1 - (1 + eps)^2| ≤ 1 := by
+        rw [abs_le]; constructor <;> linarith
+      have h_x_lt : x < bpow beta (prec + fx.Fexp) := by
+        have h_Fexp : fx.Fexp = cexp beta (FLX_exp prec) x := by
+          have := Hx2
+          show fx.Fexp = cexp beta (FLX_exp prec) x
+          rw [Hx1]; exact this
+        rw [h_Fexp]
+        unfold cexp FLX_exp
+        rw [show prec + (mag beta x - prec) = mag beta x from by ring]
+        have := bpow_mag_gt beta x
+        rw [abs_of_pos Hxz] at this
+        exact this
+      nlinarith
+    · show |x + -(round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x))^2|
+        < bpow beta (prec + (Fopp (Fmult fr fr)).Fexp)
+      have h_Fexp_eq : (Fopp (Fmult fr fr)).Fexp = fr.Fexp + fr.Fexp := by
+        unfold Fopp Fmult; rfl
+      rw [h_Fexp_eq]
+      have h_factor : x + -(round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x))^2
+          = -((round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x) - Real.sqrt x)
+              * (round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x) + Real.sqrt x)) := by
+        have h_x_sq : x = (Real.sqrt x)^2 := (Real.sq_sqrt (le_of_lt Hxz)).symm
+        nth_rewrite 1 [h_x_sq]
+        ring
+      rw [h_factor, abs_neg, abs_mul]
+      have h_err : |round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x) - Real.sqrt x|
+          ≤ (1/2) * bpow beta fr.Fexp := by
+        have h_half := error_le_half_ulp_round beta (FLX_exp prec)
+          (FLX_exp_valid prec Hp)
+          (monotone_exp_not_FTZ (FLX_exp_valid prec Hp) (FLX_exp_monotone prec))
+          (FLX_exp_monotone prec) choice (Real.sqrt x)
+        have h_ulp_eq : ulp beta (FLX_exp prec)
+            (round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x))
+            = bpow beta fr.Fexp := by
+          rw [ulp_neq_0 beta (FLX_exp prec) Hr]
+          have : fr.Fexp = cexp beta (FLX_exp prec) (F2R fr) := Hr2
+          rw [this, ← Hr1]
+        rw [h_ulp_eq] at h_half
+        exact h_half
+      have h_round_lt : |round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x)|
+          < bpow beta (prec + fr.Fexp) := by
+        have h_Fexp_r : fr.Fexp = cexp beta (FLX_exp prec)
+            (round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x)) := by
+          have := Hr2
+          show fr.Fexp = cexp beta (FLX_exp prec) _
+          rw [Hr1]; exact this
+        rw [h_Fexp_r]
+        unfold cexp FLX_exp
+        rw [show prec + (mag beta _ - prec) = mag beta _ from by ring]
+        exact bpow_mag_gt beta _
+      have h_round_pos : 0 ≤ round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x) := by
+        rw [show (0 : ℝ) = round beta (FLX_exp prec) (Znearest choice) 0 from
+              (round_0 _ _ _).symm]
+        exact round_le beta (FLX_exp prec) (FLX_exp_valid prec Hp) _ (le_of_lt h_sqrt_pos)
+      have h_sqrt_lt : Real.sqrt x < bpow beta (prec + fr.Fexp) := by
+        by_contra h_not
+        push_neg at h_not
+        have h_bpow_F : generic_format beta (FLX_exp prec)
+            (bpow beta (prec + fr.Fexp)) := by
+          apply generic_format_bpow beta (FLX_exp prec)
+          unfold FLX_exp; omega
+        have h_pow_le_abs : bpow beta (prec + fr.Fexp) ≤ |Real.sqrt x| := by
+          rw [abs_of_pos h_sqrt_pos]; exact h_not
+        have h_round_abs_ge :=
+          abs_round_ge_generic beta (FLX_exp prec) (FLX_exp_valid prec Hp)
+            (Znearest choice) h_bpow_F h_pow_le_abs
+        rw [abs_of_nonneg h_round_pos] at h_round_lt
+        rw [abs_of_nonneg h_round_pos] at h_round_abs_ge
+        linarith
+      have h_sum_lt : |round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x)
+          + Real.sqrt x| < 2 * bpow beta (prec + fr.Fexp) := by
+        rw [abs_of_nonneg (by linarith)]
+        rw [abs_of_nonneg h_round_pos] at h_round_lt
+        linarith
+      have h_pow_id : (1/2) * bpow beta fr.Fexp * (2 * bpow beta (prec + fr.Fexp))
+          = bpow beta (prec + (fr.Fexp + fr.Fexp)) := by
+        rw [show prec + (fr.Fexp + fr.Fexp) = fr.Fexp + (prec + fr.Fexp) from by ring]
+        rw [bpow_plus beta fr.Fexp (prec + fr.Fexp)]
+        ring
+      have h_lhs_pos : 0 < (1/2) * bpow beta fr.Fexp :=
+        mul_pos (by norm_num) (bpow_gt_0 _ _)
+      have h_product : |round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x) - Real.sqrt x|
+          * |round beta (FLX_exp prec) (Znearest choice) (Real.sqrt x) + Real.sqrt x|
+          < (1/2) * bpow beta fr.Fexp * (2 * bpow beta (prec + fr.Fexp)) :=
+        mul_lt_mul' h_err h_sum_lt (abs_nonneg _) h_lhs_pos
+      linarith [h_product, h_pow_id]
+
 end LeanFlocq
