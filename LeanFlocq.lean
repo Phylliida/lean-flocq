@@ -19,4 +19,5 @@ import LeanFlocq.Prop.Sterbenz
 import LeanFlocq.Prop.Mult_error
 import LeanFlocq.Prop.Plus_error
 import LeanFlocq.Prop.Div_sqrt_error
+import LeanFlocq.IEEE754.Bits
 
