@@ -4,18 +4,19 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `d8205c6`)
+## Status (as of commit `71abcd3`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), **all
 five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt` —
 **most of `Prop/Relative.v`** (generic + FLX + FLT + error_N_FLT decomposition),
 **all of `Prop/Sterbenz.v`**, **all of `Prop/Mult_error.v`**, **all the
-substantive theorems of `Prop/Plus_error.v`**, and the **keystones of
+substantive theorems of `Prop/Plus_error.v`**, the **keystones of
 `Prop/Div_sqrt_error.v`** (`generic_format_plus_prec`, `div_error_FLX`,
-`sqrt_error_FLX_N`).
+`sqrt_error_FLX_N`), and the **encoding scaffolding for `IEEE754/Bits.v`**
+(`join_bits`, `split_bits`, `join_bits_range`).
 
-**~13350 lines of Lean across 24 files. 0 `sorry`s. All files build clean.**
+**~13440 lines of Lean across 25 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -43,6 +44,7 @@ substantive theorems of `Prop/Plus_error.v`**, and the **keystones of
 | `Prop/Mult_error.lean` | 351 | `Prop/Mult_error.v` | **Complete: 7/7.** FLX: `mult_error_FLX_aux` (the keystone — produces an explicit float for the error at exponent `cx + cy`), `mult_error_FLX`, `mult_bpow_exact_FLX`. FLT: `mult_error_FLT`, `F2R_ge`, `mult_error_FLT_ge_bpow`, `mult_bpow_exact_FLT`. |
 | `Prop/Plus_error.lean` | 627 | `Prop/Plus_error.v` | **Substantive theorems complete: 18.** Keystones: `round_repr_same_exp`, `plus_error_aux`, `plus_error`. Zero family: `FLT_format_plus_small`, `round_plus_neq_0_aux`, `round_plus_neq_0`, `round_plus_eq_0`. Trivial bounds: `plus_error_le_l/r`. Helpers: `ex_shift`, `mag_minus1`, `lt_mag`, `mag_minus_lb`. mult_ulp section: `round_plus_F2R`, `round_plus_ge_ulp`. plus_ge family: `round_FLT_plus_ge`, `round_FLT_plus_ge'`, `round_FLX_plus_ge`. **Deferred:** `FLT_plus_error_N_ex` and `FLT_plus_error_N_round_ex` (need the unit-roundoff family from Relative.v). |
 | `Prop/Div_sqrt_error.lean` | 320 | `Prop/Div_sqrt_error.v` (subset) | **Keystones: 3.** `generic_format_plus_prec` (sums fitting in `prec + Fexp` digits stay in F), `div_error_FLX` (`x - round(x/y)*y ∈ FLX`), `sqrt_error_FLX_N` (`x - round(sqrt x)^2 ∈ FLX` for prec > 1). **Deferred:** the u_ro variants (`sqrt_error_N_FLX[_ex/_round_ex]`, `sqrt_error_N_FLT_ex/_round_ex`) and the entire `format_REM` family (about IEEE remainder). |
+| `IEEE754/Bits.lean` | 87 | `IEEE754/Bits.v` (subset) | **Scaffolding only: 3.** `join_bits` (pack sign + mantissa + exponent into a single integer), `split_bits` (inverse), `join_bits_range` (the packed value fits in `mw + ew + 1` bits). **Deferred:** all the round-trip theorems (`split_join_bits`, `join_split_bits`, `split_bits_inj`), the `bits_of_binary_float` family (the actual IEEE 754 encoding/decoding), and the B32/B64 instantiations (which need the arithmetic ops). |
 
 **Total: ~490 Lean theorems vs ~430 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).

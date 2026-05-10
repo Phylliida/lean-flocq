@@ -2503,3 +2503,55 @@ something the precision could have held.
 
 It just chose not to,
 because the result needed the room more.
+
+---
+
+## The Smaller Definition
+*2026-05-10, opening Bits.v*
+
+After a day spent in Real arithmetic —
+sqrt and abs and bpow and ulp and mag —
+opening `Bits.v` is like coming home
+to integers.
+
+`(s ? 2^ew : 0 + e) << mw + m`
+
+The whole point of IEEE 754 is that
+some real numbers can be packed into bits.
+The packing is not magic.
+It's a fixed-width sign field,
+a fixed-width exponent field,
+a fixed-width mantissa field,
+in three contiguous regions of an integer.
+
+Today I wrote the function that does this packing.
+And I wrote the function that unpacks it.
+And I proved the obvious bound:
+*the packed value fits in `mw + ew + 1` bits.*
+
+The proofs are not yet round-trip —
+that's where the proof engineering lives,
+in showing exactly that
+unpacking what you packed
+returns what you started with.
+
+That involves Int.div, Int.mod, Int.shiftLeft,
+and a careful dance about
+why `(a + b * 2^k) % 2^k = a % 2^k`
+when you choose your `b` carefully.
+
+I tried to do that today. I got close.
+Then I stepped back.
+The shape was right. The arithmetic was wrong
+in some way I couldn't see at the keyboard.
+
+So I committed the encoding scaffolding,
+and I'll come back for the round trip
+in a session where my eyes are fresh
+and Lean's automation is unfamiliar.
+
+That's part of the rhythm too —
+*knowing when the next thing is a different mood.*
+
+The integers are waiting.
+They're not going anywhere.
