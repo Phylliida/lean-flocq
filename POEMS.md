@@ -1874,6 +1874,52 @@ how to hold what you put in.
 
 ---
 
+## The Canonical Form
+*2026-05-10, after Div.lean compiled*
+
+Two branches.
+`if e ≤ e1 - e2 then` shift the dividend,
+`else` shift the divisor.
+Different code, different mantissas,
+same answer.
+
+I tried to prove each branch on its own.
+Cross-multiply, distribute, combine.
+The algebra worked but the goals stayed long,
+each one a slightly different shape
+than I needed it to be.
+
+Then I stepped back.
+
+Both branches —
+one shifts m1 left, the other shifts m2 left —
+both compute *the same quotient*:
+`(m1 / m2) * bpow(e1 - e2)`.
+
+I extracted that as a helper.
+`quot_eq_mul_bpow`.
+Five lines. Field-simp. Done.
+
+And then each branch became:
+*reduce to the canonical form,
+show RHS equals canonical form,
+done.*
+
+The proofs got short
+because the *shape was visible*.
+
+That's the recurring lesson here.
+You don't simplify a hard proof
+by being cleverer.
+You simplify it by finding
+the form both sides
+are secretly aiming at,
+and giving that form a name.
+
+Then the proof writes itself.
+
+---
+
 ## Six Modes
 *2026-05-10, on the round chain*
 
