@@ -4,21 +4,22 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `e86ddc3`)
+## Status (as of commit `c72866d`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
-(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), **all
-five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt` —
-**most of `Prop/Relative.v`** (generic + FLX + FLT + error_N_FLT decomposition),
-**all of `Prop/Sterbenz.v`**, **all of `Prop/Mult_error.v`**, **all the
-substantive theorems of `Prop/Plus_error.v`**, the **keystones of
-`Prop/Div_sqrt_error.v`** (`generic_format_plus_prec`, `div_error_FLX`,
-`sqrt_error_FLX_N`), and **the bulk of `IEEE754/Bits.v`** through
-`bits_of_binary_float` (encoding), `split_bits_of_binary_float_correct`
-(unpack-side correspondence), and `binary_float_of_bits_aux` (decoding
-function, correctness deferred).
+(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
+`bounded_canonical_lt_emax`), **all five files of `Calc/`** — `Bracket`,
+`Round`, `Operations`, `Div`, `Sqrt` — **most of `Prop/Relative.v`** (generic
++ FLX + FLT + error_N_FLT decomposition), **all of `Prop/Sterbenz.v`**,
+**all of `Prop/Mult_error.v`**, **all the substantive theorems of
+`Prop/Plus_error.v`**, the **keystones of `Prop/Div_sqrt_error.v`**
+(`generic_format_plus_prec`, `div_error_FLX`, `sqrt_error_FLX_N`), and
+**the bulk of `IEEE754/Bits.v`** through `bits_of_binary_float` (encoding),
+`split_bits_of_binary_float_correct` (unpack-side correspondence), and
+`binary_float_of_bits_aux` (decoding function, correctness deferred).
+Added helper `Zdigits_le_Zpower` to Digits.lean.
 
-**~13860 lines of Lean across 25 files. 0 `sorry`s. All files build clean.**
+**~13880 lines of Lean across 25 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -34,7 +35,7 @@ function, correctness deferred).
 | `FTZ.lean` | 414 | `Core/FTZ.v` | **Complete: 8/8.** Includes `FLXN_format_FTZ` and `FTZ_format_FLXN`. |
 | `Ulp.lean` | 2486 | `Core/Ulp.v` | **Complete: 103/103.** All keystones (`succ_DN_eq_UP`, `ulp_round`, error bounds, mixed-sign perturbation, `generic_format_plus_ulp`). |
 | `Round_NE.lean` | 740 | `Core/Round_NE.v` | **Complete: 10/10.** `DN_UP_parity_generic_pos/_aux/_generic`, `Rnd_NE_pt_{total,monotone,round}`, `round_NE_opp/_abs/_pt_pos/_pt`, `exists_NE_FLX/_FLT`. |
-| `Digits.lean` | 74 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 6 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
+| `Digits.lean` | 87 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 7 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`, `_le_Zpower`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
 | `Binary.lean` | 813 | `IEEE754/Binary.v` (lines 1–963) | **Structural part done.** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, `overflow_to_inf`, `binary_overflow`. `binary_round_aux` and arithmetic ops blocked behind `Calc/`. |
 | `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
 | `Calc/Round.lean` | 868 | `Calc/Round.v` | **Most of it.** `cexp_inbetween_float[_loc_Exact]`, `cond_incr`, `inbetween_float_round[_sign]`. All 6 mode families: DN/UP/ZR/N/NE/NA, both unsigned and signed, `inbetween_int_*` and `inbetween_float_*`. `truncate_aux`, `truncate`, `truncate_0`, `truncate_correct_partial[_partial']`/`_correct[_correct']`. `round_any_correct`, `round_trunc_any_correct[_']`. `truncate_FIX`, `truncate_FIX_correct`. **Deferred:** `round_sign_any_correct` family (sign-aware truncate-correct chain), 24 mode-specific corollary aliases, `generic_format_truncate`/`truncate_correct_format` (need `Zdigits_div_Zpower`). |
