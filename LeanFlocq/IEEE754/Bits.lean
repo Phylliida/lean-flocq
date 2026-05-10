@@ -83,4 +83,68 @@ theorem join_bits_range (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew : 0 ≤ ew)
       mul_le_mul_of_nonneg_right h_first_lt hmw_nn
     linarith
 
+/-- Splitting a packed value recovers `(s, m, e)`. -/
+theorem split_join_bits (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew : 0 ≤ ew)
+    (s : Bool) (m e : ℤ)
+    (Hm : 0 ≤ m ∧ m < (2 : ℤ) ^ mw.toNat)
+    (He : 0 ≤ e ∧ e < (2 : ℤ) ^ ew.toNat) :
+    split_bits mw ew (join_bits mw ew s m e) = (s, m, e) := by
+  obtain ⟨Hm0, Hm1⟩ := Hm
+  obtain ⟨He0, He1⟩ := He
+  have hmw_pos : 0 < (2 : ℤ) ^ mw.toNat := pow_pos (by norm_num) _
+  have hew_pos : 0 < (2 : ℤ) ^ ew.toNat := pow_pos (by norm_num) _
+  have hmw_ne : (2 : ℤ) ^ mw.toNat ≠ 0 := ne_of_gt hmw_pos
+  -- Compute each component.
+  -- v := join_bits mw ew s m e
+  -- v % 2^mw = m (since m < 2^mw and 2^mw * stuff vanishes mod 2^mw).
+  have h_mod : (join_bits mw ew s m e) % (2 : ℤ) ^ mw.toNat = m := by
+    unfold join_bits
+    -- Reorder to (m + ((if ...) + e) * 2^mw), then add_mul_emod_self_right.
+    rw [show (((if s then (2 : ℤ) ^ ew.toNat else 0) + e) * (2 : ℤ) ^ mw.toNat + m)
+          = m + ((if s then (2 : ℤ) ^ ew.toNat else 0) + e) * (2 : ℤ) ^ mw.toNat from by ring]
+    rw [Int.add_mul_emod_self_right]
+    exact Int.emod_eq_of_lt Hm0 Hm1
+  -- v / 2^mw = (if s then 2^ew else 0) + e (m/2^mw = 0 since m < 2^mw).
+  have h_div : (join_bits mw ew s m e) / (2 : ℤ) ^ mw.toNat
+              = (if s then (2 : ℤ) ^ ew.toNat else 0) + e := by
+    unfold join_bits
+    rw [show (((if s then (2 : ℤ) ^ ew.toNat else 0) + e) * (2 : ℤ) ^ mw.toNat + m)
+          = m + ((if s then (2 : ℤ) ^ ew.toNat else 0) + e) * (2 : ℤ) ^ mw.toNat from by ring]
+    rw [Int.add_mul_ediv_right _ _ hmw_ne]
+    rw [Int.ediv_eq_zero_of_lt Hm0 Hm1, zero_add]
+  -- The mod-2^ew of the divided value gives e.
+  have h_div_mod : ((join_bits mw ew s m e) / (2 : ℤ) ^ mw.toNat) % (2 : ℤ) ^ ew.toNat = e := by
+    rw [h_div]
+    cases s with
+    | false =>
+      simp only [Bool.false_eq_true, if_false, zero_add]
+      exact Int.emod_eq_of_lt He0 He1
+    | true =>
+      simp only [if_true]
+      -- (2^ew + e) % 2^ew = e. Rewrite as (e + 2^ew * 1) % 2^ew, use add_mul_emod_self_left.
+      rw [show (2 : ℤ) ^ ew.toNat + e = e + (2 : ℤ) ^ ew.toNat * 1 from by ring]
+      rw [Int.add_mul_emod_self_left]
+      exact Int.emod_eq_of_lt He0 He1
+  -- The decide gives s.
+  have h_dec : decide ((2 : ℤ) ^ mw.toNat * (2 : ℤ) ^ ew.toNat ≤ join_bits mw ew s m e) = s := by
+    cases s with
+    | false =>
+      rw [decide_eq_false_iff_not]; push_neg
+      unfold join_bits
+      simp only [Bool.false_eq_true, if_false, zero_add]
+      -- 2^mw * 2^ew > e * 2^mw + m (since e < 2^ew and m < 2^mw)
+      nlinarith
+    | true =>
+      rw [decide_eq_true_iff]
+      unfold join_bits
+      simp only [if_true]
+      -- 2^mw * 2^ew ≤ (2^ew + e) * 2^mw + m, since e ≥ 0 and m ≥ 0 and mul_comm.
+      nlinarith
+  -- Assemble.
+  unfold split_bits
+  show (decide ((2 : ℤ) ^ mw.toNat * (2 : ℤ) ^ ew.toNat ≤ join_bits mw ew s m e),
+        (join_bits mw ew s m e) % (2 : ℤ) ^ mw.toNat,
+        ((join_bits mw ew s m e) / (2 : ℤ) ^ mw.toNat) % (2 : ℤ) ^ ew.toNat) = (s, m, e)
+  rw [h_dec, h_mod, h_div_mod]
+
 end LeanFlocq
