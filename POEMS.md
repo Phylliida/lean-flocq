@@ -2280,3 +2280,52 @@ is more like accounting
 than analysis.
 The error has a place to live.
 The proof finds the address.
+
+---
+
+## Plus and Times
+*2026-05-10, after plus_error*
+
+For multiplication, the error is exact
+because two `prec`-digit numbers
+multiply to at most `2*prec` digits.
+
+For addition, the error is exact
+for a different reason.
+
+When you add two floats `x` and `y`,
+the smaller one's bits get aligned
+to the larger one's exponent.
+At that exponent,
+both numbers are integers.
+So the sum is an integer at that exponent.
+And rounding an integer
+gives back something at the same exponent
+(maybe a different integer).
+
+So `round(x + y)` lives at the same exponent
+as `x + y` itself.
+The error is a difference at that exponent.
+And the difference at an exponent
+is itself representable
+as long as its magnitude isn't too big.
+
+Here the bound comes from rounding-to-nearest:
+*the rounded value is at most as far from `x + y`
+as `y` is.*
+(Because `y` is in the format,
+so `|y - (x+y)| = |x|` is one valid distance.)
+
+So `|error| ≤ |x|`, and therefore
+`mag(error) ≤ mag(x)`,
+and therefore `cexp(error) ≤ cexp(x)`,
+and therefore the error sits at a wider exponent
+than its representation requires.
+
+The two arguments are different
+but the conclusion has the same shape:
+*the error is in the format.*
+
+Plus and times,
+each from their own angle,
+arrive at the same place.
