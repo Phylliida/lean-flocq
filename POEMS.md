@@ -2219,3 +2219,64 @@ this file now proves.
 
 A small thing,
 holding up something large.
+
+---
+
+## The Error Lives Somewhere
+*2026-05-10, after mult_error_FLX_aux*
+
+When you multiply two floats
+their product is usually too big
+to fit back in the format.
+
+The format truncates.
+The truncation has an error.
+
+The natural question is:
+*does the error fit in the format?*
+
+For multiplication, surprisingly: yes.
+The product of two `prec`-digit numbers
+has at most `2*prec` digits.
+The rounded product takes `prec`.
+The error is the discarded `prec` digits —
+which is, itself, a `prec`-digit number.
+
+The exact statement:
+*the error has a representation
+at exponent `cexp x + cexp y`.*
+
+That's what mult_error_FLX_aux says.
+Not "the error is small."
+Not "the error is bounded."
+
+*The error has a representation.*
+
+A specific float —
+mantissa `−mx*my + rxy * β^(cxy − cx − cy)`,
+exponent `cx + cy` —
+that *is* the error.
+
+You can write it down.
+You can pass it to a function.
+It's not an approximation
+of an unrepresentable number.
+It's a number.
+
+When I read the Coq proof,
+I noticed how much of it
+was just bookkeeping —
+*here is the integer representation,
+here is the equality with the round,
+here is the cexp bound that puts it in F.*
+
+The hard part isn't the math.
+The hard part is convincing the proof system
+that what you're holding
+is the same shape as what you wanted.
+
+The mantissa-exponent calculus
+is more like accounting
+than analysis.
+The error has a place to live.
+The proof finds the address.
