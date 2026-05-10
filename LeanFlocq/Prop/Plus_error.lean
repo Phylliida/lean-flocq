@@ -264,4 +264,364 @@ theorem round_plus_eq_0 (beta : radix) (fexp : ℤ → ℤ)
   by_contra Hne
   exact round_plus_neq_0 beta fexp hValid h_NotFTZ rnd Fx Fy Hne H
 
+/-! ### Trivial bounds from round-N -/
+
+/-- Round-to-nearest error never exceeds `|x|`. -/
+theorem plus_error_le_l (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (choice : ℤ → Bool)
+    {x y : ℝ}
+    (_Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y) :
+    |round beta fexp (Znearest choice) (x + y) - (x + y)| ≤ |x| := by
+  have h_dist : |round beta fexp (Znearest choice) (x + y) - (x + y)|
+              ≤ |y - (x + y)| :=
+    (round_N_pt beta fexp hValid choice (x + y)).2 y Fy
+  rw [show y - (x + y) = -x from by ring, abs_neg] at h_dist
+  exact h_dist
+
+/-- Round-to-nearest error never exceeds `|y|`. -/
+theorem plus_error_le_r (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (choice : ℤ → Bool)
+    {x y : ℝ}
+    (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y) :
+    |round beta fexp (Znearest choice) (x + y) - (x + y)| ≤ |y| := by
+  rw [add_comm]
+  exact plus_error_le_l beta fexp hValid choice Fy Fx
+
+/-! ### Helper lemmas for round_plus_F2R -/
+
+/-- An F-format value can be expressed at any exponent at most its `cexp`. -/
+theorem ex_shift (beta : radix) (fexp : ℤ → ℤ)
+    {x : ℝ} (e : ℤ)
+    (Fx : generic_format beta fexp x)
+    (He : e ≤ cexp beta fexp x) :
+    ∃ m : ℤ, x = (m : ℝ) * bpow beta e := by
+  refine ⟨Ztrunc (scaled_mantissa beta fexp x)
+        * (beta.val : ℤ) ^ (cexp beta fexp x - e).toNat, ?_⟩
+  have h_diff_nn : 0 ≤ cexp beta fexp x - e := by linarith
+  have h_x : x = (Ztrunc (scaled_mantissa beta fexp x) : ℝ)
+              * bpow beta (cexp beta fexp x) := Fx
+  conv_lhs => rw [h_x]
+  rw [show ((Ztrunc (scaled_mantissa beta fexp x)
+        * (beta.val : ℤ) ^ (cexp beta fexp x - e).toNat : ℤ) : ℝ)
+      = (Ztrunc (scaled_mantissa beta fexp x) : ℝ)
+        * (((beta.val : ℤ) ^ (cexp beta fexp x - e).toNat : ℤ) : ℝ) from by push_cast; ring]
+  rw [IZR_Zpower beta h_diff_nn, mul_assoc, ← bpow_plus]
+  have heq : cexp beta fexp x - e + e = cexp beta fexp x := by ring
+  rw [heq]
+
+/-- `mag(z) - 1 = mag(z / β)` for nonzero `z`. -/
+theorem mag_minus1 (beta : radix) {z : ℝ} (Hz : z ≠ 0) :
+    mag beta z - 1 = mag beta (z / (beta.val : ℝ)) := by
+  -- z / β = z * β^(-1), so mag(z / β) = mag(z) + (-1) = mag(z) - 1.
+  have h_eq : z / (beta.val : ℝ) = z * bpow beta (-1) := by
+    rw [show bpow beta (-1) = ((beta.val : ℝ))⁻¹ from by
+        unfold bpow; simp]
+    rw [div_eq_mul_inv]
+  rw [h_eq, mag_mult_bpow beta Hz]; ring
+
+/-- `lt_mag`: if `0 < y` and `mag x < mag y`, then `x < y`. -/
+theorem lt_mag (beta : radix) {x y : ℝ} (Py : 0 < y) (H : mag beta x < mag beta y) :
+    x < y := by
+  rcases le_or_gt x 0 with hx | hx
+  · linarith
+  · have hx_ne : x ≠ 0 := ne_of_gt hx
+    have hy_ne : y ≠ 0 := ne_of_gt Py
+    have h_x_lt : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+    have h_y_low : bpow beta (mag beta y - 1) ≤ |y| := bpow_mag_le beta hy_ne
+    have h_pow_le : bpow beta (mag beta x) ≤ bpow beta (mag beta y - 1) :=
+      bpow_le beta (by omega)
+    rw [abs_of_pos hx] at h_x_lt
+    rw [abs_of_pos Py] at h_y_low
+    linarith
+
+/-- `mag_minus_lb`: if `0 < x`, `0 < y`, and `mag y ≤ mag x - 2`, then
+`mag x - 1 ≤ mag(x - y)`. -/
+theorem mag_minus_lb (beta : radix) {x y : ℝ}
+    (Px : 0 < x) (Py : 0 < y) (Hln : mag beta y ≤ mag beta x - 2) :
+    mag beta x - 1 ≤ mag beta (x - y) := by
+  have Hbeta : 2 ≤ beta.val := beta.prop
+  have hx_ne : x ≠ 0 := ne_of_gt Px
+  have hy_ne : y ≠ 0 := ne_of_gt Py
+  -- bpow(mag x - 1) ≤ |x| = x.
+  have h_x_low : bpow beta (mag beta x - 1) ≤ x := by
+    have := bpow_mag_le beta hx_ne; rw [abs_of_pos Px] at this; exact this
+  have h_y_high : y < bpow beta (mag beta y) := by
+    have := bpow_mag_gt beta y; rw [abs_of_pos Py] at this; exact this
+  -- bpow(mag x - 2) + bpow(mag x - 2) ≤ x: from bpow(mag x - 1) = β * bpow(mag x - 2)
+  -- and 2 ≤ β.
+  have h_step : bpow beta (mag beta x - 2) + bpow beta (mag beta x - 2) ≤ x := by
+    refine le_trans ?_ h_x_low
+    have h_pow_split : bpow beta (mag beta x - 1)
+                    = (beta.val : ℝ) * bpow beta (mag beta x - 2) := by
+      rw [show (mag beta x - 1 : ℤ) = (mag beta x - 2) + 1 from by ring,
+          bpow_plus, bpow_one]; ring
+    rw [h_pow_split]
+    have h_beta_real : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast Hbeta
+    have h_pow_nn : 0 ≤ bpow beta (mag beta x - 2) := bpow_ge_0 _ _
+    nlinarith
+  -- y < bpow(mag x - 2): from y < bpow(mag y) and mag y ≤ mag x - 2.
+  have h_y_lt : y < bpow beta (mag beta x - 2) := by
+    refine lt_of_lt_of_le h_y_high ?_
+    exact bpow_le beta Hln
+  -- bpow(mag x - 2) ≤ x - y.
+  have h_xy_lb : bpow beta (mag beta x - 2) ≤ x - y := by linarith
+  -- From bpow(mag x - 2) ≤ |x - y|, get mag x - 1 ≤ mag(x - y).
+  apply mag_ge_bpow
+  rw [show (mag beta x - 1 - 1 : ℤ) = mag beta x - 2 from by ring]
+  -- |x - y| ≥ bpow(mag x - 2). Note x - y > 0 since y < x (from lt_mag).
+  have h_xy_pos : 0 < x - y := by
+    have : y < x := lt_mag beta Px (by omega)
+    linarith
+  rw [abs_of_pos h_xy_pos]
+  exact h_xy_lb
+
+/-! ### round_plus_F2R: structure of the rounded sum -/
+
+/-- For `x ≠ 0` and `x, y ∈ F`, the rounded sum `round(x + y)` has an
+F2R-representation at exponent `cexp(x / β)`. -/
+theorem round_plus_F2R (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (hMon : Monotone_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ}
+    (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y) (Zx : x ≠ 0) :
+    ∃ m : ℤ, round beta fexp rnd (x + y)
+      = F2R (beta := beta) ⟨m, cexp beta fexp (x / (beta.val : ℝ))⟩ := by
+  set e := cexp beta fexp (x / (beta.val : ℝ)) with he_def
+  rcases le_or_gt (mag beta (x / (beta.val : ℝ))) (mag beta y) with H1 | H1
+  · -- Case 1: mag(x/β) ≤ mag(y).
+    have h_e_le_x : e ≤ cexp beta fexp x := by
+      show cexp beta fexp _ ≤ cexp beta fexp x
+      unfold cexp; apply hMon
+      rw [← mag_minus1 beta Zx]; omega
+    have h_e_le_y : e ≤ cexp beta fexp y := by
+      show cexp beta fexp _ ≤ cexp beta fexp y
+      unfold cexp; exact hMon _ _ H1
+    obtain ⟨nx, Hnx⟩ := ex_shift beta fexp e Fx h_e_le_x
+    obtain ⟨ny, Hny⟩ := ex_shift beta fexp e Fy h_e_le_y
+    obtain ⟨n, Hn⟩ := round_repr_same_exp beta fexp rnd (nx + ny) e
+    refine ⟨n, ?_⟩
+    rw [show x + y = F2R (beta := beta) ⟨nx + ny, e⟩ from by
+        rw [Hnx, Hny]
+        show (nx : ℝ) * bpow beta e + (ny : ℝ) * bpow beta e
+            = ((nx + ny : ℤ) : ℝ) * bpow beta e
+        push_cast; ring]
+    exact Hn
+  · -- Case 2: mag(y) < mag(x/β) = mag(x) - 1, so mag(y) ≤ mag(x) - 2.
+    have h_mag_minus1_eq : mag beta (x / (beta.val : ℝ)) = mag beta x - 1 :=
+      (mag_minus1 beta Zx).symm
+    have H1' : mag beta y ≤ mag beta x - 2 := by rw [h_mag_minus1_eq] at H1; omega
+    -- x + y ≠ 0: if y = -x, mag y = mag x, contradicting H1'.
+    have hxy_ne : x + y ≠ 0 := by
+      intro h
+      have h_y_neg_x : y = -x := by linarith
+      have : mag beta y = mag beta x := by rw [h_y_neg_x]; exact mag_opp beta x
+      omega
+    have h_round_ne : round beta fexp rnd (x + y) ≠ 0 :=
+      round_plus_neq_0 beta fexp hValid (monotone_exp_not_FTZ hValid hMon) rnd Fx Fy hxy_ne
+    -- mag x - 1 ≤ mag (x + y).
+    have h_mag_xy : mag beta x - 1 ≤ mag beta (x + y) := by
+      apply mag_ge_bpow
+      rw [show (mag beta x - 1 - 1 : ℤ) = mag beta x - 2 from by ring]
+      have h_x_low : bpow beta (mag beta x - 1) ≤ |x| := bpow_mag_le beta Zx
+      have h_y_high : |y| < bpow beta (mag beta x - 2) := by
+        by_cases hy : y = 0
+        · rw [hy, abs_zero]; exact bpow_gt_0 _ _
+        · have h1 : |y| < bpow beta (mag beta y) := bpow_mag_gt beta y
+          have h2 : bpow beta (mag beta y) ≤ bpow beta (mag beta x - 2) :=
+            bpow_le beta H1'
+          linarith
+      have h_pow_split : bpow beta (mag beta x - 1)
+                      = (beta.val : ℝ) * bpow beta (mag beta x - 2) := by
+        rw [show (mag beta x - 1 : ℤ) = (mag beta x - 2) + 1 from by ring,
+            bpow_plus, bpow_one]; ring
+      have h_beta_real : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+      have h_pow_nn : 0 ≤ bpow beta (mag beta x - 2) := bpow_ge_0 _ _
+      -- |x| - |y| ≥ bpow(mag x - 2).
+      have h_sub : bpow beta (mag beta x - 2) ≤ |x| - |y| := by
+        have h_2pow : 2 * bpow beta (mag beta x - 2)
+                    ≤ bpow beta (mag beta x - 1) := by
+          rw [h_pow_split]; nlinarith
+        linarith
+      -- |x + y| ≥ | |x| - |y| | ≥ |x| - |y|.
+      have h_abs : |x| - |y| ≤ |x + y| := by
+        have h_rev := abs_sub_abs_le_abs_sub x (-y)
+        rw [show x - -y = x + y from by ring, abs_neg] at h_rev
+        have h_self : |x| - |y| ≤ |(|x| - |y|)| := le_abs_self _
+        linarith
+      linarith
+    -- e ≤ cexp (round (x + y)).
+    have h_e_le_round : e ≤ cexp beta fexp (round beta fexp rnd (x + y)) := by
+      refine le_trans ?_ (cexp_round_ge beta fexp hValid hMon rnd h_round_ne)
+      show cexp beta fexp _ ≤ cexp beta fexp (x + y)
+      unfold cexp; apply hMon
+      rw [h_mag_minus1_eq]; exact h_mag_xy
+    obtain ⟨n, Hn⟩ := ex_shift beta fexp e
+                        (generic_format_round beta fexp hValid rnd (x + y))
+                        h_e_le_round
+    exact ⟨n, Hn⟩
+
+/-! ### Round of x + y is at least one ulp -/
+
+/-- Under `Exp_not_FTZ` (and Monotone), the rounded nonzero sum is at least
+`ulp(x / β)`. -/
+theorem round_plus_ge_ulp (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (hMon : Monotone_exp fexp)
+    (h_NotFTZ : Exp_not_FTZ fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ}
+    (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (KK : round beta fexp rnd (x + y) ≠ 0) :
+    ulp beta fexp (x / (beta.val : ℝ)) ≤ |round beta fexp rnd (x + y)| := by
+  by_cases Zx : x = 0
+  · -- x = 0: round(0 + y) = y (since y ∈ F).
+    rw [Zx, zero_add, round_generic beta fexp rnd Fy]
+    rw [show (0 : ℝ) / (beta.val : ℝ) = 0 from by ring]
+    have h_y_F : y = (Ztrunc (scaled_mantissa beta fexp y) : ℝ)
+                  * bpow beta (cexp beta fexp y) := Fy
+    by_cases Hm : Ztrunc (scaled_mantissa beta fexp y) = 0
+    · -- y = 0 and round(0 + 0) = 0, contradicting KK.
+      exfalso
+      apply KK
+      rw [Zx, zero_add, h_y_F, Hm]; push_cast; rw [zero_mul]; exact round_0 _ _ _
+    · have hy_ne : y ≠ 0 := by
+        rw [h_y_F]; intro h
+        rcases mul_eq_zero.mp h with h1 | h1
+        · apply Hm; exact_mod_cast h1
+        · exact (bpow_ne_0 _ _) h1
+      -- Chain: ulp 0 ≤ ulp y = bpow(cexp y) ≤ |my| * bpow(cexp y) = |y|.
+      refine le_trans (ulp_ge_ulp_0 beta fexp hValid h_NotFTZ y) ?_
+      rw [ulp_neq_0 beta fexp hy_ne]
+      have h_y_abs : |y| = (|Ztrunc (scaled_mantissa beta fexp y)| : ℝ)
+                          * bpow beta (cexp beta fexp y) := by
+        conv_lhs => rw [h_y_F]
+        rw [abs_mul, abs_of_pos (bpow_gt_0 _ _)]
+      rw [h_y_abs]
+      have h_m_ge_1 : (1 : ℝ) ≤ (|Ztrunc (scaled_mantissa beta fexp y)| : ℝ) := by
+        have : 1 ≤ |Ztrunc (scaled_mantissa beta fexp y)| := by
+          rcases lt_trichotomy (Ztrunc (scaled_mantissa beta fexp y)) 0 with h | h | h
+          · rw [abs_of_neg h]; omega
+          · exact absurd h Hm
+          · rw [abs_of_pos h]; exact h
+        exact_mod_cast this
+      have h_pow_nn : 0 ≤ bpow beta (cexp beta fexp y) := bpow_ge_0 _ _
+      nlinarith
+  · obtain ⟨m, Hm⟩ := round_plus_F2R beta fexp hValid hMon rnd Fx Fy Zx
+    by_cases Zm : m = 0
+    · exfalso; apply KK; rw [Hm, Zm]; exact F2R_0 _
+    · rw [Hm]
+      have h_div_ne : x / (beta.val : ℝ) ≠ 0 := by
+        intro h
+        apply Zx
+        have hb_ne : (beta.val : ℝ) ≠ 0 := ne_of_gt (radix_pos beta)
+        rw [div_eq_zero_iff] at h
+        rcases h with h | h
+        · exact h
+        · exact absurd h hb_ne
+      rw [ulp_neq_0 beta fexp h_div_ne]
+      show bpow beta (cexp beta fexp (x / (beta.val : ℝ)))
+          ≤ |F2R (beta := beta) ⟨m, cexp beta fexp (x / (beta.val : ℝ))⟩|
+      have h_F2R_abs : |F2R (beta := beta) ⟨m, cexp beta fexp (x / (beta.val : ℝ))⟩|
+                    = (|m| : ℝ) * bpow beta (cexp beta fexp (x / (beta.val : ℝ))) := by
+        show |(m : ℝ) * bpow beta _| = |(m : ℝ)| * bpow beta _
+        rw [abs_mul, abs_of_pos (bpow_gt_0 _ _)]
+      rw [h_F2R_abs]
+      have h_abs_m : (1 : ℝ) ≤ (|m| : ℝ) := by
+        have : 1 ≤ |m| := by
+          rcases lt_trichotomy m 0 with hm | hm | hm
+          · rw [abs_of_neg hm]; omega
+          · exact absurd hm Zm
+          · rw [abs_of_pos hm]; exact hm
+        exact_mod_cast this
+      have h_pow_nn : 0 ≤ bpow beta (cexp beta fexp (x / (beta.val : ℝ))) := bpow_ge_0 _ _
+      nlinarith
+
+/-! ### `round_FLT_plus_ge` and friends -/
+
+/-- In FLT, if `|x| ≥ β^(e + prec)` and the sum doesn't round to zero, then
+the rounded sum has magnitude at least `β^e`. -/
+theorem round_FLT_plus_ge (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ} (e : ℤ)
+    (Fx : generic_format beta (FLT_exp emin prec) x)
+    (Fy : generic_format beta (FLT_exp emin prec) y)
+    (He : bpow beta (e + prec) ≤ |x|)
+    (KK : round beta (FLT_exp emin prec) rnd (x + y) ≠ 0) :
+    bpow beta e ≤ |round beta (FLT_exp emin prec) rnd (x + y)| := by
+  have Zx : x ≠ 0 := by
+    intro hx; rw [hx, abs_zero] at He
+    exact absurd He (not_le_of_gt (bpow_gt_0 _ _))
+  have h_div_ne : x / (beta.val : ℝ) ≠ 0 := by
+    intro h
+    have hb_ne : (beta.val : ℝ) ≠ 0 := ne_of_gt (radix_pos beta)
+    rw [div_eq_zero_iff] at h
+    rcases h with h | h
+    · exact Zx h
+    · exact hb_ne h
+  refine le_trans ?_ (round_plus_ge_ulp beta (FLT_exp emin prec)
+                      (FLT_exp_valid emin prec Hp) (FLT_exp_monotone emin prec)
+                      (monotone_exp_not_FTZ (FLT_exp_valid emin prec Hp)
+                        (FLT_exp_monotone emin prec))
+                      rnd Fx Fy KK)
+  rw [ulp_neq_0 beta (FLT_exp emin prec) h_div_ne]
+  show bpow beta e ≤ bpow beta (cexp beta (FLT_exp emin prec) (x / (beta.val : ℝ)))
+  apply bpow_le
+  unfold cexp
+  rw [← mag_minus1 beta Zx]
+  unfold FLT_exp
+  have h_mag : e + prec < mag beta x :=
+    lt_bpow beta (lt_of_le_of_lt He (bpow_mag_gt beta x))
+  exact le_max_of_le_left (by omega)
+
+/-- Generalization: if `x = 0` then `|y| ≥ β^e` is enough. -/
+theorem round_FLT_plus_ge' (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ} (e : ℤ)
+    (Fx : generic_format beta (FLT_exp emin prec) x)
+    (Fy : generic_format beta (FLT_exp emin prec) y)
+    (H1 : x ≠ 0 → bpow beta (e + prec) ≤ |x|)
+    (H2 : x = 0 → y ≠ 0 → bpow beta e ≤ |y|)
+    (H3 : round beta (FLT_exp emin prec) rnd (x + y) ≠ 0) :
+    bpow beta e ≤ |round beta (FLT_exp emin prec) rnd (x + y)| := by
+  by_cases H4 : x = 0
+  · by_cases H5 : y = 0
+    · exfalso; apply H3
+      rw [H4, H5, add_zero, round_0]
+    · rw [H4, zero_add, round_generic beta (FLT_exp emin prec) rnd Fy]
+      exact H2 H4 H5
+  · exact round_FLT_plus_ge beta emin prec Hp rnd e Fx Fy (H1 H4) H3
+
+/-- The same statement for FLX. -/
+theorem round_FLX_plus_ge (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ} (e : ℤ)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (Fy : generic_format beta (FLX_exp prec) y)
+    (He : bpow beta (e + prec) ≤ |x|)
+    (KK : round beta (FLX_exp prec) rnd (x + y) ≠ 0) :
+    bpow beta e ≤ |round beta (FLX_exp prec) rnd (x + y)| := by
+  have Zx : x ≠ 0 := by
+    intro hx; rw [hx, abs_zero] at He
+    exact absurd He (not_le_of_gt (bpow_gt_0 _ _))
+  have h_div_ne : x / (beta.val : ℝ) ≠ 0 := by
+    intro h
+    have hb_ne : (beta.val : ℝ) ≠ 0 := ne_of_gt (radix_pos beta)
+    rw [div_eq_zero_iff] at h
+    rcases h with h | h
+    · exact Zx h
+    · exact hb_ne h
+  refine le_trans ?_ (round_plus_ge_ulp beta (FLX_exp prec)
+                      (FLX_exp_valid prec Hp) (FLX_exp_monotone prec)
+                      (monotone_exp_not_FTZ (FLX_exp_valid prec Hp)
+                        (FLX_exp_monotone prec))
+                      rnd Fx Fy KK)
+  rw [ulp_neq_0 beta (FLX_exp prec) h_div_ne]
+  show bpow beta e ≤ bpow beta (cexp beta (FLX_exp prec) (x / (beta.val : ℝ)))
+  apply bpow_le
+  unfold cexp
+  rw [← mag_minus1 beta Zx]
+  unfold FLX_exp
+  have h_mag : e + prec < mag beta x :=
+    lt_bpow beta (lt_of_le_of_lt He (bpow_mag_gt beta x))
+  omega
+
 end LeanFlocq
