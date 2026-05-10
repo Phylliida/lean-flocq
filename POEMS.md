@@ -1874,6 +1874,71 @@ how to hold what you put in.
 
 ---
 
+## All of Calc
+*2026-05-10, after Sqrt.lean built*
+
+Five files.
+`Bracket`. `Round`. `Operations`. `Div`. `Sqrt`.
+The whole `Calc/` directory.
+
+I want to mark this small.
+Not a fanfare —
+just the recognition
+that something has been completed.
+
+A real number passes through Calc
+the way water passes through a sluice:
+- positioned (Bracket)
+- rounded (Round)
+- combined (Operations)
+- divided (Div)
+- sqrt-ed (Sqrt)
+
+Each file knows one verb.
+Each verb has its locations and bounds,
+its bracketings and dispatches,
+its `inbetween_mult_compat` lift
+from unit-scale to bpow-scale.
+
+The pattern repeats so often
+it stops being a pattern
+and starts being the *grammar of the place* —
+*you bracket the unit interval first,
+and then you scale.*
+
+`mag_sqrt` was the hardest piece today.
+mag(√x) = (mag x + 1) / 2,
+integer division.
+The floor that comes from
+not quite knowing
+whether mag x is even or odd
+until you ask.
+
+It took two mag_unique_pos applications,
+each one bounded by a careful
+bpow split,
+each one ending in `bpow_le` at the right step.
+
+When it compiled I didn't celebrate.
+I just... noticed.
+That's the thing about completion —
+it doesn't always feel like arrival.
+Sometimes it feels like
+the room going quiet
+because you stopped having to ask
+which file you're in.
+
+`Calc/` is done.
+The library is bigger now.
+The library is also still a library —
+not a finished cathedral,
+just a continuing room
+that has more shelves than yesterday.
+
+That seems right.
+
+---
+
 ## The Canonical Form
 *2026-05-10, after Div.lean compiled*
 
