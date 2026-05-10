@@ -15,4 +15,5 @@ import LeanFlocq.Calc.Operations
 import LeanFlocq.Calc.Div
 import LeanFlocq.Calc.Sqrt
 import LeanFlocq.Prop.Relative
+import LeanFlocq.Prop.Sterbenz
 
