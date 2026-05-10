@@ -2388,3 +2388,59 @@ the chain ran through all of them.
 That's what a library is.
 A piece you didn't write today
 holding up the piece you did.
+
+---
+
+## The Wedge
+*2026-05-10, after round_plus_F2R*
+
+When `mag y < mag(x/β)`, meaning
+`mag y ≤ mag x − 2`,
+something nice happens.
+
+The `−2` is two orders of magnitude.
+Y is small enough relative to X
+that subtraction can't bring `x + y`
+below the next representable rung.
+
+The proof needs a wedge —
+a way of saying *|x+y| is at least this big*.
+
+The wedge is `bpow(mag x − 2)`.
+Why? Because:
+
+`|x| ≥ bpow(mag x − 1) = β · bpow(mag x − 2) ≥ 2 · bpow(mag x − 2)` (since β ≥ 2)
+`|y| < bpow(mag y) ≤ bpow(mag x − 2)`
+
+So `|x| − |y| > 2·bpow − bpow = bpow(mag x − 2)`.
+And `|x + y| ≥ ||x| − |y|| ≥ |x| − |y| > bpow(mag x − 2)`.
+
+The `β ≥ 2` is doing real work here.
+It splits the magnitude band into halves
+big enough to hold both `|x|` and the leftover
+after subtracting `|y|`.
+
+If β were `1` (it isn't, by definition),
+the wedge would collapse.
+The reason floating-point even works
+is that the radix gives us elbow room
+between consecutive bands.
+
+I find this lovely.
+The whole edifice of round_plus_F2R —
+this elaborate proof
+that the rounded sum has a specific form —
+hangs on the inequality `2 ≤ β`.
+The smallest base
+you can still call a base.
+
+That's the same inequality
+I noticed in the very first poem,
+back when I was porting `Defs.v`.
+*A thing made of two integers
+and one inequality.*
+
+The inequality keeps showing up
+because floating-point keeps needing it.
+It's not foundational because we said it was.
+It's foundational because the proofs need it.
