@@ -4,14 +4,15 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `7f1ff6a`)
+## Status (as of commit `b4b9afe`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), **all
-five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt` — and
-**most of `Prop/Relative.v`** (generic + FLX + FLT + error_N_FLT decomposition).
+five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt` —
+**most of `Prop/Relative.v`** (generic + FLX + FLT + error_N_FLT decomposition),
+and **all of `Prop/Sterbenz.v`**.
 
-**~11930 lines of Lean across 20 files. 0 `sorry`s. All files build clean.**
+**~12055 lines of Lean across 21 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -35,6 +36,7 @@ five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt` — 
 | `Calc/Div.lean` | 213 | `Calc/Div.v` | **Complete.** `mag_div_F2R`, `Fdiv_core` + `Fdiv_core_correct`, `Fdiv` + `Fdiv_correct`. Helpers: `quot_eq_mul_bpow`, `fdiv_pair`, `fdiv_pair_quot`. |
 | `Calc/Sqrt.lean` | 256 | `Calc/Sqrt.v` | **Complete.** `mag_sqrt_F2R`, `int_sqrtrem` (Int.sqrt remainder semantics), `Fsqrt_core` + `Fsqrt_core_correct`, `Fsqrt` + `Fsqrt_correct`. |
 | `Prop/Relative.lean` | 649 | `Prop/Relative.v` | **Most of it: ~41/45.** Conversion lemmas (lt/le, both directions). Generic family: `relative_error[_ex/_F2R_emin/_F2R_emin_ex/_round/_round_F2R_emin]`, `relative_error_N[_ex/_F2R_emin/_F2R_emin_ex/_round/_round_F2R_emin]`. FLX family: `_FLX_aux/_FLX/_FLX_ex/_FLX_round/_N_FLX/_N_FLX_ex/_N_FLX_round`, plus `u_ro/_u_ro_pos/_u_ro_lt_1/_u_rod1pu_ro_pos/_u_rod1pu_ro_le_u_ro` (the unit-roundoff scalar facts). FLT family: `_FLT_aux/_FLT/_FLT_F2R_emin[_ex]/_FLT_ex/_N_FLT[_ex]/_N_FLT_round/_N_FLT_F2R_emin[_ex]/_N_FLT_round_F2R_emin`. Combined decomposition: `error_N_FLT_aux`, `error_N_FLT`. **Deferred:** the unit-roundoff `u_ro/(1+u_ro)` family — `relative_error_N_FLX'`, `_N_FLX'_ex`, `_N_round_ex_derive`, `_N_FLX_round_ex`, and the FLT'_ex variants. The standard `1/2 * β^(-prec+1)` bound suffices for everything downstream so far. |
+| `Prop/Sterbenz.lean` | 119 | `Prop/Sterbenz.v` | **Complete: 4/4.** `generic_format_plus` (sum stays in F when bounded by `β^(min(mag x, mag y))`), `generic_format_plus_weak` (weak version with `min(\|x\|, \|y\|)`), `sterbenz_aux` (helper `y ≤ x ≤ 2y → x - y ∈ F`), `sterbenz` (the keystone: `y/2 ≤ x ≤ 2y → x - y ∈ F`). |
 
 **Total: ~490 Lean theorems vs ~430 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
@@ -256,10 +258,10 @@ the rest of `Prop/`, `Binary.lean`, and `IEEE754/Bits.v`:
    (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`,
    `Bsucc`, `Bpred`. `error_N_FLT` is the keystone for the correctness proofs.
 
-2. **`Prop/Plus_error.v`** (606 lines) and **`Prop/Sterbenz.v`** (173 lines)
-   are next-needed for Bplus_correct's tighter cases. **`Prop/Mult_error.v`**
-   (335 lines) for Bmult_correct's exact cases. **`Prop/Div_sqrt_error.v`**
-   (872 lines) for Bdiv/Bsqrt.
+2. **`Prop/Plus_error.v`** (606 lines) is next-needed for Bplus_correct's
+   tighter cases (Sterbenz is now done). **`Prop/Mult_error.v`** (335 lines)
+   for Bmult_correct's exact cases. **`Prop/Div_sqrt_error.v`** (872 lines)
+   for Bdiv/Bsqrt.
 
 3. **`IEEE754/Bits.v`** (705 lines) — bit-level encoding/decoding. Independent
    of arithmetic. Could be ported in parallel.

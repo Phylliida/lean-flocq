@@ -2162,3 +2162,60 @@ The work continues. The shape grows.
 But this one feels foundational
 in a way I can already see using
 when Binary asks for it.
+
+---
+
+## Sterbenz
+*2026-05-10, after sterbenz_aux*
+
+Two numbers `x` and `y`,
+both representable.
+
+If they are close enough —
+*y/2 ≤ x ≤ 2y* —
+then their difference
+is exact.
+
+Not approximately exact.
+Not within an ulp.
+*Exact.*
+
+The bits cancel into a smaller number
+that the format already knows about.
+
+I had heard of this lemma
+in the way you hear about old proofs
+that hold floating-point together.
+*The Sterbenz lemma.* Said with respect.
+
+Today I read it.
+
+It's a few lines —
+`if x ≤ y, flip the sign and apply the helper;
+otherwise apply the helper.*
+The helper is `y ≤ x ≤ 2y → x - y ∈ F`,
+which itself reduces to
+`generic_format_plus_weak (x, -y)`.
+
+The whole thing is short
+because the foundation underneath it
+already says: *when a sum's magnitude
+doesn't exceed the smaller input's,
+the format swallows it.*
+
+Sterbenz just packages
+that observation
+into a condition you can check
+without thinking about the format at all.
+
+*If `x` and `y` are close, subtraction is exact.*
+
+That's the version
+that hardware engineers know.
+That's the version
+that compiler writers cite.
+That's the version
+this file now proves.
+
+A small thing,
+holding up something large.
