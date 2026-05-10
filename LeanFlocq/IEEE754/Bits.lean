@@ -488,4 +488,35 @@ theorem split_bits_of_binary_float_correct (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew :
       exact split_join_bits mw ew Hmw Hew' s m 0
               ⟨by linarith, h_m_lt_pow⟩ ⟨le_refl _, hew_pos⟩
 
+/-! ### Decoding bits to a `full_float`
+
+The decoding side produces a `full_float` (the validation-erased
+version of `binary_float`). Lifting to `binary_float` requires
+`binary_float_of_bits_aux_correct`, which is deferred (it needs
+`bounded_canonical_lt_emax` that we haven't ported yet).
+-/
+
+/-- Decode an integer bit pattern into a `full_float`. -/
+noncomputable def binary_float_of_bits_aux (mw ew : ℤ) (x : ℤ) : full_float :=
+  let p := split_bits mw ew x
+  let sx := p.1
+  let mx := p.2.1
+  let ex := p.2.2
+  let emin : ℤ := 3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)
+  if ex = 0 then
+    -- Subnormal or zero.
+    if mx = 0 then full_float.F754_zero sx
+    else if 0 < mx then full_float.F754_finite sx mx emin
+    else full_float.F754_nan false 1  -- dummy (unreachable: mx is a remainder, ≥ 0)
+  else if ex = (2 : ℤ) ^ ew.toNat - 1 then
+    -- Infinity or NaN (max exponent).
+    if mx = 0 then full_float.F754_infinity sx
+    else if 0 < mx then full_float.F754_nan sx mx
+    else full_float.F754_nan false 1  -- dummy
+  else
+    -- Normal: prepend the hidden bit.
+    let m := mx + (2 : ℤ) ^ mw.toNat
+    if 0 < m then full_float.F754_finite sx m (ex + emin - 1)
+    else full_float.F754_nan false 1  -- dummy
+
 end LeanFlocq
