@@ -8,9 +8,14 @@ Initial port: `join_bits`, `split_bits`, and `join_bits_range`. The full
 round-trip theorems and the `bits_of_binary_float` family are deferred.
 -/
 import LeanFlocq.Core.Defs
+import LeanFlocq.Core.Zaux
+import LeanFlocq.Core.Raux
+import LeanFlocq.Core.Digits
 import LeanFlocq.Core.Binary
 
 namespace LeanFlocq
+
+open radix (radix2)
 
 /-! ### Bit-level encoding
 
@@ -245,5 +250,131 @@ theorem split_bits_inj (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew : 0 ≤ ew)
   simp only at hjx hjy
   rw [H] at hjx
   linarith [hjx, hjy]
+
+/-! ### IEEE 754 encoding of `binary_float` -/
+
+/-- Pack a `binary_float` into its IEEE 754 integer representation.
+
+Parameterized by mantissa width `mw` and exponent width `ew`.
+Recovers Coq's `prec := mw + 1` (with hidden bit) and `emax := 2^(ew - 1)`. -/
+noncomputable def bits_of_binary_float (mw ew : ℤ)
+    (x : binary_float (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat)) : ℤ :=
+  match x with
+  | .B754_zero s => join_bits mw ew s 0 0
+  | .B754_infinity s => join_bits mw ew s 0 ((2 : ℤ) ^ ew.toNat - 1)
+  | .B754_nan s pl _ => join_bits mw ew s pl ((2 : ℤ) ^ ew.toNat - 1)
+  | .B754_finite s m e _ =>
+    let mm := m - (2 : ℤ) ^ mw.toNat
+    if 0 ≤ mm then
+      join_bits mw ew s mm (e - (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) + 1)
+    else
+      join_bits mw ew s m 0
+
+/-- The integer encoding of a `binary_float` lies in `[0, 2^(mw+ew+1))`. -/
+theorem bits_of_binary_float_range (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew : 0 < ew)
+    (x : binary_float (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat)) :
+    0 ≤ bits_of_binary_float mw ew x
+      ∧ bits_of_binary_float mw ew x < (2 : ℤ) ^ (mw + ew + 1).toNat := by
+  have Hew' : 0 ≤ ew := le_of_lt Hew
+  have hmw_pos : 0 < (2 : ℤ) ^ mw.toNat := pow_pos (by norm_num) _
+  have hew_pos : 0 < (2 : ℤ) ^ ew.toNat := pow_pos (by norm_num) _
+  have hew_m1_pos : 0 < (2 : ℤ) ^ (ew - 1).toNat := pow_pos (by norm_num) _
+  -- 2^ew = 2 * 2^(ew - 1).
+  have h_pow_ew : (2 : ℤ) ^ ew.toNat = 2 * (2 : ℤ) ^ (ew - 1).toNat := by
+    have h_toNat : ew.toNat = (ew - 1).toNat + 1 := by omega
+    rw [h_toNat, pow_succ]; ring
+  cases x with
+  | B754_zero s =>
+    show 0 ≤ join_bits mw ew s 0 0 ∧ _
+    exact join_bits_range mw ew Hmw Hew' s 0 0
+            ⟨le_refl _, hmw_pos⟩ ⟨le_refl _, hew_pos⟩
+  | B754_infinity s =>
+    show 0 ≤ join_bits mw ew s 0 ((2 : ℤ) ^ ew.toNat - 1) ∧ _
+    refine join_bits_range mw ew Hmw Hew' s 0 ((2 : ℤ) ^ ew.toNat - 1)
+            ⟨le_refl _, hmw_pos⟩ ⟨?_, ?_⟩
+    · linarith
+    · linarith
+  | B754_nan s pl h_nan =>
+    obtain ⟨h_pl_pos, h_pl_digits⟩ := h_nan
+    show 0 ≤ join_bits mw ew s pl ((2 : ℤ) ^ ew.toNat - 1) ∧ _
+    refine join_bits_range mw ew Hmw Hew' s pl ((2 : ℤ) ^ ew.toNat - 1)
+            ⟨by linarith, ?_⟩ ⟨by linarith, by linarith⟩
+    have h_pl_lt_pow : pl < (2 : ℤ) ^ mw.toNat := by
+      have h_mag : Zdigits radix2 pl ≤ mw := by linarith
+      have h_pl_ne : pl ≠ 0 := by linarith
+      have h_corr := Zdigits_correct radix2 h_pl_ne
+      have h_pl_lt : |(pl : ℝ)| < bpow radix2 (Zdigits radix2 pl) := h_corr.2
+      have h_pow_le : bpow radix2 (Zdigits radix2 pl) ≤ bpow radix2 mw := bpow_le _ h_mag
+      have h_pl_abs : |(pl : ℝ)| = (pl : ℝ) := abs_of_pos (by exact_mod_cast (by linarith : 0 < pl))
+      have h_pl_bpow : (pl : ℝ) < bpow radix2 mw := by
+        rw [← h_pl_abs]; linarith
+      have h_bpow_eq : bpow radix2 mw = ((2 : ℤ) ^ mw.toNat : ℝ) := by
+        rw [← IZR_Zpower radix2 Hmw]
+        push_cast
+        rfl
+      rw [h_bpow_eq] at h_pl_bpow
+      exact_mod_cast h_pl_bpow
+    exact h_pl_lt_pow
+  | B754_finite s m e h_bd =>
+    have h_m_pos : 1 ≤ m := h_bd.1
+    have h_canon : canonical_mantissa (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat) m e := h_bd.2.1
+    have h_e_le : e ≤ (2 : ℤ) ^ (ew - 1).toNat - (mw + 1) := h_bd.2.2
+    have h_m_ne : m ≠ 0 := by linarith
+    -- m < 2 * 2^mw: from Zdigits radix2 m ≤ prec = mw + 1.
+    have h_m_digits : Zdigits radix2 m ≤ mw + 1 := by
+      unfold canonical_mantissa FLT_exp at h_canon
+      have h_d_pos : 1 ≤ Zdigits radix2 m := Zdigits_gt_0 radix2 h_m_ne
+      have h_max_le : (Zdigits radix2 m + e) - (mw + 1) ≤ e := by
+        have h_le_right : ((Zdigits radix2 m + e) - (mw + 1))
+            ≤ max ((Zdigits radix2 m + e) - (mw + 1))
+                  (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) :=
+          le_max_left _ _
+        linarith [le_of_eq h_canon, h_le_right]
+      linarith
+    have h_m_lt : m < 2 * (2 : ℤ) ^ mw.toNat := by
+      have h_corr := Zdigits_correct radix2 h_m_ne
+      have h_m_lt_bpow : |(m : ℝ)| < bpow radix2 (Zdigits radix2 m) := h_corr.2
+      have h_pow_le : bpow radix2 (Zdigits radix2 m) ≤ bpow radix2 (mw + 1) :=
+        bpow_le _ h_m_digits
+      have h_m_abs : |(m : ℝ)| = (m : ℝ) := abs_of_pos (by exact_mod_cast (by linarith : 0 < m))
+      have h_m_bpow : (m : ℝ) < bpow radix2 (mw + 1) := by
+        rw [← h_m_abs]; linarith
+      have h_bpow_eq : bpow radix2 (mw + 1) = ((2 : ℤ) ^ (mw + 1).toNat : ℝ) := by
+        rw [← IZR_Zpower radix2 (by linarith : (0 : ℤ) ≤ mw + 1)]
+        push_cast
+        rfl
+      rw [h_bpow_eq] at h_m_bpow
+      have h_m_lt_int : m < (2 : ℤ) ^ (mw + 1).toNat := by exact_mod_cast h_m_bpow
+      have h_pow_succ : (2 : ℤ) ^ (mw + 1).toNat = 2 * (2 : ℤ) ^ mw.toNat := by
+        have : (mw + 1).toNat = mw.toNat + 1 := by omega
+        rw [this, pow_succ]; ring
+      linarith
+    -- emin ≤ e from h_canon (via max ≥ emin).
+    have h_emin_le : 3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1) ≤ e := by
+      unfold canonical_mantissa FLT_exp at h_canon
+      have h_max_ge :
+          (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1))
+          ≤ max ((Zdigits radix2 m + e) - (mw + 1))
+                (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) :=
+        le_max_right _ _
+      linarith [le_of_eq h_canon]
+    -- Compute the bits_of_binary_float for the finite case explicitly.
+    show 0 ≤ bits_of_binary_float mw ew (.B754_finite s m e h_bd)
+          ∧ bits_of_binary_float mw ew (.B754_finite s m e h_bd)
+              < (2 : ℤ) ^ (mw + ew + 1).toNat
+    unfold bits_of_binary_float
+    simp only
+    by_cases h_mm : 0 ≤ m - (2 : ℤ) ^ mw.toNat
+    · rw [if_pos h_mm]
+      refine join_bits_range mw ew Hmw Hew' s (m - (2 : ℤ) ^ mw.toNat)
+              (e - (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) + 1)
+              ⟨h_mm, by linarith [h_m_lt]⟩ ⟨by linarith, ?_⟩
+      rw [h_pow_ew]
+      linarith
+    · push_neg at h_mm
+      have h_m_lt_pow : m < (2 : ℤ) ^ mw.toNat := by linarith
+      rw [if_neg (not_le.mpr h_mm)]
+      exact join_bits_range mw ew Hmw Hew' s m 0
+              ⟨by linarith, h_m_lt_pow⟩ ⟨le_refl _, hew_pos⟩
 
 end LeanFlocq
