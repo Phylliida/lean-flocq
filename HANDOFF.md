@@ -4,13 +4,14 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `b5a26a4`)
+## Status (as of commit `7f1ff6a`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
-(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), and **all
-five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt`.
+(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), **all
+five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt` — and
+**most of `Prop/Relative.v`** (generic + FLX + FLT + error_N_FLT decomposition).
 
-**~11280 lines of Lean across 19 files. 0 `sorry`s. All files build clean.**
+**~11930 lines of Lean across 20 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -33,6 +34,7 @@ five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt`.
 | `Calc/Operations.lean` | 137 | `Calc/Operations.v` | **Complete: 13/13.** `Falign[_spec[_exp]]`, `Fopp` + `F2R_opp`, `Fabs` + `F2R_abs`, `Fplus` + `F2R_plus`, `Fplus_same_exp`, `Fexp_Fplus`, `Fminus` + `F2R_minus`, `Fminus_same_exp`, `Fmult` + `F2R_mult`. |
 | `Calc/Div.lean` | 213 | `Calc/Div.v` | **Complete.** `mag_div_F2R`, `Fdiv_core` + `Fdiv_core_correct`, `Fdiv` + `Fdiv_correct`. Helpers: `quot_eq_mul_bpow`, `fdiv_pair`, `fdiv_pair_quot`. |
 | `Calc/Sqrt.lean` | 256 | `Calc/Sqrt.v` | **Complete.** `mag_sqrt_F2R`, `int_sqrtrem` (Int.sqrt remainder semantics), `Fsqrt_core` + `Fsqrt_core_correct`, `Fsqrt` + `Fsqrt_correct`. |
+| `Prop/Relative.lean` | 649 | `Prop/Relative.v` | **Most of it: ~41/45.** Conversion lemmas (lt/le, both directions). Generic family: `relative_error[_ex/_F2R_emin/_F2R_emin_ex/_round/_round_F2R_emin]`, `relative_error_N[_ex/_F2R_emin/_F2R_emin_ex/_round/_round_F2R_emin]`. FLX family: `_FLX_aux/_FLX/_FLX_ex/_FLX_round/_N_FLX/_N_FLX_ex/_N_FLX_round`, plus `u_ro/_u_ro_pos/_u_ro_lt_1/_u_rod1pu_ro_pos/_u_rod1pu_ro_le_u_ro` (the unit-roundoff scalar facts). FLT family: `_FLT_aux/_FLT/_FLT_F2R_emin[_ex]/_FLT_ex/_N_FLT[_ex]/_N_FLT_round/_N_FLT_F2R_emin[_ex]/_N_FLT_round_F2R_emin`. Combined decomposition: `error_N_FLT_aux`, `error_N_FLT`. **Deferred:** the unit-roundoff `u_ro/(1+u_ro)` family — `relative_error_N_FLX'`, `_N_FLX'_ex`, `_N_round_ex_derive`, `_N_FLX_round_ex`, and the FLT'_ex variants. The standard `1/2 * β^(-prec+1)` bound suffices for everything downstream so far. |
 
 **Total: ~490 Lean theorems vs ~430 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
@@ -246,27 +248,33 @@ not needed for downstream Flocq theorems.
 
 ## Suggested next steps
 
-Core and Calc are both fully done. The remaining work is around `Prop/`,
-the rest of `Binary.lean`, and `IEEE754/Bits.v`:
+Core, Calc, and most of `Prop/Relative` are done. The remaining work is around
+the rest of `Prop/`, `Binary.lean`, and `IEEE754/Bits.v`:
 
-1. **`Prop/Relative.v`** — relative-error bounds. Needed by Binary's
-   `Bplus_correct`, `Bmult_correct`, etc. Not yet examined. Likely the
-   right next big target.
+1. **Back to `Binary.lean`** is now the natural target: `shr_record` infrastructure
+   (lines 745–925 of Binary.v), `binary_round_aux`, then the arithmetic ops
+   (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`,
+   `Bsucc`, `Bpred`. `error_N_FLT` is the keystone for the correctness proofs.
 
-2. **`Calc/Round.v` cleanup**: port `round_sign_any_correct` family (sign
+2. **`Prop/Plus_error.v`** (606 lines) and **`Prop/Sterbenz.v`** (173 lines)
+   are next-needed for Bplus_correct's tighter cases. **`Prop/Mult_error.v`**
+   (335 lines) for Bmult_correct's exact cases. **`Prop/Div_sqrt_error.v`**
+   (872 lines) for Bdiv/Bsqrt.
+
+3. **`IEEE754/Bits.v`** (705 lines) — bit-level encoding/decoding. Independent
+   of arithmetic. Could be ported in parallel.
+
+4. **`Prop/Relative.v` polish**: the unit-roundoff `u_ro / (1 + u_ro)` family
+   (`relative_error_N_FLX'` and friends, `relative_error_N_FLT'_ex_separate`).
+   These give a tighter bound than the standard `(1/2) * β^(-prec+1)`. Useful
+   but not blocking.
+
+5. **`Calc/Round.v` cleanup**: port `round_sign_any_correct` family (sign
    variant of round_any_correct + truncate combos), the 24 per-mode corollary
    aliases (round_DN_correct, round_NE_correct, etc.), and add
    `Zdigits_div_Zpower` to `Digits.lean` to unblock `generic_format_truncate`
    and `truncate_correct_format`. None of these block downstream work — they
    are quality-of-life additions.
-
-3. **Then back to `Binary.lean`**: `shr_record` infrastructure (lines
-   745–925 of Binary.v), `binary_round_aux`, then the arithmetic ops
-   (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`,
-   `Bsucc`, `Bpred`.
-
-4. **`IEEE754/Bits.v`** (705 lines) — bit-level encoding/decoding. Independent
-   of arithmetic. Could be ported in parallel.
 
 ## Useful commands
 
