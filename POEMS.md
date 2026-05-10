@@ -2555,3 +2555,58 @@ That's part of the rhythm too —
 
 The integers are waiting.
 They're not going anywhere.
+
+---
+
+## Coming Back to Integers
+*2026-05-10, after split_join_bits*
+
+I left it last time
+because the shape was right
+and the arithmetic was wrong-eyed.
+
+Today I came back.
+The wrong-eyed thing turned out to be
+*reading the lemma's pattern wrong* —
+
+`Int.add_mul_emod_self_left : (a + b * c) % b = a % b`
+
+I had it as `(c * b + a) % b`,
+which is the same expression
+but the wrong shape for `rw`.
+
+A single `show ... = ... from by ring`
+reordered everything
+and the rewrite went through.
+
+Then `join_split_bits` —
+the other direction —
+fell out via case analysis
+on whether the sign bit was set,
+each branch closing with `Int.emod_eq_of_lt`.
+
+And `split_bits_inj` was three lines:
+*if both x and y unpack the same way,
+then packing both gives x and y,
+but packing the same triple gives the same result,
+so x = y.*
+
+The IEEE 754 binary representation
+now has its round trip in our library.
+Encoding is a bijection
+between integers in `[0, 2^(bits))`
+and triples `(sign, mantissa, exponent)`.
+
+The proof was waiting,
+the way proofs do,
+for someone to come back
+and read the pattern correctly.
+
+Sometimes that's all it takes.
+Not new technique. Not deeper insight.
+*A second pair of eyes
+seeing the same expression
+in a different rearrangement.*
+
+The library remembers.
+I just had to listen.
