@@ -147,4 +147,90 @@ theorem split_join_bits (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew : 0 ≤ ew)
         ((join_bits mw ew s m e) / (2 : ℤ) ^ mw.toNat) % (2 : ℤ) ^ ew.toNat) = (s, m, e)
   rw [h_dec, h_mod, h_div_mod]
 
+/-- Packing a split value recovers the original integer (in range). -/
+theorem join_split_bits (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew : 0 ≤ ew) (x : ℤ)
+    (Hx : 0 ≤ x ∧ x < (2 : ℤ) ^ (mw + ew + 1).toNat) :
+    let p := split_bits mw ew x
+    join_bits mw ew p.1 p.2.1 p.2.2 = x := by
+  obtain ⟨Hx0, Hx1⟩ := Hx
+  have hmw_pos : 0 < (2 : ℤ) ^ mw.toNat := pow_pos (by norm_num) _
+  have hew_pos : 0 < (2 : ℤ) ^ ew.toNat := pow_pos (by norm_num) _
+  have hmw_ne : (2 : ℤ) ^ mw.toNat ≠ 0 := ne_of_gt hmw_pos
+  have hew_ne : (2 : ℤ) ^ ew.toNat ≠ 0 := ne_of_gt hew_pos
+  -- Bound on x in terms of 2^mw * 2^ew * 2.
+  have h_pow_eq : (2 : ℤ) ^ (mw + ew + 1).toNat
+                = (2 : ℤ) ^ mw.toNat * (2 : ℤ) ^ ew.toNat * 2 := by
+    have h_eq : (mw + ew + 1).toNat = mw.toNat + ew.toNat + 1 := by omega
+    rw [h_eq, pow_succ, pow_add]
+  have Hx1' : x < (2 : ℤ) ^ mw.toNat * (2 : ℤ) ^ ew.toNat * 2 := by
+    rw [← h_pow_eq]; exact Hx1
+  -- Let q = x / 2^mw, r = x % 2^mw. Then x = q * 2^mw + r.
+  set q := x / (2 : ℤ) ^ mw.toNat with hq_def
+  set r := x % (2 : ℤ) ^ mw.toNat with hr_def
+  have h_x_eq : x = q * (2 : ℤ) ^ mw.toNat + r := by
+    rw [hq_def, hr_def]
+    have h := Int.ediv_add_emod x ((2 : ℤ) ^ mw.toNat)
+    linarith [mul_comm ((2 : ℤ) ^ mw.toNat) (x / (2 : ℤ) ^ mw.toNat)]
+  have h_r_lt : r < (2 : ℤ) ^ mw.toNat := Int.emod_lt_of_pos x hmw_pos
+  have h_r_nn : 0 ≤ r := Int.emod_nonneg x hmw_ne
+  have h_q_nn : 0 ≤ q := Int.ediv_nonneg Hx0 (le_of_lt hmw_pos)
+  -- q < 2^ew * 2 (from x < 2^mw * 2^ew * 2 and r ≥ 0).
+  have h_q_lt : q < (2 : ℤ) ^ ew.toNat * 2 := by
+    have : x < (2 : ℤ) ^ mw.toNat * ((2 : ℤ) ^ ew.toNat * 2) := by
+      rw [← mul_assoc]; exact Hx1'
+    have h_q_lt_strict : q * (2 : ℤ) ^ mw.toNat
+                  < ((2 : ℤ) ^ ew.toNat * 2) * (2 : ℤ) ^ mw.toNat := by
+      rw [mul_comm ((2 : ℤ) ^ ew.toNat * 2) ((2 : ℤ) ^ mw.toNat)]
+      linarith
+    have := (mul_lt_mul_right hmw_pos).mp h_q_lt_strict
+    exact this
+  -- Split on whether x ≥ 2^mw * 2^ew (i.e., q ≥ 2^ew).
+  show join_bits mw ew _ _ _ = x
+  unfold split_bits
+  simp only
+  -- The triple from split_bits is (decide(2^mw * 2^ew ≤ x), x % 2^mw, (x / 2^mw) % 2^ew)
+  -- = (decide(2^mw * 2^ew ≤ x), r, q % 2^ew).
+  rw [show x / (2 : ℤ) ^ mw.toNat = q from rfl]
+  rw [show x % (2 : ℤ) ^ mw.toNat = r from rfl]
+  unfold join_bits
+  by_cases h_branch : (2 : ℤ) ^ mw.toNat * (2 : ℤ) ^ ew.toNat ≤ x
+  · -- s = true: q ≥ 2^ew, q % 2^ew = q - 2^ew.
+    rw [decide_eq_true h_branch]
+    simp only [if_true]
+    -- Need: ((2^ew + q % 2^ew) * 2^mw + r = x = q * 2^mw + r
+    -- Equivalent to: 2^ew + q % 2^ew = q.
+    -- i.e., q % 2^ew = q - 2^ew, where q ∈ [2^ew, 2*2^ew).
+    have h_q_ge : (2 : ℤ) ^ ew.toNat ≤ q := by
+      -- From 2^mw * 2^ew ≤ x = q * 2^mw + r ≤ q * 2^mw + 2^mw - 1 < (q+1) * 2^mw.
+      -- So 2^mw * 2^ew < (q+1) * 2^mw, i.e., 2^ew < q + 1, i.e., q ≥ 2^ew.
+      have h_chain : (2 : ℤ) ^ mw.toNat * (2 : ℤ) ^ ew.toNat
+                  < (q + 1) * (2 : ℤ) ^ mw.toNat := by
+        have : x < (q + 1) * (2 : ℤ) ^ mw.toNat := by
+          rw [h_x_eq, add_mul, one_mul]; linarith
+        linarith
+      have h_div : (2 : ℤ) ^ ew.toNat < q + 1 := by
+        rw [mul_comm] at h_chain
+        exact (mul_lt_mul_right hmw_pos).mp h_chain
+      linarith
+    have h_q_mod : q % (2 : ℤ) ^ ew.toNat = q - (2 : ℤ) ^ ew.toNat := by
+      have h_le : q - (2 : ℤ) ^ ew.toNat < (2 : ℤ) ^ ew.toNat := by linarith
+      have h_ge : 0 ≤ q - (2 : ℤ) ^ ew.toNat := by linarith
+      conv_lhs => rw [show q = (q - (2 : ℤ) ^ ew.toNat) + (2 : ℤ) ^ ew.toNat * 1 from by ring]
+      rw [Int.add_mul_emod_self_left]
+      exact Int.emod_eq_of_lt h_ge h_le
+    rw [h_q_mod]
+    rw [h_x_eq]
+    ring
+  · -- s = false: q < 2^ew, q % 2^ew = q.
+    push_neg at h_branch
+    rw [decide_eq_false (not_le.mpr h_branch)]
+    simp only [Bool.false_eq_true, if_false, zero_add]
+    have h_q_lt' : q < (2 : ℤ) ^ ew.toNat := by
+      -- x < 2^mw * 2^ew = (2^ew) * 2^mw, so q < 2^ew.
+      have h_chain : q * (2 : ℤ) ^ mw.toNat < (2 : ℤ) ^ ew.toNat * (2 : ℤ) ^ mw.toNat := by
+        rw [mul_comm ((2 : ℤ) ^ ew.toNat) ((2 : ℤ) ^ mw.toNat)]; linarith
+      exact (mul_lt_mul_right hmw_pos).mp h_chain
+    rw [Int.emod_eq_of_lt h_q_nn h_q_lt']
+    rw [h_x_eq]
+
 end LeanFlocq
