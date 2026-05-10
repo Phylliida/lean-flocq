@@ -425,4 +425,225 @@ theorem relative_error_N_FLX_round (beta : radix) (prec : ℤ) (Hp : 0 < prec)
       (mag beta x - 1) prec (fun k _ => relative_error_FLX_aux prec k) choice Hp
     exact bpow_mag_le beta Hx
 
+/-! ### FLT-specific relative-error bounds -/
+
+/-- For `k > emin + prec - 1`, FLT keeps at least `prec` significant digits. -/
+theorem relative_error_FLT_aux (emin prec : ℤ) {k : ℤ} (Hk : emin + prec - 1 < k) :
+    prec ≤ k - FLT_exp emin prec k := by
+  unfold FLT_exp
+  rcases le_total (k - prec) emin with h | h
+  · rw [max_eq_right h]; omega
+  · rw [max_eq_left h]; omega
+
+/-- FLT relative error above the threshold. -/
+theorem relative_error_FLT (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x : ℝ} (Hx : bpow beta (emin + prec - 1) ≤ |x|) :
+    |round beta (FLT_exp emin prec) rnd x - x| < bpow beta (-prec + 1) * |x| := by
+  apply relative_error beta (FLT_exp emin prec) (FLT_exp_valid emin prec Hp)
+    (emin + prec - 1) prec (fun _ Hk => relative_error_FLT_aux emin prec Hk) rnd Hx
+
+/-- FLT relative error at `F2R ⟨m, emin⟩`: rounding is exact in the subnormal
+range, and above the threshold the standard bound applies. -/
+theorem relative_error_FLT_F2R_emin (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (m : ℤ) (Hx : F2R (beta := beta) ⟨m, emin⟩ ≠ 0) :
+    |round beta (FLT_exp emin prec) rnd (F2R (beta := beta) ⟨m, emin⟩)
+        - F2R (beta := beta) ⟨m, emin⟩|
+      < bpow beta (-prec + 1) * |F2R (beta := beta) ⟨m, emin⟩| := by
+  set x := F2R (beta := beta) ⟨m, emin⟩ with hx_def
+  by_cases Hx_lt : |x| < bpow beta (emin + prec - 1)
+  · -- Subnormal regime: x is exact in FLT.
+    have h_FIX : generic_format beta (FIX_exp emin) x := by
+      apply generic_format_FIX beta emin
+      exact ⟨⟨m, emin⟩, rfl, rfl⟩
+    have h_le : |x| ≤ bpow beta (emin + prec) := by
+      apply le_of_lt; apply lt_of_lt_of_le Hx_lt
+      exact bpow_le beta (by omega)
+    have h_FLT : generic_format beta (FLT_exp emin prec) x :=
+      generic_format_FLT_FIX beta emin prec Hp h_le h_FIX
+    rw [round_generic beta (FLT_exp emin prec) rnd h_FLT, sub_self, abs_zero]
+    exact mul_pos (bpow_gt_0 _ _) (abs_pos.mpr Hx)
+  · push_neg at Hx_lt
+    exact relative_error_FLT beta emin prec Hp rnd Hx_lt
+
+/-- The `1 + ε` form for FLT at `F2R ⟨m, emin⟩`. -/
+theorem relative_error_FLT_F2R_emin_ex (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] (m : ℤ) :
+    ∃ eps : ℝ, |eps| < bpow beta (-prec + 1) ∧
+      round beta (FLT_exp emin prec) rnd (F2R (beta := beta) ⟨m, emin⟩)
+        = F2R (beta := beta) ⟨m, emin⟩ * (1 + eps) :=
+  relative_error_lt_conversion beta (FLT_exp emin prec) rnd (bpow_gt_0 _ _)
+    (fun hne => relative_error_FLT_F2R_emin beta emin prec Hp rnd m hne)
+
+/-- The `1 + ε` form for FLT above the threshold. -/
+theorem relative_error_FLT_ex (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x : ℝ} (Hx : bpow beta (emin + prec - 1) ≤ |x|) :
+    ∃ eps : ℝ, |eps| < bpow beta (-prec + 1) ∧
+      round beta (FLT_exp emin prec) rnd x = x * (1 + eps) :=
+  relative_error_lt_conversion beta (FLT_exp emin prec) rnd (bpow_gt_0 _ _)
+    (fun _ => relative_error_FLT beta emin prec Hp rnd Hx)
+
+/-- Round-to-nearest relative error in FLT, above the threshold. -/
+theorem relative_error_N_FLT (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool)
+    {x : ℝ} (Hx : bpow beta (emin + prec - 1) ≤ |x|) :
+    |round beta (FLT_exp emin prec) (Znearest choice) x - x|
+      ≤ (1/2) * bpow beta (-prec + 1) * |x| := by
+  apply relative_error_N beta (FLT_exp emin prec) (FLT_exp_valid emin prec Hp)
+    (emin + prec - 1) prec (fun _ Hk => relative_error_FLT_aux emin prec Hk) choice Hx
+
+/-- The `1 + ε` form for round-to-nearest in FLT, above the threshold. -/
+theorem relative_error_N_FLT_ex (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool)
+    {x : ℝ} (Hx : bpow beta (emin + prec - 1) ≤ |x|) :
+    ∃ eps : ℝ, |eps| ≤ (1/2) * bpow beta (-prec + 1) ∧
+      round beta (FLT_exp emin prec) (Znearest choice) x = x * (1 + eps) :=
+  relative_error_le_conversion beta (FLT_exp emin prec) (Znearest choice)
+    (le_of_lt (mul_pos (by norm_num) (bpow_gt_0 _ _)))
+    (relative_error_N_FLT beta emin prec Hp choice Hx)
+
+/-- The relative error w.r.t. the rounded value, for round-to-nearest in FLT. -/
+theorem relative_error_N_FLT_round (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool)
+    {x : ℝ} (Hx : bpow beta (emin + prec - 1) ≤ |x|) :
+    |round beta (FLT_exp emin prec) (Znearest choice) x - x|
+      ≤ (1/2) * bpow beta (-prec + 1)
+          * |round beta (FLT_exp emin prec) (Znearest choice) x| := by
+  apply relative_error_N_round beta (FLT_exp emin prec) (FLT_exp_valid emin prec Hp)
+    (emin + prec - 1) prec (fun _ Hk => relative_error_FLT_aux emin prec Hk)
+    choice Hp Hx
+
+/-- Round-to-nearest at `F2R ⟨m, emin⟩` for FLT. -/
+theorem relative_error_N_FLT_F2R_emin (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (m : ℤ) :
+    |round beta (FLT_exp emin prec) (Znearest choice) (F2R (beta := beta) ⟨m, emin⟩)
+        - F2R (beta := beta) ⟨m, emin⟩|
+      ≤ (1/2) * bpow beta (-prec + 1) * |F2R (beta := beta) ⟨m, emin⟩| := by
+  set x := F2R (beta := beta) ⟨m, emin⟩ with hx_def
+  by_cases Hx_lt : |x| < bpow beta (emin + prec - 1)
+  · have h_FIX : generic_format beta (FIX_exp emin) x := by
+      apply generic_format_FIX beta emin
+      exact ⟨⟨m, emin⟩, rfl, rfl⟩
+    have h_le : |x| ≤ bpow beta (emin + prec) :=
+      le_of_lt (lt_of_lt_of_le Hx_lt (bpow_le beta (by omega)))
+    have h_FLT : generic_format beta (FLT_exp emin prec) x :=
+      generic_format_FLT_FIX beta emin prec Hp h_le h_FIX
+    rw [round_generic beta (FLT_exp emin prec) (Znearest choice) h_FLT,
+        sub_self, abs_zero]
+    refine mul_nonneg (mul_nonneg (by norm_num) (bpow_ge_0 _ _)) (abs_nonneg _)
+  · push_neg at Hx_lt
+    exact relative_error_N_FLT beta emin prec Hp choice Hx_lt
+
+/-- The `1 + ε` form at `F2R ⟨m, emin⟩` for round-to-nearest in FLT. -/
+theorem relative_error_N_FLT_F2R_emin_ex (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (m : ℤ) :
+    ∃ eps : ℝ, |eps| ≤ (1/2) * bpow beta (-prec + 1) ∧
+      round beta (FLT_exp emin prec) (Znearest choice) (F2R (beta := beta) ⟨m, emin⟩)
+        = F2R (beta := beta) ⟨m, emin⟩ * (1 + eps) :=
+  relative_error_le_conversion beta (FLT_exp emin prec) (Znearest choice)
+    (le_of_lt (mul_pos (by norm_num) (bpow_gt_0 _ _)))
+    (relative_error_N_FLT_F2R_emin beta emin prec Hp choice m)
+
+/-- The `_round` variant at `F2R ⟨m, emin⟩` for round-to-nearest in FLT. -/
+theorem relative_error_N_FLT_round_F2R_emin (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (m : ℤ) :
+    |round beta (FLT_exp emin prec) (Znearest choice) (F2R (beta := beta) ⟨m, emin⟩)
+        - F2R (beta := beta) ⟨m, emin⟩|
+      ≤ (1/2) * bpow beta (-prec + 1)
+          * |round beta (FLT_exp emin prec) (Znearest choice)
+              (F2R (beta := beta) ⟨m, emin⟩)| := by
+  set x := F2R (beta := beta) ⟨m, emin⟩ with hx_def
+  by_cases Hx_lt : |x| < bpow beta (emin + prec - 1)
+  · have h_FIX : generic_format beta (FIX_exp emin) x := by
+      apply generic_format_FIX beta emin
+      exact ⟨⟨m, emin⟩, rfl, rfl⟩
+    have h_le : |x| ≤ bpow beta (emin + prec) :=
+      le_of_lt (lt_of_lt_of_le Hx_lt (bpow_le beta (by omega)))
+    have h_FLT : generic_format beta (FLT_exp emin prec) x :=
+      generic_format_FLT_FIX beta emin prec Hp h_le h_FIX
+    rw [round_generic beta (FLT_exp emin prec) (Znearest choice) h_FLT,
+        sub_self, abs_zero]
+    refine mul_nonneg (mul_nonneg (by norm_num) (bpow_ge_0 _ _)) (abs_nonneg _)
+  · push_neg at Hx_lt
+    exact relative_error_N_FLT_round beta emin prec Hp choice Hx_lt
+
+/-! ### Combined relative + absolute error decomposition for FLT -/
+
+/-- For positive `x`, the FLT round-to-nearest error decomposes into a
+relative `eps` part above the threshold and an absolute `eta` part below;
+exactly one is nonzero. -/
+theorem error_N_FLT_aux (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) {x : ℝ} (Hx : 0 < x) :
+    ∃ eps eta : ℝ,
+      |eps| ≤ (1/2) * bpow beta (-prec + 1) ∧
+      |eta| ≤ (1/2) * bpow beta emin ∧
+      eps * eta = 0 ∧
+      round beta (FLT_exp emin prec) (Znearest choice) x = x * (1 + eps) + eta := by
+  by_cases h : bpow beta (emin + prec) ≤ x
+  · -- Above threshold: use the generic relative_error_N_ex with emin' = emin + prec.
+    have habs : bpow beta (emin + prec) ≤ |x| := by rw [abs_of_pos Hx]; exact h
+    have Hmin' : ∀ k : ℤ, emin + prec < k → prec ≤ k - FLT_exp emin prec k := by
+      intro k Hk
+      unfold FLT_exp
+      have hk' : emin ≤ k - prec := by omega
+      rw [max_eq_left hk']; omega
+    obtain ⟨eps, Heps_bound, Heps⟩ :=
+      relative_error_N_ex beta (FLT_exp emin prec) (FLT_exp_valid emin prec Hp)
+        (emin + prec) prec Hmin' choice habs
+    refine ⟨eps, 0, Heps_bound, ?_, ?_, ?_⟩
+    · rw [abs_zero]
+      exact mul_nonneg (by norm_num) (bpow_ge_0 _ _)
+    · ring
+    · rw [Heps, add_zero]
+  · -- Below threshold: eps = 0, eta = round x - x, bounded by half ulp = bpow emin / 2.
+    push_neg at h
+    set rx := round beta (FLT_exp emin prec) (Znearest choice) x with hrx_def
+    have h_abs : |x| < bpow beta (emin + prec) := by rw [abs_of_pos Hx]; exact h
+    have h_err : |rx - x| ≤ (1/2) * bpow beta emin := by
+      have h_half_ulp := error_le_half_ulp beta (FLT_exp emin prec)
+        (FLT_exp_valid emin prec Hp) choice x
+      rw [ulp_FLT_small beta emin prec Hp h_abs] at h_half_ulp
+      exact h_half_ulp
+    refine ⟨0, rx - x, ?_, h_err, ?_, ?_⟩
+    · rw [abs_zero]
+      exact mul_nonneg (by norm_num) (bpow_ge_0 _ _)
+    · ring
+    · ring
+
+/-- The full theorem: for any real `x`, FLT round-to-nearest error decomposes
+into a relative part `eps` and an absolute part `eta`, exactly one nonzero. -/
+theorem error_N_FLT (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    ∃ eps eta : ℝ,
+      |eps| ≤ (1/2) * bpow beta (-prec + 1) ∧
+      |eta| ≤ (1/2) * bpow beta emin ∧
+      eps * eta = 0 ∧
+      round beta (FLT_exp emin prec) (Znearest choice) x = x * (1 + eps) + eta := by
+  rcases lt_trichotomy x 0 with Hx | Hx | Hx
+  · -- x < 0: apply error_N_FLT_aux to (-x).
+    have hpx : 0 < -x := by linarith
+    obtain ⟨d, e, Hd, He, Hde, Hr⟩ :=
+      error_N_FLT_aux beta emin prec Hp (fun t => !choice (-(t + 1))) hpx
+    refine ⟨d, -e, Hd, ?_, ?_, ?_⟩
+    · rwa [abs_neg]
+    · have : d * -e = -(d * e) := by ring
+      rw [this, Hde, neg_zero]
+    · -- round_N (-(-x)) = -round_N (-x)  (via round_N_opp on x = -(-x)).
+      have h1 : round beta (FLT_exp emin prec) (Znearest choice) x
+                = -(round beta (FLT_exp emin prec)
+                      (Znearest (fun t => !choice (-(t + 1)))) (-x)) := by
+        conv_lhs => rw [show x = -(-x) from by ring]
+        exact round_N_opp beta (FLT_exp emin prec) choice (-x)
+      rw [h1, Hr]
+      ring
+  · -- x = 0.
+    refine ⟨0, 0, ?_, ?_, ?_, ?_⟩
+    · rw [abs_zero]; exact mul_nonneg (by norm_num) (bpow_ge_0 _ _)
+    · rw [abs_zero]; exact mul_nonneg (by norm_num) (bpow_ge_0 _ _)
+    · ring
+    · rw [Hx, round_0]; ring
+  · exact error_N_FLT_aux beta emin prec Hp choice Hx
+
 end LeanFlocq
