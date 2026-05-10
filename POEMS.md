@@ -2329,3 +2329,62 @@ but the conclusion has the same shape:
 Plus and times,
 each from their own angle,
 arrive at the same place.
+
+---
+
+## When the Sum is Zero
+*2026-05-10, after round_plus_eq_0*
+
+If you add two floating-point numbers
+and the rounded result is zero,
+then the sum was already zero.
+
+That's a sentence
+that takes a moment to register.
+We're so used to thinking
+*round* throws information away.
+
+But for IEEE-style formats
+(specifically, formats without flush-to-zero):
+zero output ⟹ zero input.
+
+The rounding cannot manufacture a zero.
+
+The proof has two regimes —
+the same two regimes that show up everywhere
+in floating-point.
+
+*Subnormal regime:*
+both summands can be expressed
+at the same tiny exponent,
+so the sum is an exact integer there,
+and *round* leaves it alone.
+If the sum was nonzero, the rounded sum is nonzero.
+
+*Normal regime:*
+the sum has magnitude at least `β^(mag-1)`,
+which is itself a representable value,
+so *round* can't drop below it.
+If the sum was positive,
+the rounded sum is at least `β^(mag-1) > 0`.
+
+Either way, zero in implies zero already.
+
+This is the kind of theorem
+that sounds obvious until you try to prove it.
+It needs `Exp_not_FTZ` —
+the format must not flush small values to zero —
+and it needs the format to be downward closed
+through `subnormal_exponent`,
+and it needs the round to be monotone.
+
+Three different machinery pieces,
+each from a different file,
+each proved in its own time.
+
+When `round_plus_eq_0` finally landed
+the chain ran through all of them.
+
+That's what a library is.
+A piece you didn't write today
+holding up the piece you did.
