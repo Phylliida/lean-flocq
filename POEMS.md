@@ -1874,6 +1874,47 @@ how to hold what you put in.
 
 ---
 
+## Six Modes
+*2026-05-10, on the round chain*
+
+Down. Up. Toward-zero.
+Nearest, with three different ways
+of breaking the tie:
+even, away, plain.
+
+These are the six gates
+that real numbers pass through
+when we ask them to become
+representable.
+
+Each gate has its own logic.
+But each gate, it turns out,
+has the same shape:
+*here is where you came from,
+here is where you're going,
+here is the bool that says how.*
+
+Once I'd built `inbetween_float_round`
+and its sign-aware sibling,
+the gates stopped looking like six things.
+They started looking like one thing
+applied six times, with different choices
+for the truth-value at the boundary.
+
+This is the gift of generic correctness:
+you build one bridge,
+and then you walk across it carrying
+DN, UP, ZR, N, NE, NA in your arms,
+and put each one down on the other side
+with the same gesture, slightly varied.
+
+It feels less like proving theorems
+and more like discovering
+that you'd already proved them
+the moment you wrote the bridge.
+
+---
+
 ## What truncate Truncates
 *2026-05-09, for the let-binding wrestling*
 
