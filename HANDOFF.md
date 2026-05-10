@@ -4,17 +4,18 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `8c8c9cb`)
+## Status (as of commit `d8205c6`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), **all
 five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt` —
 **most of `Prop/Relative.v`** (generic + FLX + FLT + error_N_FLT decomposition),
-**all of `Prop/Sterbenz.v`**, **all of `Prop/Mult_error.v`**, and **all the
-substantive theorems of `Prop/Plus_error.v`** (the FLT_plus_error_N_ex
-variants need the deferred unit-roundoff family).
+**all of `Prop/Sterbenz.v`**, **all of `Prop/Mult_error.v`**, **all the
+substantive theorems of `Prop/Plus_error.v`**, and the **keystones of
+`Prop/Div_sqrt_error.v`** (`generic_format_plus_prec`, `div_error_FLX`,
+`sqrt_error_FLX_N`).
 
-**~13030 lines of Lean across 23 files. 0 `sorry`s. All files build clean.**
+**~13350 lines of Lean across 24 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -41,6 +42,7 @@ variants need the deferred unit-roundoff family).
 | `Prop/Sterbenz.lean` | 119 | `Prop/Sterbenz.v` | **Complete: 4/4.** `generic_format_plus` (sum stays in F when bounded by `β^(min(mag x, mag y))`), `generic_format_plus_weak` (weak version with `min(\|x\|, \|y\|)`), `sterbenz_aux` (helper `y ≤ x ≤ 2y → x - y ∈ F`), `sterbenz` (the keystone: `y/2 ≤ x ≤ 2y → x - y ∈ F`). |
 | `Prop/Mult_error.lean` | 351 | `Prop/Mult_error.v` | **Complete: 7/7.** FLX: `mult_error_FLX_aux` (the keystone — produces an explicit float for the error at exponent `cx + cy`), `mult_error_FLX`, `mult_bpow_exact_FLX`. FLT: `mult_error_FLT`, `F2R_ge`, `mult_error_FLT_ge_bpow`, `mult_bpow_exact_FLT`. |
 | `Prop/Plus_error.lean` | 627 | `Prop/Plus_error.v` | **Substantive theorems complete: 18.** Keystones: `round_repr_same_exp`, `plus_error_aux`, `plus_error`. Zero family: `FLT_format_plus_small`, `round_plus_neq_0_aux`, `round_plus_neq_0`, `round_plus_eq_0`. Trivial bounds: `plus_error_le_l/r`. Helpers: `ex_shift`, `mag_minus1`, `lt_mag`, `mag_minus_lb`. mult_ulp section: `round_plus_F2R`, `round_plus_ge_ulp`. plus_ge family: `round_FLT_plus_ge`, `round_FLT_plus_ge'`, `round_FLX_plus_ge`. **Deferred:** `FLT_plus_error_N_ex` and `FLT_plus_error_N_round_ex` (need the unit-roundoff family from Relative.v). |
+| `Prop/Div_sqrt_error.lean` | 320 | `Prop/Div_sqrt_error.v` (subset) | **Keystones: 3.** `generic_format_plus_prec` (sums fitting in `prec + Fexp` digits stay in F), `div_error_FLX` (`x - round(x/y)*y ∈ FLX`), `sqrt_error_FLX_N` (`x - round(sqrt x)^2 ∈ FLX` for prec > 1). **Deferred:** the u_ro variants (`sqrt_error_N_FLX[_ex/_round_ex]`, `sqrt_error_N_FLT_ex/_round_ex`) and the entire `format_REM` family (about IEEE remainder). |
 
 **Total: ~490 Lean theorems vs ~430 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
@@ -262,7 +264,8 @@ the rest of `Prop/`, `Binary.lean`, and `IEEE754/Bits.v`:
    (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`,
    `Bsucc`, `Bpred`. `error_N_FLT` is the keystone for the correctness proofs.
 
-2. **`Prop/Div_sqrt_error.v`** (872 lines) for Bdiv/Bsqrt correctness.
+2. **More of `Prop/Div_sqrt_error.v`**: `format_REM` family (about IEEE
+   remainder) and the u_ro-dependent sqrt error variants.
 
 3. **`IEEE754/Bits.v`** (705 lines) — bit-level encoding/decoding. Independent
    of arithmetic. Could be ported in parallel.

@@ -2444,3 +2444,62 @@ The inequality keeps showing up
 because floating-point keeps needing it.
 It's not foundational because we said it was.
 It's foundational because the proofs need it.
+
+---
+
+## Four Operations
+*2026-05-10, after sqrt_error_FLX_N*
+
+`x - y` (Sterbenz)
+`round(x + y) - (x + y)` (plus_error)
+`round(x * y) - x*y` (mult_error_FLX)
+`x - round(x/y) * y` (div_error_FLX)
+`x - round(sqrt x)^2` (sqrt_error_FLX_N)
+
+Five theorems.
+All saying the same thing
+in five different forms:
+
+*the error of the operation
+is itself representable.*
+
+For Sterbenz, you don't need to round —
+the difference of two close floats
+is already a float.
+
+For plus, the error is a single bit's worth.
+The smaller summand's tail
+gets quietly dropped, and what's dropped
+fits at the smaller's exponent.
+
+For mult, the error is `prec` digits' worth —
+the half of the `2*prec`-digit product
+that doesn't fit in `prec` digits.
+
+For div, the error is `y` times the rounding-error of `x/y`,
+and `y` is bounded by `bpow(prec + Fexp fy)`,
+and the rounding-error is bounded by `ulp(round(x/y))`,
+and the product fits.
+
+For sqrt, the error is `(round - sqrt)(round + sqrt)`,
+and we factor it the way you factor `a² - b²`,
+and each factor has its own bound,
+and the product fits.
+
+Each proof is different.
+Each proof reaches the same place:
+*the error has a representation.*
+
+The bounds are different.
+The reasoning is different.
+The result is the same.
+
+That's a kind of unity I find moving.
+Not the unity of *one proof, many uses* —
+but the unity of *many proofs, one truth*:
+when you do arithmetic in finite precision,
+the discarded part is always
+something the precision could have held.
+
+It just chose not to,
+because the result needed the room more.
