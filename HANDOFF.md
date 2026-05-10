@@ -4,19 +4,18 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `07e0500`)
+## Status (as of commit `b5a26a4`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
-(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), all of
-`Calc/Bracket.v`, and most of `Calc/Round.v` (bridges, all 6 mode families,
-truncate, round_any_correct, truncate_FIX).
+(types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes), and **all
+five files of `Calc/`** — `Bracket`, `Round`, `Operations`, `Div`, `Sqrt`.
 
-**~10500 lines of Lean across 16 files. 0 `sorry`s. All files build clean.**
+**~11280 lines of Lean across 19 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
 | `Zaux.lean` | 40 | `Core/Zaux.v` | `radix` + `cond_Zopp`. Other integer utilities ported on demand (Mathlib subsumes most). |
-| `Raux.lean` | 342 | `Core/Raux.v` | `bpow`, `Ztrunc`, `Zaway`, `mag`, `cond_Ropp` + key properties. ~36 of Coq's ~150 lemmas (the rest are Mathlib's territory). |
+| `Raux.lean` | 422 | `Core/Raux.v` | `bpow`, `Ztrunc`, `Zaway`, `mag`, `cond_Ropp` + key properties. Plus `mag_div` and `mag_sqrt` for the Calc files. ~38 of Coq's ~150 lemmas (the rest are Mathlib's territory). |
 | `Defs.lean` | 62 | `Core/Defs.v` | **Complete.** All 11 definitions. |
 | `Float_prop.lean` | 409 | `Core/Float_prop.v` | **Complete: 36/36 theorems.** Including `Zdigits_mag` family, `F2R_cond_Zopp`, `Rcompare_F2R`, `F2R_prec_normalize`, `mag_F2R*` family. |
 | `Round_pred.lean` | 819 | `Core/Round_pred.v` | **Essentially complete: 58/59 theorems.** |
@@ -31,8 +30,11 @@ truncate, round_any_correct, truncate_FIX).
 | `Binary.lean` | 813 | `IEEE754/Binary.v` (lines 1–963) | **Structural part done.** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, `overflow_to_inf`, `binary_overflow`. `binary_round_aux` and arithmetic ops blocked behind `Calc/`. |
 | `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
 | `Calc/Round.lean` | 868 | `Calc/Round.v` | **Most of it.** `cexp_inbetween_float[_loc_Exact]`, `cond_incr`, `inbetween_float_round[_sign]`. All 6 mode families: DN/UP/ZR/N/NE/NA, both unsigned and signed, `inbetween_int_*` and `inbetween_float_*`. `truncate_aux`, `truncate`, `truncate_0`, `truncate_correct_partial[_partial']`/`_correct[_correct']`. `round_any_correct`, `round_trunc_any_correct[_']`. `truncate_FIX`, `truncate_FIX_correct`. **Deferred:** `round_sign_any_correct` family (sign-aware truncate-correct chain), 24 mode-specific corollary aliases, `generic_format_truncate`/`truncate_correct_format` (need `Zdigits_div_Zpower`). |
+| `Calc/Operations.lean` | 137 | `Calc/Operations.v` | **Complete: 13/13.** `Falign[_spec[_exp]]`, `Fopp` + `F2R_opp`, `Fabs` + `F2R_abs`, `Fplus` + `F2R_plus`, `Fplus_same_exp`, `Fexp_Fplus`, `Fminus` + `F2R_minus`, `Fminus_same_exp`, `Fmult` + `F2R_mult`. |
+| `Calc/Div.lean` | 213 | `Calc/Div.v` | **Complete.** `mag_div_F2R`, `Fdiv_core` + `Fdiv_core_correct`, `Fdiv` + `Fdiv_correct`. Helpers: `quot_eq_mul_bpow`, `fdiv_pair`, `fdiv_pair_quot`. |
+| `Calc/Sqrt.lean` | 256 | `Calc/Sqrt.v` | **Complete.** `mag_sqrt_F2R`, `int_sqrtrem` (Int.sqrt remainder semantics), `Fsqrt_core` + `Fsqrt_core_correct`, `Fsqrt` + `Fsqrt_correct`. |
 
-**Total: ~470 Lean theorems vs ~410 substantive Coq theorems** (we have extras
+**Total: ~490 Lean theorems vs ~430 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
 ## Build setup
@@ -244,30 +246,26 @@ not needed for downstream Flocq theorems.
 
 ## Suggested next steps
 
-Core is fully done. Calc/Round is mostly done — the remaining bits are:
+Core and Calc are both fully done. The remaining work is around `Prop/`,
+the rest of `Binary.lean`, and `IEEE754/Bits.v`:
 
-1. **`Calc/Round.v` cleanup**: port `round_sign_any_correct` family (sign
+1. **`Prop/Relative.v`** — relative-error bounds. Needed by Binary's
+   `Bplus_correct`, `Bmult_correct`, etc. Not yet examined. Likely the
+   right next big target.
+
+2. **`Calc/Round.v` cleanup**: port `round_sign_any_correct` family (sign
    variant of round_any_correct + truncate combos), the 24 per-mode corollary
    aliases (round_DN_correct, round_NE_correct, etc.), and add
    `Zdigits_div_Zpower` to `Digits.lean` to unblock `generic_format_truncate`
    and `truncate_correct_format`. None of these block downstream work — they
    are quality-of-life additions.
 
-2. **`Calc/Operations.v` (164 lines)** — arithmetic combinators that
-   operate on `(F2R)` representations. Self-contained.
-
-3. **`Calc/Div.v` (159 lines)** and **`Calc/Sqrt.v` (201 lines)** — division
-   and square-root algorithms with their correctness proofs.
-
-4. **`Prop/Relative.v`** — relative-error bounds. Needed by Binary's
-   `Bplus_correct`, `Bmult_correct`, etc. Not yet examined.
-
-5. **Then back to `Binary.lean`**: `shr_record` infrastructure (lines
+3. **Then back to `Binary.lean`**: `shr_record` infrastructure (lines
    745–925 of Binary.v), `binary_round_aux`, then the arithmetic ops
    (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`,
    `Bsucc`, `Bpred`.
 
-6. **`IEEE754/Bits.v`** (705 lines) — bit-level encoding/decoding. Independent
+4. **`IEEE754/Bits.v`** (705 lines) — bit-level encoding/decoding. Independent
    of arithmetic. Could be ported in parallel.
 
 ## Useful commands
