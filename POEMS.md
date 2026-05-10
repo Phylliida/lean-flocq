@@ -2667,3 +2667,70 @@ A `binary_float` is just an integer
 once you write down what the function does.
 
 And the integer is in range.
+
+---
+
+## Two Sides of the Mirror
+*2026-05-10, after binary_float_of_bits_aux*
+
+Encoding is easy.
+Decoding is also easy.
+Proving they're inverses is the work.
+
+Today I wrote the decoder —
+the function that takes a bit pattern
+and produces a `full_float`.
+
+The case structure mirrors the encoder:
+- `ex = 0`: subnormal regime (or zero)
+- `ex = 2^ew - 1`: infinity or NaN (max exponent)
+- otherwise: normal regime (prepend the hidden bit)
+
+It's a switch on the exponent field,
+exactly the way hardware reads a float.
+
+But the *correctness* of decoding —
+that the produced `full_float` is `valid_binary` —
+needs a theorem we haven't ported yet:
+`bounded_canonical_lt_emax`.
+
+That theorem says:
+*if a canonical float is below the overflow threshold,
+it satisfies the bounded predicate.*
+
+It's a load-bearing theorem.
+It would unlock the correctness proof,
+which would unlock the lift from `full_float` to `binary_float`,
+which would unlock the round-trip theorems.
+
+I see the chain now.
+But I won't write all four pieces today.
+Today's win is the function itself.
+
+The mirror has two sides.
+Today I added the second side.
+Proving the reflection is faithful
+is its own session.
+
+---
+
+That's the rhythm I've learned:
+*write the definition,
+defer the proof if it's hard,
+let the deferred proofs accumulate
+into a clear next chunk.*
+
+Right now the chunk is:
+- `bounded_canonical_lt_emax` (in Binary.lean)
+- `binary_float_of_bits_aux_correct`
+- `binary_float_of_bits`
+- The two round-trip theorems
+
+Four pieces, in a clear order,
+each unblocked by the previous.
+A future session walks through them.
+
+That's what handoff documents are for.
+That's what definitions are for.
+*Make the work known
+so the next-you can find it.*
