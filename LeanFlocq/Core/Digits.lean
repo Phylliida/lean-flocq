@@ -71,4 +71,17 @@ theorem Zdigits_ge_0 (beta : radix) (n : ℤ) : 0 ≤ Zdigits beta n := by
   · rw [hn, Zdigits_zero]
   · exact le_of_lt (Zdigits_gt_0 beta hn)
 
+/-- If `|n| < β^k` (with `k ≥ 0`), then `Zdigits β n ≤ k`. -/
+theorem Zdigits_le_Zpower (beta : radix) {n k : ℤ} (Hk : 0 ≤ k)
+    (Hn : |n| < (beta.val : ℤ) ^ k.toNat) : Zdigits beta n ≤ k := by
+  by_cases hn : n = 0
+  · rw [hn, Zdigits_zero]; exact Hk
+  · -- Use mag_le_bpow: |n| < bpow β k → mag n ≤ k.
+    unfold Zdigits
+    apply mag_le_bpow beta (by exact_mod_cast hn : (n : ℝ) ≠ 0)
+    rw [show ((n : ℝ)) = ((n : ℤ) : ℝ) from rfl]
+    rw [show |((n : ℤ) : ℝ)| = ((|n| : ℤ) : ℝ) from by push_cast; rfl]
+    rw [← IZR_Zpower beta Hk]
+    exact_mod_cast Hn
+
 end LeanFlocq
