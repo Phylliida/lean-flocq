@@ -233,4 +233,17 @@ theorem join_split_bits (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew : 0 ≤ ew) (x : ℤ
     rw [Int.emod_eq_of_lt h_q_nn h_q_lt']
     rw [h_x_eq]
 
+/-- `split_bits` is injective on the valid range `[0, 2^(mw+ew+1))`. -/
+theorem split_bits_inj (mw ew : ℤ) (Hmw : 0 ≤ mw) (Hew : 0 ≤ ew)
+    (x y : ℤ)
+    (Hx : 0 ≤ x ∧ x < (2 : ℤ) ^ (mw + ew + 1).toNat)
+    (Hy : 0 ≤ y ∧ y < (2 : ℤ) ^ (mw + ew + 1).toNat)
+    (H : split_bits mw ew x = split_bits mw ew y) :
+    x = y := by
+  have hjx := join_split_bits mw ew Hmw Hew x Hx
+  have hjy := join_split_bits mw ew Hmw Hew y Hy
+  simp only at hjx hjy
+  rw [H] at hjx
+  linarith [hjx, hjy]
+
 end LeanFlocq
