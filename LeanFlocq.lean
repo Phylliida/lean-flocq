@@ -17,4 +17,5 @@ import LeanFlocq.Calc.Sqrt
 import LeanFlocq.Prop.Relative
 import LeanFlocq.Prop.Sterbenz
 import LeanFlocq.Prop.Mult_error
+import LeanFlocq.Prop.Plus_error
 

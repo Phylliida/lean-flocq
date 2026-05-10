@@ -12,6 +12,7 @@ import LeanFlocq.Core.FLX
 import LeanFlocq.Core.FLT
 import LeanFlocq.Core.Ulp
 import LeanFlocq.Calc.Operations
+import LeanFlocq.Prop.Plus_error
 
 namespace LeanFlocq
 
@@ -266,6 +267,68 @@ theorem F2R_ge (beta : radix) (y : float beta) (Hy : F2R y ≠ 0) :
     exact_mod_cast h_abs_int
   have h_pow_nn : 0 ≤ bpow beta e := bpow_ge_0 _ _
   nlinarith
+
+/-- A lower bound on the magnitude of the multiplication error in FLT,
+when `|x * y|` is comfortably above the underflow threshold. -/
+theorem mult_error_FLT_ge_bpow (beta : radix) (emin prec : ℤ)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ} (e : ℤ)
+    (Fx : generic_format beta (FLT_exp emin prec) x)
+    (Fy : generic_format beta (FLT_exp emin prec) y)
+    (H1 : bpow beta (e + 2 * prec - 1) ≤ |x * y|)
+    (Hne : round beta (FLT_exp emin prec) rnd (x * y) - x * y ≠ 0) :
+    bpow beta e ≤ |round beta (FLT_exp emin prec) rnd (x * y) - x * y| := by
+  set mx := Ztrunc (scaled_mantissa beta (FLT_exp emin prec) x) with hmx_def
+  set my := Ztrunc (scaled_mantissa beta (FLT_exp emin prec) y) with hmy_def
+  set cx := cexp beta (FLT_exp emin prec) x with hcx_def
+  set cy := cexp beta (FLT_exp emin prec) y with hcy_def
+  -- xy = F2R ⟨mx*my, cx + cy⟩.
+  have h_xy : x * y = F2R (beta := beta) ⟨mx * my, cx + cy⟩ := by
+    have hx : x = (mx : ℝ) * bpow beta cx := Fx
+    have hy : y = (my : ℝ) * bpow beta cy := Fy
+    show x * y = ((mx * my : ℤ) : ℝ) * bpow beta (cx + cy)
+    rw [hx, hy, bpow_plus]
+    push_cast; ring
+  obtain ⟨n, Hn⟩ := round_repr_same_exp beta (FLT_exp emin prec) rnd (mx * my) (cx + cy)
+  -- Express the error as F2R ⟨n - mx*my, cx + cy⟩.
+  have h_err : round beta (FLT_exp emin prec) rnd (x * y) - x * y
+             = F2R (beta := beta) ⟨n - mx * my, cx + cy⟩ := by
+    rw [h_xy, Hn, ← Fminus_same_exp, F2R_minus]
+  rw [h_err]
+  rw [h_err] at Hne
+  -- F2R_ge gives bpow(cx + cy) ≤ |F2R ⟨n - mx*my, cx + cy⟩|.
+  refine le_trans ?_ (F2R_ge beta ⟨n - mx * my, cx + cy⟩ Hne)
+  apply bpow_le
+  -- Need e ≤ cx + cy. Use FLT_exp = max(_ - prec, emin), so cx ≥ mag x - prec.
+  show e ≤ (⟨n - mx * my, cx + cy⟩ : float beta).Fexp
+  show e ≤ cx + cy
+  have Hx0 : x ≠ 0 := by
+    intro h
+    have : x * y = 0 := by rw [h]; ring
+    rw [this, abs_zero] at H1
+    exact absurd H1 (not_le_of_gt (bpow_gt_0 _ _))
+  have Hy0 : y ≠ 0 := by
+    intro h
+    have : x * y = 0 := by rw [h]; ring
+    rw [this, abs_zero] at H1
+    exact absurd H1 (not_le_of_gt (bpow_gt_0 _ _))
+  have Hex_high : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+  have Hey_high : |y| < bpow beta (mag beta y) := bpow_mag_gt beta y
+  -- |xy| < bpow(mag x + mag y), and bpow(e + 2*prec - 1) ≤ |xy|.
+  have h_xy_high : |x * y| < bpow beta (mag beta x + mag beta y) := by
+    rw [abs_mul, bpow_plus]
+    exact mul_lt_mul'' Hex_high Hey_high (abs_nonneg _) (abs_nonneg _)
+  have h_e_lt : e + 2 * prec - 1 < mag beta x + mag beta y :=
+    lt_bpow beta (lt_of_le_of_lt H1 h_xy_high)
+  have hcx_ge : mag beta x - prec ≤ cx := by
+    show mag beta x - prec ≤ cexp beta (FLT_exp emin prec) x
+    unfold cexp FLT_exp
+    exact le_max_left _ _
+  have hcy_ge : mag beta y - prec ≤ cy := by
+    show mag beta y - prec ≤ cexp beta (FLT_exp emin prec) y
+    unfold cexp FLT_exp
+    exact le_max_left _ _
+  linarith
 
 /-- Multiplying an FLT value by a sufficiently-large `bpow e` keeps it in FLT. -/
 theorem mult_bpow_exact_FLT (beta : radix) (emin prec : ℤ)
