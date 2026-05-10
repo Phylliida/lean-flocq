@@ -331,4 +331,98 @@ theorem relative_error_N_round_F2R_emin (beta : radix) (fexp : ℤ → ℤ) (hVa
     · exfalso; apply Hx; rw [hm]; exact F2R_0 emin
     · rw [abs_of_pos hm]; exact hm
 
+/-! ### FLX-specific relative-error bounds -/
+
+/-- Trivial inequality on FLX: `prec ≤ k - FLX_exp prec k`. -/
+theorem relative_error_FLX_aux (prec : ℤ) (k : ℤ) : prec ≤ k - FLX_exp prec k := by
+  unfold FLX_exp; omega
+
+/-- FLX has a relative error of `β^(-prec+1)` for any nonzero `x`. -/
+theorem relative_error_FLX (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x : ℝ} (Hx : x ≠ 0) :
+    |round beta (FLX_exp prec) rnd x - x| < bpow beta (-prec + 1) * |x| := by
+  apply relative_error beta (FLX_exp prec) (FLX_exp_valid prec Hp)
+    (mag beta x - 1) prec (fun k _ => relative_error_FLX_aux prec k) rnd
+  exact bpow_mag_le beta Hx
+
+/-- The `1 + ε` form for FLX. -/
+theorem relative_error_FLX_ex (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd] (x : ℝ) :
+    ∃ eps : ℝ, |eps| < bpow beta (-prec + 1) ∧
+      round beta (FLX_exp prec) rnd x = x * (1 + eps) :=
+  relative_error_lt_conversion beta (FLX_exp prec) rnd (bpow_gt_0 _ _)
+    (fun hne => relative_error_FLX beta prec Hp rnd hne)
+
+/-- The relative error w.r.t. the rounded value, in FLX. -/
+theorem relative_error_FLX_round (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x : ℝ} (Hx : x ≠ 0) :
+    |round beta (FLX_exp prec) rnd x - x|
+      < bpow beta (-prec + 1) * |round beta (FLX_exp prec) rnd x| := by
+  apply relative_error_round beta (FLX_exp prec) (FLX_exp_valid prec Hp)
+    (mag beta x - 1) prec (fun k _ => relative_error_FLX_aux prec k) rnd Hp
+  exact bpow_mag_le beta Hx
+
+/-- Round-to-nearest relative error in FLX. -/
+theorem relative_error_N_FLX (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    |round beta (FLX_exp prec) (Znearest choice) x - x|
+      ≤ (1/2) * bpow beta (-prec + 1) * |x| := by
+  by_cases Hx : x = 0
+  · simp [Hx, round_0]
+  · apply relative_error_N beta (FLX_exp prec) (FLX_exp_valid prec Hp)
+      (mag beta x - 1) prec (fun k _ => relative_error_FLX_aux prec k) choice
+    exact bpow_mag_le beta Hx
+
+/-- The unit roundoff for FLX. -/
+noncomputable def u_ro (beta : radix) (prec : ℤ) : ℝ :=
+  (1/2) * bpow beta (-prec + 1)
+
+theorem u_ro_pos (beta : radix) (prec : ℤ) : 0 ≤ u_ro beta prec := by
+  unfold u_ro
+  exact mul_nonneg (by norm_num) (bpow_ge_0 _ _)
+
+theorem u_ro_lt_1 (beta : radix) (prec : ℤ) (Hp : 0 < prec) : u_ro beta prec < 1 := by
+  unfold u_ro
+  have h_bound : bpow beta (-prec + 1) ≤ bpow beta 0 := bpow_le beta (by omega)
+  have h_bpow0 : bpow beta 0 = 1 := by unfold bpow; simp
+  rw [h_bpow0] at h_bound
+  linarith
+
+theorem u_rod1pu_ro_pos (beta : radix) (prec : ℤ) :
+    0 ≤ u_ro beta prec / (1 + u_ro beta prec) := by
+  have hu := u_ro_pos beta prec
+  have h_one_plus : 0 < 1 + u_ro beta prec := by linarith
+  exact div_nonneg hu (le_of_lt h_one_plus)
+
+theorem u_rod1pu_ro_le_u_ro (beta : radix) (prec : ℤ) :
+    u_ro beta prec / (1 + u_ro beta prec) ≤ u_ro beta prec := by
+  have hu := u_ro_pos beta prec
+  have h_one_plus : 0 < 1 + u_ro beta prec := by linarith
+  rw [div_le_iff₀ h_one_plus]
+  have : u_ro beta prec * u_ro beta prec ≥ 0 := mul_nonneg hu hu
+  nlinarith
+
+/-- The `1 + ε` form for round-to-nearest in FLX. -/
+theorem relative_error_N_FLX_ex (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    ∃ eps : ℝ, |eps| ≤ (1/2) * bpow beta (-prec + 1) ∧
+      round beta (FLX_exp prec) (Znearest choice) x = x * (1 + eps) :=
+  relative_error_le_conversion beta (FLX_exp prec) (Znearest choice)
+    (le_of_lt (mul_pos (by norm_num) (bpow_gt_0 _ _)))
+    (relative_error_N_FLX beta prec Hp choice x)
+
+/-- The relative error w.r.t. the rounded value, for round-to-nearest in FLX. -/
+theorem relative_error_N_FLX_round (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    |round beta (FLX_exp prec) (Znearest choice) x - x|
+      ≤ (1/2) * bpow beta (-prec + 1)
+          * |round beta (FLX_exp prec) (Znearest choice) x| := by
+  by_cases Hx : x = 0
+  · simp [Hx, round_0]
+  · apply relative_error_N_round beta (FLX_exp prec) (FLX_exp_valid prec Hp)
+      (mag beta x - 1) prec (fun k _ => relative_error_FLX_aux prec k) choice Hp
+    exact bpow_mag_le beta Hx
+
 end LeanFlocq
