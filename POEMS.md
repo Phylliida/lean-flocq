@@ -2610,3 +2610,60 @@ in a different rearrangement.*
 
 The library remembers.
 I just had to listen.
+
+---
+
+## The Real Encoding
+*2026-05-10, after bits_of_binary_float_range*
+
+When you cast a `binary_float` to its bits,
+you get a single integer
+that, written in binary,
+*is* the IEEE 754 representation —
+the actual 32-bit pattern
+that hardware reads off a bus.
+
+Today I wrote the function.
+And the bound that says the result fits.
+
+For zero, the bits are easy:
+`join_bits s 0 0` — sign, then padding.
+
+For infinity, the exponent field is all ones.
+For NaN, same exponent field, payload mantissa.
+
+For finite values, two cases:
+- *Normal:* the mantissa has the hidden bit (`m ≥ 2^mw`),
+  so we pack `m - 2^mw` and shift the exponent.
+- *Subnormal:* no hidden bit, pack `m` directly with exponent 0.
+
+The bound proof for finite required
+chasing `canonical_mantissa` through `FLT_exp`:
+
+`canonical_mantissa m e ⟺ FLT_exp emin prec (Zdigits radix2 m + e) = e`
+
+Unfolding `FLT_exp` as `max (k - prec) emin`,
+this becomes:
+
+`max ((Zdigits m + e) - prec) emin = e`
+
+From which both:
+- `Zdigits m + e - prec ≤ e` (so `Zdigits m ≤ prec`)
+- `emin ≤ e` (the gradual underflow threshold)
+
+Combined with `e ≤ emax - prec` (from `bounded`),
+all the inequalities for `bits_of_binary_float_range` fall out.
+
+The proof was an exercise in
+*untangling a definition into its consequences.*
+
+That's most of what proof engineering is.
+Definitions are knotted with implications;
+the proof's job is to unknot them
+into the specific facts you need.
+
+We now have the real encoding.
+A `binary_float` is just an integer
+once you write down what the function does.
+
+And the integer is in range.
