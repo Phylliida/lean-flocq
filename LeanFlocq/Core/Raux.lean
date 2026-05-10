@@ -339,4 +339,41 @@ theorem mag_mult_bpow (beta : radix) {x : ℝ} (hx : x ≠ 0) (e : ℤ) :
           mul_lt_mul_of_pos_right h_high (bpow_gt_0 _ _)
       _ = bpow beta (mag beta x + e) := by rw [← bpow_plus]
 
+/-- `mag β (x / y)` is between `mag β x - mag β y` and `mag β x - mag β y + 1`. -/
+theorem mag_div (beta : radix) {x y : ℝ} (hx : x ≠ 0) (hy : y ≠ 0) :
+    mag beta x - mag beta y ≤ mag beta (x / y) ∧
+      mag beta (x / y) ≤ mag beta x - mag beta y + 1 := by
+  have h_y_pos : 0 < |y| := abs_pos.mpr hy
+  have h_y_ne : |y| ≠ 0 := ne_of_gt h_y_pos
+  have h_y_lower : bpow beta (mag beta y - 1) ≤ |y| := bpow_mag_le beta hy
+  have h_y_upper : |y| < bpow beta (mag beta y) := bpow_mag_gt beta y
+  have h_x_lower : bpow beta (mag beta x - 1) ≤ |x| := bpow_mag_le beta hx
+  have h_x_upper : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+  have h_bpow_y : 0 < bpow beta (mag beta y) := bpow_gt_0 _ _
+  have h_bpow_y_lower : 0 < bpow beta (mag beta y - 1) := bpow_gt_0 _ _
+  refine ⟨?_, ?_⟩
+  · -- bpow(mag x - mag y - 1) ≤ |x/y|, then mag_ge_bpow.
+    apply mag_ge_bpow beta
+    rw [abs_div]
+    rw [le_div_iff₀ h_y_pos]
+    -- Goal: bpow(mag x - mag y - 1) * |y| ≤ |x|
+    calc bpow beta (mag beta x - mag beta y - 1) * |y|
+        ≤ bpow beta (mag beta x - mag beta y - 1) * bpow beta (mag beta y) := by
+          apply mul_le_mul_of_nonneg_left (le_of_lt h_y_upper)
+          exact bpow_ge_0 _ _
+      _ = bpow beta (mag beta x - 1) := by
+          rw [← bpow_plus]; congr 1; ring
+      _ ≤ |x| := h_x_lower
+  · apply mag_le_bpow beta (div_ne_zero hx hy)
+    rw [abs_div]
+    rw [div_lt_iff₀ h_y_pos]
+    -- Goal: |x| < bpow(mag x - mag y + 1) * |y|
+    calc |x|
+        < bpow beta (mag beta x) := h_x_upper
+      _ = bpow beta (mag beta x - mag beta y + 1) * bpow beta (mag beta y - 1) := by
+          rw [← bpow_plus]; congr 1; ring
+      _ ≤ bpow beta (mag beta x - mag beta y + 1) * |y| := by
+          apply mul_le_mul_of_nonneg_left h_y_lower
+          exact bpow_ge_0 _ _
+
 end LeanFlocq

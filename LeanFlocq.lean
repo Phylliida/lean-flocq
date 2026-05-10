@@ -12,4 +12,5 @@ import LeanFlocq.Core.Binary
 import LeanFlocq.Calc.Bracket
 import LeanFlocq.Calc.Round
 import LeanFlocq.Calc.Operations
+import LeanFlocq.Calc.Div
 
