@@ -11,6 +11,7 @@ import Mathlib.Algebra.Order.Floor.Ring
 import Mathlib.Algebra.Order.Floor.Semiring
 import Mathlib.Data.Real.Archimedean
 import Mathlib.Data.Int.Log
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Tactic.Positivity
 import LeanFlocq.Core.Zaux
 
@@ -338,6 +339,48 @@ theorem mag_mult_bpow (beta : radix) {x : ℝ} (hx : x ≠ 0) (e : ℤ) :
         < bpow beta (mag beta x) * bpow beta e :=
           mul_lt_mul_of_pos_right h_high (bpow_gt_0 _ _)
       _ = bpow beta (mag beta x + e) := by rw [← bpow_plus]
+
+/-- `mag β (√x) = ⌊(mag β x + 1) / 2⌋` for `0 < x`. -/
+theorem mag_sqrt (beta : radix) {x : ℝ} (hx : 0 < x) :
+    mag beta (Real.sqrt x) = (mag beta x + 1) / 2 := by
+  set n := mag beta x with hn
+  set k := (n + 1) / 2 with hk
+  have hx_ne : x ≠ 0 := ne_of_gt hx
+  have h_x_lower : bpow beta (n - 1) ≤ |x| := bpow_mag_le beta hx_ne
+  have h_x_upper : |x| < bpow beta n := bpow_mag_gt beta x
+  have h_x_pos_abs : |x| = x := abs_of_pos hx
+  rw [h_x_pos_abs] at h_x_lower h_x_upper
+  have h_sqrt_pos : 0 < Real.sqrt x := Real.sqrt_pos.mpr hx
+  have h_sqrt_ne : Real.sqrt x ≠ 0 := ne_of_gt h_sqrt_pos
+  apply mag_unique_pos
+  · -- bpow(k - 1) ≤ sqrt x
+    -- ↔ bpow(k - 1)^2 ≤ x  (since both sides nonneg)
+    -- bpow(k-1)^2 = bpow(2(k-1)) = bpow(2k - 2)
+    rw [show (k : ℤ) - 1 = k - 1 from rfl]
+    have h_sq_eq : bpow beta (k - 1) ^ 2 = bpow beta (2 * (k - 1)) := by
+      rw [show (2 : ℤ) * (k - 1) = (k - 1) + (k - 1) from by ring, bpow_plus, sq]
+    rw [show (Real.sqrt x) = Real.sqrt x from rfl]
+    rw [show bpow beta (k - 1) = Real.sqrt (bpow beta (k - 1) ^ 2) from
+        (Real.sqrt_sq (le_of_lt (bpow_gt_0 beta _))).symm]
+    apply Real.sqrt_le_sqrt
+    rw [h_sq_eq]
+    -- 2(k-1) ≤ n - 1: we have k = (n+1)/2 (integer div)
+    have h_2k_le : 2 * (k - 1) ≤ n - 1 := by
+      have h_2k : 2 * k ≤ n + 1 := by
+        rw [hk]; omega
+      omega
+    exact le_trans (bpow_le beta h_2k_le) h_x_lower
+  · -- sqrt x < bpow(k)
+    rw [show Real.sqrt x = Real.sqrt x from rfl]
+    rw [show bpow beta k = Real.sqrt (bpow beta k ^ 2) from
+        (Real.sqrt_sq (le_of_lt (bpow_gt_0 beta _))).symm]
+    apply Real.sqrt_lt_sqrt (le_of_lt hx)
+    have h_sq_eq : bpow beta k ^ 2 = bpow beta (2 * k) := by
+      rw [show (2 : ℤ) * k = k + k from by ring, bpow_plus, sq]
+    rw [h_sq_eq]
+    have h_2k_ge : n ≤ 2 * k := by
+      rw [hk]; omega
+    exact lt_of_lt_of_le h_x_upper (bpow_le beta h_2k_ge)
 
 /-- `mag β (x / y)` is between `mag β x - mag β y` and `mag β x - mag β y + 1`. -/
 theorem mag_div (beta : radix) {x y : ℝ} (hx : x ≠ 0) (hy : y ≠ 0) :
