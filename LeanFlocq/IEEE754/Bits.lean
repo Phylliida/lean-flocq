@@ -665,4 +665,129 @@ noncomputable def binary_float_of_bits (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < e
   binary_float.FF2B (binary_float_of_bits_aux mw ew x)
     (binary_float_of_bits_aux_correct mw ew Hmw Hew Hmax x)
 
+/-! ### Round-trip theorems -/
+
+/-- 2^ew - 1 > 0 (the max exponent field is nonzero). -/
+private theorem pow_ew_minus_one_ne_zero (ew : ℤ) (Hew : 0 < ew) :
+    (2 : ℤ) ^ ew.toNat - 1 ≠ 0 := by
+  have h_ne : ew.toNat ≠ 0 := by omega
+  have h_one_lt : (1 : ℤ) < (2 : ℤ) ^ ew.toNat :=
+    one_lt_pow₀ (by norm_num : (1 : ℤ) < 2) h_ne
+  linarith
+
+/-- For a subnormal finite value (`m < 2^mw`), the exponent equals `emin`. -/
+private theorem subnormal_exp_eq_emin (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < ew)
+    (Hmax : mw + 1 < (2 : ℤ) ^ (ew - 1).toNat)
+    {m e : ℤ}
+    (h_bd : bounded (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat) m e)
+    (h_m_lt : m < (2 : ℤ) ^ mw.toNat) :
+    e = 3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1) := by
+  obtain ⟨h_m_pos, h_canon, _⟩ := h_bd
+  -- canonical_mantissa: FLT_exp emin prec (Zdigits m + e) = e.
+  unfold canonical_mantissa FLT_exp at h_canon
+  have h_m_ne : m ≠ 0 := by linarith
+  have h_Zd_le : Zdigits radix2 m ≤ mw := by
+    apply Zdigits_le_Zpower radix2 (le_of_lt Hmw)
+    rw [abs_of_pos (by linarith : (0 : ℤ) < m)]; exact h_m_lt
+  -- (Zdigits m + e) - (mw+1) ≤ mw + e - (mw+1) = e - 1 < e.
+  -- So the max with emin must be emin (else it would be ≤ e-1, giving e ≤ e-1).
+  -- Thus emin = e.
+  rcases le_or_lt ((Zdigits radix2 m + e) - (mw + 1))
+                  (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) with h_le | h_lt
+  · rw [max_eq_right h_le] at h_canon
+    linarith
+  · rw [max_eq_left (le_of_lt h_lt)] at h_canon
+    -- h_canon : (Zdigits m + e) - (mw+1) = e, so Zdigits m = mw+1, contradicting Zd ≤ mw.
+    linarith
+
+/-- For a normal finite value (`2^mw ≤ m`), the encoded exponent field
+`e - emin + 1` is in the valid range `[1, 2^ew - 1)`. -/
+private theorem normal_exp_field_bounds (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < ew)
+    (Hmax : mw + 1 < (2 : ℤ) ^ (ew - 1).toNat)
+    {m e : ℤ}
+    (h_bd : bounded (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat) m e)
+    (h_m_ge : (2 : ℤ) ^ mw.toNat ≤ m) :
+    let emin := 3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)
+    1 ≤ e - emin + 1 ∧ e - emin + 1 < (2 : ℤ) ^ ew.toNat - 1 := by
+  obtain ⟨_, h_canon, h_e_le⟩ := h_bd
+  set emin := 3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1) with hemin_def
+  -- From canonical_mantissa: max(Zdigits m + e - (mw+1), emin) = e.
+  unfold canonical_mantissa FLT_exp at h_canon
+  -- emin ≤ e (since the max ≥ emin and equals e).
+  have h_emin_le_e : emin ≤ e := by
+    have : emin ≤ max ((Zdigits radix2 m + e) - (mw + 1)) emin := le_max_right _ _
+    linarith [le_of_eq h_canon]
+  refine ⟨by linarith, ?_⟩
+  -- e - emin + 1 < 2^ew - 1 ↔ e < 2^ew + emin - 2 = 2*emax + emin - 2.
+  -- Substituting emin = 3 - emax - (mw+1): 2*emax + 3 - emax - (mw+1) - 2 = emax - (mw+1) + ... let me compute.
+  -- 2^ew = 2 * 2^(ew-1) = 2 * emax (where emax = 2^(ew-1)).
+  have h_pow_ew : (2 : ℤ) ^ ew.toNat = 2 * (2 : ℤ) ^ (ew - 1).toNat := by
+    have h_toNat : ew.toNat = (ew - 1).toNat + 1 := by omega
+    rw [h_toNat, pow_succ]; ring
+  rw [h_pow_ew, hemin_def]
+  linarith
+
+/-- Decoding the encoding of a `binary_float` recovers the original. -/
+theorem binary_float_of_bits_of_binary_float (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < ew)
+    (Hmax : mw + 1 < (2 : ℤ) ^ (ew - 1).toNat)
+    (x : binary_float (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat)) :
+    binary_float_of_bits mw ew Hmw Hew Hmax (bits_of_binary_float mw ew x) = x := by
+  apply binary_float.B2FF_inj
+  -- B2FF (binary_float_of_bits ...) = binary_float_of_bits_aux (bits_of_binary_float x).
+  show binary_float.B2FF
+        (binary_float.FF2B (binary_float_of_bits_aux mw ew (bits_of_binary_float mw ew x)) _)
+       = binary_float.B2FF x
+  rw [binary_float.B2FF_FF2B]
+  unfold binary_float_of_bits_aux
+  rw [split_bits_of_binary_float_correct mw ew (le_of_lt Hmw) Hew x]
+  have h_pow_ew_ne_1 := pow_ew_minus_one_ne_zero ew Hew
+  cases x with
+  | B754_zero s =>
+    unfold split_bits_of_binary_float
+    simp; rfl
+  | B754_infinity s =>
+    unfold split_bits_of_binary_float
+    simp [h_pow_ew_ne_1]; rfl
+  | B754_nan s pl h_nan =>
+    have h_pl_pos : 1 ≤ pl := h_nan.1
+    have h_pl_ne_0 : pl ≠ 0 := by linarith
+    have h_pl_pos' : 0 < pl := by linarith
+    unfold split_bits_of_binary_float
+    simp [h_pow_ew_ne_1, h_pl_ne_0, h_pl_pos']; rfl
+  | B754_finite s m e h_bd =>
+    have h_m_pos : 1 ≤ m := h_bd.1
+    -- Use explicit emin form to match what the unfolded function shows.
+    unfold split_bits_of_binary_float
+    by_cases h_mm : 0 ≤ m - (2 : ℤ) ^ mw.toNat
+    · -- Normal branch.
+      have h_m_ge : (2 : ℤ) ^ mw.toNat ≤ m := by linarith
+      obtain ⟨h_field_ge, h_field_lt⟩ :=
+        normal_exp_field_bounds mw ew Hmw Hew Hmax h_bd h_m_ge
+      have h_ex_ne_0 :
+          e - (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) + 1 ≠ 0 := by linarith
+      have h_ex_ne_max :
+          e - (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) + 1
+            ≠ (2 : ℤ) ^ ew.toNat - 1 := by linarith
+      have h_m_pos_real : 0 < m := by linarith
+      have h_m_eq : m - (2 : ℤ) ^ mw.toNat + (2 : ℤ) ^ mw.toNat = m := by ring
+      have h_e_eq :
+          e - (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) + 1
+            + (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) - 1 = e := by ring
+      simp only [if_pos h_mm, if_neg h_ex_ne_0, if_neg h_ex_ne_max,
+                 h_m_eq, h_e_eq, if_pos h_m_pos_real]
+      rfl
+    · -- Subnormal branch.
+      push_neg at h_mm
+      have h_m_lt : m < (2 : ℤ) ^ mw.toNat := by linarith
+      have h_not_le : ¬ 0 ≤ m - (2 : ℤ) ^ mw.toNat := not_le.mpr h_mm
+      have h_m_ne_0 : m ≠ 0 := by linarith
+      have h_m_pos' : 0 < m := by linarith
+      have h_e_eq_emin : e = 3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1) :=
+        subnormal_exp_eq_emin mw ew Hmw Hew Hmax h_bd h_m_lt
+      simp only [if_neg h_not_le, if_pos (rfl : (0 : ℤ) = 0),
+                 if_neg h_m_ne_0, if_pos h_m_pos']
+      show full_float.F754_finite s m (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1))
+            = full_float.F754_finite s m e
+      rw [← h_e_eq_emin]
+
 end LeanFlocq
