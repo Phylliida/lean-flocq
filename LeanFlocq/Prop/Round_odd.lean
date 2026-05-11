@@ -592,4 +592,110 @@ theorem Rnd_odd_pt_monotone (beta : radix) (fexp : ℤ → ℤ)
   rw [h_f_eq, h_g_eq]
   exact round_le beta fexp hValid Zrnd_odd Hxy
 
+/-! ### Magnitude and canonical exponent preservation under round-to-odd -/
+
+/-- Under FLT with even radix and `prec > 1`, round-to-odd preserves the
+magnitude (when not in the subnormal regime). -/
+theorem mag_round_odd (beta : radix) (Even_beta : Even beta.val)
+    (emin prec : ℤ) (Hp1 : 1 < prec)
+    {x : ℝ} (Hx : emin < mag beta x) :
+    mag beta (round beta (FLT_exp emin prec) Zrnd_odd x) = mag beta x := by
+  have Hp : 0 < prec := by linarith
+  have hValid : Valid_exp (FLT_exp emin prec) := FLT_exp_valid emin prec Hp
+  haveI : Exists_NE beta (FLT_exp emin prec) :=
+    exists_NE_FLT beta emin prec Hp (Or.inr Hp1)
+  by_cases Zx : x = 0
+  · rw [Zx, round_0]
+  set e := mag beta x with he_def
+  -- bpow(e-1) ≤ |x| and |x| < bpow(e).
+  have h_lo : bpow beta (e - 1) ≤ |x| := bpow_mag_le beta Zx
+  have h_hi : |x| < bpow beta e := bpow_mag_gt beta x
+  refine mag_unique beta ?_ ?_
+  · -- Show: bpow(e-1) ≤ |round x|.
+    apply abs_round_ge_generic beta (FLT_exp emin prec) hValid Zrnd_odd
+    · exact FLT_format_bpow beta emin prec Hp (e - 1) (by linarith)
+    · exact h_lo
+  · -- Show: |round x| < bpow e.
+    have h_le : |round beta (FLT_exp emin prec) Zrnd_odd x| ≤ bpow beta e := by
+      apply abs_round_le_generic beta (FLT_exp emin prec) hValid Zrnd_odd
+      · exact FLT_format_bpow beta emin prec Hp e (by linarith)
+      · linarith
+    rcases lt_or_eq_of_le h_le with h_lt | h_eq
+    · exact h_lt
+    -- Contradiction: |round x| = bpow e is incompatible with odd witness.
+    exfalso
+    have h_odd_pt := round_odd_pt beta (FLT_exp emin prec) hValid x
+    obtain ⟨_, h_cases⟩ := h_odd_pt
+    rcases h_cases with h_eq_x | ⟨_, g, hg_F2R, hg_can, hg_odd⟩
+    · -- round x = x: but then |x| = bpow e, contradicting |x| < bpow e.
+      rw [← h_eq_x] at h_lo h_hi
+      linarith
+    · -- round x has canonical odd-numerator g. But |round x| = bpow e
+      -- means |g| equals the canonical of bpow e, whose numerator is β^k
+      -- (k > 0), hence even. Contradiction with g odd.
+      -- Set up: canonical for bpow e is at exponent FLT_exp(e+1).
+      set ee := FLT_exp emin prec (e + 1) with hee_def
+      have h_ee_le_e : ee ≤ e := by
+        show FLT_exp emin prec (e + 1) ≤ e
+        unfold FLT_exp
+        exact max_le (by linarith) (by linarith)
+      have h_ee_lt_e : ee < e := by
+        show FLT_exp emin prec (e + 1) < e
+        unfold FLT_exp
+        apply max_lt
+        · linarith
+        · exact Hx
+      set k : ℕ := (e - ee).toNat with hk_def
+      have hk_eq : (k : ℤ) = e - ee := Int.toNat_of_nonneg (by linarith)
+      have hk_pos : 0 < k := by
+        have : 0 < (k : ℤ) := by rw [hk_eq]; linarith
+        exact_mod_cast this
+      -- gg : ⟨β^k, ee⟩. F2R gg = bpow e.
+      set gg : float beta := ⟨(beta.val : ℤ)^k, ee⟩ with hgg_def
+      have hgg_F2R : F2R gg = bpow beta e := by
+        have h_F2R : F2R gg = (((beta.val : ℤ)^k : ℤ) : ℝ) * bpow beta ee := rfl
+        rw [h_F2R]
+        have h_pow_cast : (((beta.val : ℤ)^k : ℤ) : ℝ) = bpow beta (k : ℤ) := by
+          rw [bpow]; push_cast; rfl
+        rw [h_pow_cast, ← bpow_plus]
+        congr 1; omega
+      have hgg_can : canonical beta (FLT_exp emin prec) gg := by
+        show ee = cexp beta (FLT_exp emin prec) (F2R gg)
+        rw [hgg_F2R]
+        unfold cexp
+        rw [mag_bpow]
+      -- Fabs g has same canonical structure, equal F2R = |F2R g| = bpow e.
+      have h_F2R_g_abs : |F2R g| = bpow beta e := by
+        rw [← hg_F2R, h_eq]
+      have hFabs_g_F2R : F2R (Fabs g) = bpow beta e := by
+        rw [F2R_abs, h_F2R_g_abs]
+      have hFabs_g_can : canonical beta (FLT_exp emin prec) (Fabs g) :=
+        canonical_abs beta (FLT_exp emin prec) g.Fnum g.Fexp hg_can
+      -- canonical_unique: Fabs g = gg.
+      have h_Fabs_eq_gg : Fabs g = gg :=
+        canonical_unique beta (FLT_exp emin prec) (Fabs g) gg
+          hFabs_g_can hgg_can (hFabs_g_F2R.trans hgg_F2R.symm)
+      -- So |g.Fnum| = β^k.
+      have h_Fabs_g_Fnum : (Fabs g).Fnum = g.Fnum.natAbs := by
+        show |g.Fnum| = g.Fnum.natAbs
+        exact Int.abs_eq_natAbs g.Fnum
+      have h_natAbs_eq : (g.Fnum.natAbs : ℤ) = (beta.val : ℤ)^k := by
+        have h_Fnum_eq : (Fabs g).Fnum = gg.Fnum := by rw [h_Fabs_eq_gg]
+        rw [h_Fabs_g_Fnum] at h_Fnum_eq
+        exact h_Fnum_eq
+      -- β^k is even (β even, k > 0).
+      have h_pow_even : Even ((beta.val : ℤ)^k) := by
+        rw [Int.even_pow]
+        exact ⟨Even_beta, Nat.pos_iff_ne_zero.mp hk_pos⟩
+      -- So g.Fnum.natAbs is even, so g.Fnum is even, contradicting hg_odd.
+      apply hg_odd
+      have h_natAbs_even : Even g.Fnum.natAbs := by
+        have h_cast : Even (g.Fnum.natAbs : ℤ) := h_natAbs_eq ▸ h_pow_even
+        exact_mod_cast h_cast
+      exact (Int.natAbs_even).mp h_natAbs_even
+
+-- Note: fexp_round_odd (cexp preservation under round-to-odd) requires
+-- a careful subnormal case analysis showing |round x| = bpow emin exactly
+-- when mag x ≤ emin and x ≠ 0. Deferred to a later stage.
+
 end LeanFlocq
