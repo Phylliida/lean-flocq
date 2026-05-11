@@ -1157,14 +1157,69 @@ theorem round_round_mult_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
     unfold FTZ_exp
     split_ifs <;> omega
 
+/-! ## Bridge: round_round_mid_cases
+
+A wrapper around the `_further_place` family. Dispatches on the position of
+`x` relative to the midpoint: far below (uses `_lt_mid_further_place`), far
+above (uses `_gt_mid_further_place`), or within `(1/2)*ulp2` of the midpoint
+(left to the caller via the `Cmid` callback). Used downstream by
+`round_round_sqrt`. -/
+
+theorem round_round_mid_cases (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2f1 : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1)
+    (Hf1 : fexp1 (mag beta x) ≤ mag beta x)
+    (Cmid : |x - midp beta fexp1 x| ≤ (1/2) * ulp beta fexp2 x
+         → round_round_eq beta fexp1 fexp2 choice1 choice2 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  rcases generic_format_EM beta fexp1 Vfexp1 x with Fx | Nfx
+  · -- x ∈ F1: x ∈ F2 too (via fexp2 ≤ fexp1 - 1), so round at fexp2 fixes x.
+    unfold round_round_eq
+    have h_incl : generic_format beta fexp2 x := by
+      apply generic_inclusion_mag beta fexp1 fexp2
+      · intro _; linarith
+      · exact Fx
+    rw [round_generic beta fexp2 _ h_incl]
+  · -- x ∉ F1: round_UP x = round_DN x + ulp1.
+    have h_x_ne : x ≠ 0 := ne_of_gt Px
+    set rd := round beta fexp1 (fun y : ℝ => ⌊y⌋) x with hrd_def
+    have h_ceil : round beta fexp1 (fun y : ℝ => ⌈y⌉) x = rd + ulp beta fexp1 x :=
+      round_UP_DN_ulp beta fexp1 Nfx
+    have Pxx_rd : rd ≤ x := (round_DN_pt beta fexp1 Vfexp1 x).2.1
+    rcases lt_or_ge (x - rd) ((1/2) * (ulp beta fexp1 x - ulp beta fexp2 x))
+      with h_lt | h_ge
+    · -- x - rd < (1/2)*(ulp1 - ulp2): x below midpoint by ulp2/2.
+      apply round_round_lt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
+        Hf2f1 Hf1
+      unfold midp
+      rw [← hrd_def]
+      linarith
+    · -- (1/2)*(ulp1 - ulp2) ≤ x - rd.
+      rcases lt_or_ge ((1/2) * (ulp beta fexp1 x + ulp beta fexp2 x)) (x - rd)
+        with h_lt2 | h_le2
+      · -- (1/2)*(ulp1 + ulp2) < x - rd: x above midpoint by ulp2/2.
+        apply round_round_gt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
+          Hf2f1 Hf1
+        unfold midp'
+        rw [h_ceil]
+        linarith
+      · -- x - rd ≤ (1/2)*(ulp1 + ulp2): |x - midp| ≤ (1/2)*ulp2.
+        apply Cmid
+        rw [abs_le]
+        refine ⟨?_, ?_⟩
+        · unfold midp; rw [← hrd_def]; linarith
+        · unfold midp; rw [← hrd_def]; linarith
+
 /-! ### Notes for the next session
 
-Core mid-rounding theorems + multiplication arc are complete. Remaining big
-arcs of `Double_rounding.v`:
+Core mid-rounding theorems, multiplication arc, and the
+`round_round_mid_cases` bridge are complete. Remaining arcs:
+- sqrt theorems (~870 Coq lines, depends on `round_round_mid_cases`),
 - plus/minus theorems (the largest section, ~1760 Coq lines),
-- sqrt theorems (~870 lines),
 - division theorems (~1100 lines, with a long bridge lemma).
 
-End of multiplication arc. -/
+End of mid_cases bridge. -/
 
 end LeanFlocq
