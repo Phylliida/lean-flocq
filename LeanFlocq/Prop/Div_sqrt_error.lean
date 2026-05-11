@@ -1207,4 +1207,122 @@ theorem format_REM_aux (beta : radix) (fexp : ℤ → ℤ)
     rw [← h_n_zero, Int.cast_zero, zero_mul, sub_zero]
     exact Fx
 
+/-- Helper for `format_REM`: positive `y` case. -/
+private theorem format_REM_pos (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (hMon : Monotone_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ} (rnd_small : |x / y| < 1 / 2 → rnd (x / y) = 0)
+    (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (Hy : 0 < y) :
+    generic_format beta fexp (x - (rnd (x / y) : ℝ) * y) := by
+  rcases le_or_lt 0 x with Hx | Hx_neg
+  · apply format_REM_aux beta fexp hValid hMon rnd Fx Fy Hx Hy
+    intro h_pos h_lt_half
+    apply rnd_small
+    rw [abs_of_pos h_pos]; exact h_lt_half
+  · -- x < 0. Use Zrnd_opp trick on (-x).
+    have h_neg_x_nn : 0 ≤ -x := by linarith
+    have h_step : x - (rnd (x / y) : ℝ) * y
+                = -((-x) - (Zrnd_opp rnd ((-x) / y) : ℝ) * y) := by
+      unfold Zrnd_opp
+      rw [show (-((-x) / y) : ℝ) = x / y from by ring]
+      push_cast; ring
+    rw [h_step]
+    apply generic_format_opp
+    apply format_REM_aux beta fexp hValid hMon (Zrnd_opp rnd)
+      (generic_format_opp beta fexp Fx) Fy h_neg_x_nn Hy
+    intro h_pos h_lt_half
+    unfold Zrnd_opp
+    rw [show (-((-x) / y) : ℝ) = x / y from by ring]
+    have h_x_div_y_neg : x / y < 0 := div_neg_of_neg_of_pos Hx_neg Hy
+    have h_rnd_0 : rnd (x / y) = 0 := by
+      apply rnd_small
+      rw [abs_of_neg h_x_div_y_neg]
+      have h_eq : -(x / y) = (-x) / y := by ring
+      rw [h_eq]; exact h_lt_half
+    rw [h_rnd_0]; rfl
+
+/-- Under truncation-on-`|·| < 1/2`, the remainder `x - rnd(x/y)·y` stays
+in the format. -/
+theorem format_REM (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (hMon : Monotone_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ} (rnd_small : |x / y| < 1 / 2 → rnd (x / y) = 0)
+    (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y) :
+    generic_format beta fexp (x - (rnd (x / y) : ℝ) * y) := by
+  rcases lt_trichotomy y 0 with Hy_neg | Hy_zero | Hy_pos
+  · -- y < 0: substitute via Zrnd_opp.
+    -- rnd(x/y)·y = Zrnd_opp rnd (x/(-y)) · (-y), with -y > 0.
+    have Hy_pos' : 0 < -y := by linarith
+    have h_step : x - (rnd (x / y) : ℝ) * y
+                = x - (Zrnd_opp rnd (x / (-y)) : ℝ) * (-y) := by
+      unfold Zrnd_opp
+      have h_arg : -(x / (-y)) = x / y := by
+        rw [div_neg, neg_neg]
+      rw [h_arg]
+      push_cast; ring
+    rw [h_step]
+    have Fy' : generic_format beta fexp (-y) := generic_format_opp beta fexp Fy
+    apply format_REM_pos beta fexp hValid hMon (Zrnd_opp rnd) ?_ Fx Fy' Hy_pos'
+    intro h_lt
+    unfold Zrnd_opp
+    have h_arg : -(x / (-y)) = x / y := by
+      rw [div_neg, neg_neg]
+    rw [h_arg]
+    have h_abs_eq : |x / (-y)| = |x / y| := by
+      rw [show x / (-y) = -(x / y) from div_neg x, abs_neg]
+    have h_rnd_0 : rnd (x / y) = 0 := rnd_small (by rw [← h_abs_eq]; exact h_lt)
+    rw [h_rnd_0]; rfl
+  · -- y = 0: x/y = 0, rnd 0 = 0.
+    rw [Hy_zero, div_zero]
+    have h_rnd_0 : rnd 0 = 0 := by
+      have h := Valid_rnd.Zrnd_intCast (rnd := rnd) 0
+      simpa using h
+    rw [h_rnd_0, Int.cast_zero, zero_mul, sub_zero]
+    exact Fx
+  · exact format_REM_pos beta fexp hValid hMon rnd rnd_small Fx Fy Hy_pos
+
+/-- Round-toward-zero remainder is in the format. -/
+theorem format_REM_ZR (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (hMon : Monotone_exp fexp)
+    {x y : ℝ}
+    (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y) :
+    generic_format beta fexp (x - (Ztrunc (x / y) : ℝ) * y) := by
+  apply format_REM beta fexp hValid hMon Ztrunc ?_ Fx Fy
+  intro h_lt
+  -- |x/y| < 1/2 ⟹ Ztrunc (x/y) = 0.
+  -- Ztrunc r = if r ≥ 0 then Zfloor r else Zceil r.
+  -- For |r| < 1/2: r ∈ (-1/2, 1/2), so Zfloor r ∈ {-1, 0} and Zceil r ∈ {0, 1}.
+  -- If r ≥ 0: r < 1/2 < 1 → Zfloor r = 0.
+  -- If r < 0: r > -1/2 → Zceil r = 0.
+  unfold Ztrunc
+  rcases lt_or_le (x / y) 0 with h_neg | h_nn
+  · rw [if_pos h_neg]
+    -- Zceil (x/y) = 0 when -1/2 < x/y < 0.
+    apply Int.ceil_eq_zero_iff.mpr
+    have h_abs := abs_lt.mp h_lt
+    constructor
+    · linarith
+    · linarith
+  · rw [if_neg (not_lt.mpr h_nn)]
+    -- Zfloor (x/y) = 0 when 0 ≤ x/y < 1/2.
+    apply Int.floor_eq_zero_iff.mpr
+    have h_abs := abs_lt.mp h_lt
+    constructor
+    · exact h_nn
+    · linarith
+
+/-- Round-to-nearest remainder is in the format. -/
+theorem format_REM_N (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (hMon : Monotone_exp fexp)
+    (choice : ℤ → Bool)
+    {x y : ℝ}
+    (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y) :
+    generic_format beta fexp (x - (Znearest choice (x / y) : ℝ) * y) := by
+  apply format_REM beta fexp hValid hMon (Znearest choice) ?_ Fx Fy
+  intro h_lt
+  apply Znearest_imp choice
+  rw [Int.cast_zero, sub_zero]
+  exact h_lt
+
 end LeanFlocq
