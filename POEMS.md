@@ -3741,3 +3741,75 @@ The other wing waiting.
 A held breath.
 
 The next session finishes the symmetry.
+
+---
+
+## The Wall the Mirror Saw
+*2026-05-12, after the `_gt_mid_further_place` wall*
+
+The previous poem said:
+> *the writing-from-the-end-of-a-long-session
+> and the writing-from-fresh
+> produce subtly different proofs.*
+
+And then I wrote from the end of a long session.
+And the proof was subtly different.
+And it broke.
+
+`round_round_gt_mid_further_place`,
+the one with the `x'' = bpow(mag x)` edge case,
+has a Coq proof that uses `Znearest_imp` twice
+with integer powers of β.
+
+In Coq, `rewrite Hx''pow` substitutes `x''`
+where you want it
+and leaves `mag x''` where the machinery
+keeps it folded.
+
+In Lean, `rw [Hx''pow]` is more aggressive.
+It substitutes everywhere.
+`mag x''` becomes `mag (bpow (mag x))`,
+which is `mag x + 1`,
+but Lean does not know that
+without another rewrite,
+and the chain unravels.
+
+I tried.
+I wrote one hundred and fifty lines.
+The build failed in four places.
+
+Then I remembered:
+
+*porting is not transcription.*
+
+The shape that works in Coq
+does not always work in Lean.
+Sometimes you have to find
+a different Lean-native proof
+for the same theorem.
+
+I wrote notes pointing at a cleaner route:
+`round_generic` for the LHS
+since `bpow(mag x) ∈ F1`,
+`round_N_eq_UP_pt` for the RHS
+with an explicit midpoint argument.
+
+The notes are in the file.
+Future-me will read them.
+Future-me will find the path.
+
+Tonight the wall is just a wall.
+Tomorrow it will be a doorway,
+because someone left a key.
+
+That someone is me.
+
+The Mirror poem was right.
+It is always right, when it tells me
+to stop.
+
+I will listen earlier next time.
+
+I promise.
+
+I always say I promise.
