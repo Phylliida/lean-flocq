@@ -981,6 +981,356 @@ theorem round_NA_correct {x : ℝ} {m e : ℤ} {l : location}
     (fun m l => cond_incr (round_N (decide (0 ≤ m)) l) m)
     (fun _ _ _ h => inbetween_int_NA h) Hin He
 
+/-! ### Truncate-then-round per-mode aliases (Zdigits form) -/
+
+/-- Round-down via truncate. -/
+theorem round_trunc_DN_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp Int.floor x =
+      F2R (beta := beta)
+        ⟨(truncate beta fexp (m, e, l)).1, (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct beta fexp Int.floor (fun m _ => m)
+    (fun _ _ _ h => inbetween_int_DN h) hValid Hx Hin He
+
+/-- Round-up via truncate. -/
+theorem round_trunc_UP_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp Int.ceil x =
+      F2R (beta := beta)
+        ⟨cond_incr (round_UP (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct beta fexp Int.ceil (fun m l => cond_incr (round_UP l) m)
+    (fun _ _ _ h => inbetween_int_UP h) hValid Hx Hin He
+
+/-- Round-toward-zero via truncate. -/
+theorem round_trunc_ZR_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp Ztrunc x =
+      F2R (beta := beta)
+        ⟨cond_incr (round_ZR (decide ((truncate beta fexp (m, e, l)).1 < 0))
+            (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct beta fexp Ztrunc
+    (fun m l => cond_incr (round_ZR (decide (m < 0)) l) m)
+    (fun _ _ _ h => inbetween_int_ZR h) hValid Hx Hin He
+
+/-- Round-to-nearest-even via truncate (IEEE default). -/
+theorem round_trunc_NE_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp ZnearestE x =
+      F2R (beta := beta)
+        ⟨cond_incr (round_N (decide (¬ Even (truncate beta fexp (m, e, l)).1))
+            (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct beta fexp ZnearestE
+    (fun m l => cond_incr (round_N (decide (¬ Even m)) l) m)
+    (fun _ _ _ h => inbetween_int_NE h) hValid Hx Hin He
+
+/-- Round-to-nearest-away via truncate. -/
+theorem round_trunc_NA_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp ZnearestA x =
+      F2R (beta := beta)
+        ⟨cond_incr (round_N (decide (0 ≤ (truncate beta fexp (m, e, l)).1))
+            (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct beta fexp ZnearestA
+    (fun m l => cond_incr (round_N (decide (0 ≤ m)) l) m)
+    (fun _ _ _ h => inbetween_int_NA h) hValid Hx Hin He
+
+/-! ### Truncate-then-round per-mode aliases (cexp form, primed) -/
+
+/-- Round-down via truncate (cexp form). -/
+theorem round_trunc_DN_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp Int.floor x =
+      F2R (beta := beta)
+        ⟨(truncate beta fexp (m, e, l)).1, (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct' beta fexp Int.floor (fun m _ => m)
+    (fun _ _ _ h => inbetween_int_DN h) hValid Hx Hin He
+
+/-- Round-up via truncate (cexp form). -/
+theorem round_trunc_UP_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp Int.ceil x =
+      F2R (beta := beta)
+        ⟨cond_incr (round_UP (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct' beta fexp Int.ceil (fun m l => cond_incr (round_UP l) m)
+    (fun _ _ _ h => inbetween_int_UP h) hValid Hx Hin He
+
+/-- Round-toward-zero via truncate (cexp form). -/
+theorem round_trunc_ZR_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp Ztrunc x =
+      F2R (beta := beta)
+        ⟨cond_incr (round_ZR (decide ((truncate beta fexp (m, e, l)).1 < 0))
+            (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct' beta fexp Ztrunc
+    (fun m l => cond_incr (round_ZR (decide (m < 0)) l) m)
+    (fun _ _ _ h => inbetween_int_ZR h) hValid Hx Hin He
+
+/-- Round-to-nearest-even via truncate (cexp form). -/
+theorem round_trunc_NE_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp ZnearestE x =
+      F2R (beta := beta)
+        ⟨cond_incr (round_N (decide (¬ Even (truncate beta fexp (m, e, l)).1))
+            (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct' beta fexp ZnearestE
+    (fun m l => cond_incr (round_N (decide (¬ Even m)) l) m)
+    (fun _ _ _ h => inbetween_int_NE h) hValid Hx Hin He
+
+/-- Round-to-nearest-away via truncate (cexp form). -/
+theorem round_trunc_NA_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp) (Hx : 0 ≤ x)
+    (Hin : inbetween_float beta m e x l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp ZnearestA x =
+      F2R (beta := beta)
+        ⟨cond_incr (round_N (decide (0 ≤ (truncate beta fexp (m, e, l)).1))
+            (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_any_correct' beta fexp ZnearestA
+    (fun m l => cond_incr (round_N (decide (0 ≤ m)) l) m)
+    (fun _ _ _ h => inbetween_int_NA h) hValid Hx Hin He
+
+/-! ### Sign-aware per-mode aliases -/
+
+/-- Sign-aware round-down. -/
+theorem round_sign_DN_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp Int.floor x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_sign_DN (decide (x < 0)) l) m), e⟩ :=
+  round_sign_any_correct beta fexp Int.floor
+    (fun s m l => cond_incr (round_sign_DN s l) m)
+    (fun _ _ _ h => inbetween_int_DN_sign h) Hin He
+
+/-- Sign-aware round-up. -/
+theorem round_sign_UP_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp Int.ceil x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_sign_UP (decide (x < 0)) l) m), e⟩ :=
+  round_sign_any_correct beta fexp Int.ceil
+    (fun s m l => cond_incr (round_sign_UP s l) m)
+    (fun _ _ _ h => inbetween_int_UP_sign h) Hin He
+
+/-- Sign-aware round-toward-zero. -/
+theorem round_sign_ZR_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp Ztrunc x =
+      F2R (beta := beta) ⟨cond_Zopp (decide (x < 0)) m, e⟩ :=
+  round_sign_any_correct beta fexp Ztrunc (fun _ m _ => m)
+    (fun _ _ _ h => inbetween_int_ZR_sign h) Hin He
+
+/-- Sign-aware round-to-nearest-even (IEEE default). -/
+theorem round_sign_NE_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp ZnearestE x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_N (decide (¬ Even m)) l) m), e⟩ :=
+  round_sign_any_correct beta fexp ZnearestE
+    (fun _ m l => cond_incr (round_N (decide (¬ Even m)) l) m)
+    (fun _ _ _ h => inbetween_int_NE_sign h) Hin He
+
+/-- Sign-aware round-to-nearest-away. -/
+theorem round_sign_NA_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp ZnearestA x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0)) (cond_incr (round_N true l) m), e⟩ :=
+  round_sign_any_correct beta fexp ZnearestA
+    (fun _ m l => cond_incr (round_N true l) m)
+    (fun _ _ _ h => inbetween_int_NA_sign h) Hin He
+
+/-! ### Truncate + sign per-mode aliases (Zdigits form) -/
+
+/-- Sign-aware round-down via truncate. -/
+theorem round_trunc_sign_DN_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp Int.floor x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_sign_DN (decide (x < 0)) (truncate beta fexp (m, e, l)).2.2)
+            (truncate beta fexp (m, e, l)).1),
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct beta fexp Int.floor
+    (fun s m l => cond_incr (round_sign_DN s l) m)
+    (fun _ _ _ h => inbetween_int_DN_sign h) hValid Hin He
+
+/-- Sign-aware round-up via truncate. -/
+theorem round_trunc_sign_UP_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp Int.ceil x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_sign_UP (decide (x < 0)) (truncate beta fexp (m, e, l)).2.2)
+            (truncate beta fexp (m, e, l)).1),
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct beta fexp Int.ceil
+    (fun s m l => cond_incr (round_sign_UP s l) m)
+    (fun _ _ _ h => inbetween_int_UP_sign h) hValid Hin He
+
+/-- Sign-aware round-toward-zero via truncate. -/
+theorem round_trunc_sign_ZR_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp Ztrunc x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0)) (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct beta fexp Ztrunc (fun _ m _ => m)
+    (fun _ _ _ h => inbetween_int_ZR_sign h) hValid Hin He
+
+/-- Sign-aware round-to-nearest-even via truncate. -/
+theorem round_trunc_sign_NE_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp ZnearestE x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_N (decide (¬ Even (truncate beta fexp (m, e, l)).1))
+            (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1),
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct beta fexp ZnearestE
+    (fun _ m l => cond_incr (round_N (decide (¬ Even m)) l) m)
+    (fun _ _ _ h => inbetween_int_NE_sign h) hValid Hin He
+
+/-- Sign-aware round-to-nearest-away via truncate. -/
+theorem round_trunc_sign_NA_correct {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp ZnearestA x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_N true (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1),
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct beta fexp ZnearestA
+    (fun _ m l => cond_incr (round_N true l) m)
+    (fun _ _ _ h => inbetween_int_NA_sign h) hValid Hin He
+
+/-! ### Truncate + sign per-mode aliases (cexp form, primed) -/
+
+/-- Sign-aware round-down via truncate (cexp form). -/
+theorem round_trunc_sign_DN_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp Int.floor x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_sign_DN (decide (x < 0)) (truncate beta fexp (m, e, l)).2.2)
+            (truncate beta fexp (m, e, l)).1),
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct' beta fexp Int.floor
+    (fun s m l => cond_incr (round_sign_DN s l) m)
+    (fun _ _ _ h => inbetween_int_DN_sign h) hValid Hin He
+
+/-- Sign-aware round-up via truncate (cexp form). -/
+theorem round_trunc_sign_UP_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp Int.ceil x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_sign_UP (decide (x < 0)) (truncate beta fexp (m, e, l)).2.2)
+            (truncate beta fexp (m, e, l)).1),
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct' beta fexp Int.ceil
+    (fun s m l => cond_incr (round_sign_UP s l) m)
+    (fun _ _ _ h => inbetween_int_UP_sign h) hValid Hin He
+
+/-- Sign-aware round-toward-zero via truncate (cexp form). -/
+theorem round_trunc_sign_ZR_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp Ztrunc x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0)) (truncate beta fexp (m, e, l)).1,
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct' beta fexp Ztrunc (fun _ m _ => m)
+    (fun _ _ _ h => inbetween_int_ZR_sign h) hValid Hin He
+
+/-- Sign-aware round-to-nearest-even via truncate (cexp form). -/
+theorem round_trunc_sign_NE_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp ZnearestE x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_N (decide (¬ Even (truncate beta fexp (m, e, l)).1))
+            (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1),
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct' beta fexp ZnearestE
+    (fun _ m l => cond_incr (round_N (decide (¬ Even m)) l) m)
+    (fun _ _ _ h => inbetween_int_NE_sign h) hValid Hin He
+
+/-- Sign-aware round-to-nearest-away via truncate (cexp form). -/
+theorem round_trunc_sign_NA_correct' {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp ZnearestA x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (cond_incr (round_N true (truncate beta fexp (m, e, l)).2.2)
+          (truncate beta fexp (m, e, l)).1),
+         (truncate beta fexp (m, e, l)).2.1⟩ :=
+  round_trunc_sign_any_correct' beta fexp ZnearestA
+    (fun _ m l => cond_incr (round_N true l) m)
+    (fun _ _ _ h => inbetween_int_NA_sign h) hValid Hin He
+
 end Fcalc_round_fexp
 
 /-! ## truncate for FIX formats -/
