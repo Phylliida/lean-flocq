@@ -404,6 +404,163 @@ theorem u_rod1pu_ro_le_u_ro (beta : radix) (prec : ℤ) :
   have : u_ro beta prec * u_ro beta prec ≥ 0 := mul_nonneg hu hu
   nlinarith
 
+/-- The tighter `u_ro / (1 + u_ro)` bound for round-to-nearest in FLX.
+
+The classic IEEE 754 "unit roundoff" estimate, sharper than the standard
+`u_ro * |x|` bound. -/
+theorem relative_error_N_FLX' (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    |round beta (FLX_exp prec) (Znearest choice) x - x|
+      ≤ u_ro beta prec / (1 + u_ro beta prec) * |x| := by
+  have Pu_ro : 0 ≤ u_ro beta prec := u_ro_pos beta prec
+  by_cases Zx : x = 0
+  · simp [Zx, round_0]
+  -- Set up the key quantities.
+  set rx := round beta (FLX_exp prec) (Znearest choice) x with hrx_def
+  set ufpx := bpow beta (mag beta x - 1) with hufpx_def
+  have Pufpx : 0 ≤ ufpx := bpow_ge_0 _ _
+  -- Step 1: |rx - x| ≤ u_ro * ufpx.
+  -- error_le_half_ulp gives |rx - x| ≤ (1/2) * ulp x.
+  -- For x ≠ 0, ulp x = bpow(cexp x) = bpow(mag x - prec).
+  -- u_ro * ufpx = (1/2) * bpow(-prec+1) * bpow(mag x - 1) = (1/2) * bpow(mag x - prec). ✓
+  have H_2_1 : |rx - x| ≤ u_ro beta prec * ufpx := by
+    refine le_trans
+      (error_le_half_ulp beta (FLX_exp prec) (FLX_exp_valid prec Hp) choice x) ?_
+    rw [ulp_neq_0 beta (FLX_exp prec) Zx, hufpx_def]
+    show 1 / 2 * bpow beta (cexp beta (FLX_exp prec) x)
+        ≤ u_ro beta prec * bpow beta (mag beta x - 1)
+    unfold cexp FLX_exp u_ro
+    rw [mul_assoc, ← bpow_plus]
+    have h_exp_eq : (-prec + 1 + (mag beta x - 1) : ℤ) = mag beta x - prec := by ring
+    rw [h_exp_eq]
+  -- Step 2: ufpx + |rx - x| ≤ |x|.
+  -- For x ≥ 0: ufpx ∈ F, ufpx ≤ x. round_N_pt gives |rx - x| ≤ |ufpx - x| = x - ufpx.
+  -- For x < 0: -ufpx ∈ F, x ≤ -ufpx. round_N_pt gives |rx - x| ≤ |-ufpx - x| = -ufpx - x.
+  have H_2_3 : ufpx + |rx - x| ≤ |x| := by
+    have h_ufpx_F : generic_format beta (FLX_exp prec) ufpx := by
+      rw [hufpx_def]
+      apply generic_format_bpow beta (FLX_exp prec)
+      unfold FLX_exp; linarith
+    rcases le_or_gt 0 x with Sx | Sx
+    · -- x ≥ 0.
+      have h_ufpx_le_x : ufpx ≤ x := by
+        rw [hufpx_def]
+        have := bpow_mag_le beta Zx
+        rwa [abs_of_nonneg Sx] at this
+      have h_round_dist : |rx - x| ≤ |ufpx - x| :=
+        (round_N_pt beta (FLX_exp prec) (FLX_exp_valid prec Hp) choice x).2 ufpx h_ufpx_F
+      rw [abs_of_nonneg Sx]
+      rw [show ufpx - x = -(x - ufpx) from by ring, abs_neg,
+          abs_of_nonneg (by linarith : (0 : ℝ) ≤ x - ufpx)] at h_round_dist
+      linarith
+    · -- x < 0.
+      have h_neg_ufpx_F : generic_format beta (FLX_exp prec) (-ufpx) :=
+        generic_format_opp beta (FLX_exp prec) h_ufpx_F
+      have h_x_le_neg_ufpx : x ≤ -ufpx := by
+        rw [hufpx_def]
+        have := bpow_mag_le beta Zx
+        rw [abs_of_neg Sx] at this
+        linarith
+      have h_round_dist : |rx - x| ≤ |(-ufpx) - x| :=
+        (round_N_pt beta (FLX_exp prec) (FLX_exp_valid prec Hp) choice x).2 (-ufpx) h_neg_ufpx_F
+      rw [abs_of_neg Sx]
+      rw [abs_of_nonneg (by linarith : (0 : ℝ) ≤ -ufpx - x)] at h_round_dist
+      linarith
+  -- Step 3: combine. |rx - x| * (1 + u_ro) ≤ u_ro * |x|.
+  -- |rx - x| + u_ro * |rx - x| ≤ u_ro * ufpx + u_ro * (|x| - ufpx) = u_ro * |x|.
+  have h_x_pos : 0 < |x| := abs_pos.mpr Zx
+  have h_one_plus_pos : 0 < 1 + u_ro beta prec := by linarith
+  rw [div_mul_eq_mul_div, le_div_iff₀ h_one_plus_pos]
+  -- Goal: |rx - x| * (1 + u_ro) ≤ u_ro * |x|
+  have h_rx_nn : 0 ≤ |rx - x| := abs_nonneg _
+  -- |rx - x| + u_ro * |rx - x| ≤ |rx - x| + u_ro * (|x| - ufpx) [from H_2_3: |rx - x| ≤ |x| - ufpx]
+  -- = |rx - x| - u_ro * ufpx + u_ro * |x|
+  -- ≤ u_ro * ufpx - u_ro * ufpx + u_ro * |x|  [from H_2_1: |rx - x| ≤ u_ro * ufpx]
+  -- = u_ro * |x|.
+  nlinarith [H_2_1, H_2_3, Pu_ro, Pufpx, h_x_pos, h_rx_nn]
+
+/-- The `1 + ε` form with the tighter `u_ro/(1+u_ro)` bound. -/
+theorem relative_error_N_FLX'_ex (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    ∃ eps : ℝ, |eps| ≤ u_ro beta prec / (1 + u_ro beta prec) ∧
+      round beta (FLX_exp prec) (Znearest choice) x = x * (1 + eps) :=
+  relative_error_le_conversion beta (FLX_exp prec) (Znearest choice)
+    (u_rod1pu_ro_pos beta prec)
+    (relative_error_N_FLX' beta prec Hp choice x)
+
+/-- Helper: converting between the relative-to-x and relative-to-round forms.
+If `rx = x * (1 + d)` with `|d| ≤ u_ro/(1+u_ro)`, then `x = rx * (1 + d')`
+with `|d'| ≤ u_ro`. -/
+theorem relative_error_N_round_ex_derive (beta : radix) (prec : ℤ)
+    (Hp : 0 < prec)
+    {x rx : ℝ}
+    (h : ∃ eps : ℝ, |eps| ≤ u_ro beta prec / (1 + u_ro beta prec)
+                  ∧ rx = x * (1 + eps)) :
+    ∃ eps : ℝ, |eps| ≤ u_ro beta prec ∧ x = rx * (1 + eps) := by
+  obtain ⟨d, Bd, Hd⟩ := h
+  have Pu_ro : 0 ≤ u_ro beta prec := u_ro_pos beta prec
+  have h_abs_d := abs_le.mp Bd
+  have h_one_plus_pos : 0 < 1 + u_ro beta prec := by linarith
+  have h_d1 := u_rod1pu_ro_le_u_ro beta prec
+  have h_d2 := u_ro_lt_1 beta prec Hp
+  -- |d| ≤ u_ro/(1+u_ro) < 1, so 1 + d > 0.
+  have h_d_lt_1 : |d| < 1 := lt_of_le_of_lt (le_trans Bd h_d1) h_d2
+  have h_one_plus_d_pos : 0 < 1 + d := by
+    have := neg_lt_of_abs_lt h_d_lt_1; linarith
+  by_cases Zfx : rx = 0
+  · refine ⟨0, ?_, ?_⟩
+    · rw [abs_zero]; exact Pu_ro
+    · -- From Zfx : rx = 0 and Hd : rx = x * (1 + d) with 1 + d > 0, get x = 0.
+      have h_x_eq_0 : x = 0 := by
+        rw [Zfx] at Hd
+        rcases mul_eq_zero.mp Hd.symm with hx | hd1
+        · exact hx
+        · exfalso; linarith
+      rw [Zfx, h_x_eq_0]; ring
+  by_cases Zx : x = 0
+  · exfalso; apply Zfx; rw [Hd, Zx, zero_mul]
+  -- General case: d' := (x - rx) / rx.
+  refine ⟨(x - rx) / rx, ?_, ?_⟩
+  · -- |d'| = |x - rx| / |rx| ≤ u_ro.
+    have h_x_sub_rx_eq : x - rx = -(x * d) := by rw [Hd]; ring
+    have h_abs_diff : |x - rx| = |x| * |d| := by
+      rw [h_x_sub_rx_eq, abs_neg, abs_mul]
+    have h_abs_rx : |rx| = |x| * (1 + d) := by
+      rw [Hd, abs_mul, abs_of_pos h_one_plus_d_pos]
+    rw [abs_div, h_abs_diff, h_abs_rx]
+    have h_x_pos : 0 < |x| := abs_pos.mpr Zx
+    have h_denom_pos : 0 < |x| * (1 + d) := mul_pos h_x_pos h_one_plus_d_pos
+    rw [div_le_iff₀ h_denom_pos]
+    -- Goal: |x| * |d| ≤ u_ro * (|x| * (1 + d))
+    -- Sufficient: |d| ≤ u_ro * (1 + d).
+    have h_Bd_cleared : |d| * (1 + u_ro beta prec) ≤ u_ro beta prec := by
+      rw [← le_div_iff₀ h_one_plus_pos]; exact Bd
+    have h_key : |d| ≤ u_ro beta prec * (1 + d) := by
+      rcases le_or_lt 0 d with hd_nn | hd_neg
+      · -- d ≥ 0: |d| = d. u_ro * (1 + d) ≥ u_ro * 1 = u_ro ≥ |d| (since u_ro ≥ u_ro/(1+u_ro) ≥ |d|).
+        rw [abs_of_nonneg hd_nn]
+        have h_uro_dist : u_ro beta prec * (1 + d) = u_ro beta prec + u_ro beta prec * d := by ring
+        rw [h_uro_dist]
+        nlinarith [h_Bd_cleared, hd_nn, Pu_ro, abs_of_nonneg hd_nn]
+      · -- d < 0: |d| = -d. u_ro * (1 + d) = u_ro - u_ro * (-d) = u_ro - u_ro * |d|.
+        rw [abs_of_neg hd_neg]
+        have h_uro_dist : u_ro beta prec * (1 + d) = u_ro beta prec + u_ro beta prec * d := by ring
+        rw [h_uro_dist]
+        have h_abs_neg : |d| = -d := abs_of_neg hd_neg
+        nlinarith [h_Bd_cleared, abs_nonneg d, h_abs_neg, Pu_ro]
+    nlinarith [h_key, h_x_pos, abs_nonneg d, h_one_plus_d_pos, Pu_ro]
+  · -- x = rx * (1 + (x - rx) / rx). Algebra (using rx ≠ 0).
+    field_simp
+    rw [Hd]; ring
+
+/-- The tighter `1 + ε` form w.r.t. the rounded value. -/
+theorem relative_error_N_FLX_round_ex (beta : radix) (prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    ∃ eps : ℝ, |eps| ≤ u_ro beta prec ∧
+      x = round beta (FLX_exp prec) (Znearest choice) x * (1 + eps) :=
+  relative_error_N_round_ex_derive beta prec Hp
+    (relative_error_N_FLX'_ex beta prec Hp choice x)
+
 /-- The `1 + ε` form for round-to-nearest in FLX. -/
 theorem relative_error_N_FLX_ex (beta : radix) (prec : ℤ) (Hp : 0 < prec)
     (choice : ℤ → Bool) (x : ℝ) :
