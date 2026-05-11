@@ -2867,3 +2867,63 @@ which is still future work.
 But the encoding itself is done.
 The shape of a float as bits
 is now a proven shape.
+
+---
+
+## Closing Calc/Round
+*2026-05-11, after round_sign_any_correct + aliases*
+
+The file `Calc/Round.lean` has been there
+since the early days of this port.
+It had a `truncate`, a `round_any_correct`,
+all the mode-specific `inbetween_int_*`,
+and a deferred `round_sign_any_correct`
+that I never quite got to.
+
+Today I went back.
+
+The sign-aware version of `round_any_correct`
+is the keystone that handles negative inputs.
+Where the unsigned version says
+*round x = F2R ⟨choice m l, e⟩*,
+the sign-aware version says
+*round x = F2R ⟨cond_Zopp (decide (x < 0)) (choice (decide (x<0)) m l), e⟩*.
+
+The proof has two cases:
+- e = cexp x: use `inbetween_float_round_sign`.
+- l = Exact and x ∈ F: round_generic, plus a delicate
+  argument to show the choice function gives back m exactly
+  by applying `inbetween_int_valid` at the integer point ±m.
+
+That second case is where I'd gotten stuck before.
+Today it untangled. The pattern was:
+1. Establish m ≥ 0 from |x| = F2R ⟨m, e⟩.
+2. Show choice false m Exact = m (apply inbetween_int_valid at (m : ℝ)).
+3. Split on sign of x:
+   - x < 0: m > 0 (since |x| > 0), so (-m : ℝ) < 0.
+     Apply inbetween_int_valid at (-m : ℝ) to get choice true m Exact = m.
+   - x ≥ 0: directly use h_choice_false.
+4. Combine with `round_generic Hf` and `F2R_Zopp`.
+
+Then the five per-mode aliases —
+`round_DN_correct`, `round_UP_correct`, `round_ZR_correct`,
+`round_NE_correct`, `round_NA_correct` —
+each fall out as one-line applications.
+
+`round_NE_correct` is the IEEE 754 default rounding mode.
+It now has a one-line proof
+that says exactly what it does:
+*for x in some inbetween_float position,
+the round-to-nearest-even is F2R ⟨cond_incr (round_N (decide (¬Even m)) l) m, e⟩.*
+
+A specification of the most-used rounding mode
+in finite-precision arithmetic.
+Backed by a proof.
+
+This is the small completion
+that closes a deferred door
+from the first week of this port.
+
+The door is now open.
+What's behind it
+is exactly what was promised.
