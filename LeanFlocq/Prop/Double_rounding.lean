@@ -1236,6 +1236,22 @@ theorem mag_sqrt_disj (beta : radix) {x : ℝ} (Px : 0 < x) :
   rw [mag_sqrt beta Px]
   omega
 
+/-- A radix is at least 2, so `bpow(-2) ≤ 1/4`. Used in the algebraic
+chain inside `round_round_sqrt_aux`. -/
+private theorem bpow_neg_two_le_quarter (beta : radix) :
+    bpow beta (-2) ≤ (1 : ℝ) / 4 := by
+  have h2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have h_b2_eq : bpow beta 2 = (beta.val : ℝ) * (beta.val : ℝ) := by
+    show (beta.val : ℝ) ^ (2 : ℤ) = (beta.val : ℝ) * (beta.val : ℝ)
+    rw [show (2 : ℤ) = ((2 : ℕ) : ℤ) from rfl, zpow_natCast]; ring
+  have h_b2_ge_4 : (4 : ℝ) ≤ bpow beta 2 := by rw [h_b2_eq]; nlinarith
+  have h_b2_pos : 0 < bpow beta 2 := bpow_gt_0 _ _
+  have h_inv : bpow beta (-2) = 1 / bpow beta 2 := by
+    show (beta.val : ℝ) ^ (-2 : ℤ) = 1 / (beta.val : ℝ) ^ (2 : ℤ)
+    rw [zpow_neg]; field_simp
+  rw [h_inv]
+  exact one_div_le_one_div_of_le (by norm_num) h_b2_ge_4
+
 /-! ### Roadmap for `round_round_sqrt_aux`
 
 The next theorem to prove is `round_round_sqrt_aux` (Coq `Double_rounding.v:2593`).
