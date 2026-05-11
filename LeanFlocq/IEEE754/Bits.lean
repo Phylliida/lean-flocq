@@ -665,6 +665,27 @@ noncomputable def binary_float_of_bits (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < e
   binary_float.FF2B (binary_float_of_bits_aux mw ew x)
     (binary_float_of_bits_aux_correct mw ew Hmw Hew Hmax x)
 
+/-- The `bits_of_binary_float` function lifted to `full_float`.
+Equivalent to `bits_of_binary_float ∘ FF2B`, but with no dependent
+typing constraints (FF2B's validity proof is bypassed via case analysis). -/
+private noncomputable def bits_of_full_float (mw ew : ℤ) (ff : full_float) : ℤ :=
+  match ff with
+  | .F754_zero s => join_bits mw ew s 0 0
+  | .F754_infinity s => join_bits mw ew s 0 ((2 : ℤ) ^ ew.toNat - 1)
+  | .F754_nan s pl => join_bits mw ew s pl ((2 : ℤ) ^ ew.toNat - 1)
+  | .F754_finite s m e =>
+    let mm := m - (2 : ℤ) ^ mw.toNat
+    if 0 ≤ mm then
+      join_bits mw ew s mm (e - (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) + 1)
+    else
+      join_bits mw ew s m 0
+
+private theorem bits_of_FF2B (mw ew : ℤ) (ff : full_float)
+    (h : valid_binary (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat) ff) :
+    bits_of_binary_float mw ew (binary_float.FF2B ff h)
+      = bits_of_full_float mw ew ff := by
+  cases ff <;> rfl
+
 /-! ### Round-trip theorems -/
 
 /-- 2^ew - 1 > 0 (the max exponent field is nonzero). -/
@@ -789,5 +810,87 @@ theorem binary_float_of_bits_of_binary_float (mw ew : ℤ) (Hmw : 0 < mw) (Hew :
       show full_float.F754_finite s m (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1))
             = full_float.F754_finite s m e
       rw [← h_e_eq_emin]
+
+/-- Encoding the decoding of a bit pattern in range recovers the pattern. -/
+theorem bits_of_binary_float_of_bits (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < ew)
+    (Hmax : mw + 1 < (2 : ℤ) ^ (ew - 1).toNat)
+    (x : ℤ) (Hx : 0 ≤ x ∧ x < (2 : ℤ) ^ (mw + ew + 1).toNat) :
+    bits_of_binary_float mw ew (binary_float_of_bits mw ew Hmw Hew Hmax x) = x := by
+  have hmw_nn : 0 ≤ mw := le_of_lt Hmw
+  have hew_nn : 0 ≤ ew := le_of_lt Hew
+  have hmw_pos : 0 < (2 : ℤ) ^ mw.toNat := pow_pos (by norm_num) _
+  have hew_pos : 0 < (2 : ℤ) ^ ew.toNat := pow_pos (by norm_num) _
+  set mx := x % (2 : ℤ) ^ mw.toNat with hmx_def
+  set ex := x / (2 : ℤ) ^ mw.toNat % (2 : ℤ) ^ ew.toNat with hex_def
+  set sx := decide ((2 : ℤ) ^ mw.toNat * (2 : ℤ) ^ ew.toNat ≤ x) with hsx_def
+  have hmx_nn : 0 ≤ mx := Int.emod_nonneg _ (ne_of_gt hmw_pos)
+  have hmx_lt : mx < (2 : ℤ) ^ mw.toNat := Int.emod_lt_of_pos _ hmw_pos
+  have h_jsb : join_bits mw ew sx mx ex = x := by
+    have := join_split_bits mw ew hmw_nn hew_nn x Hx
+    simp only [hsx_def, hmx_def, hex_def, split_bits] at this
+    exact this
+  -- Use bits_of_FF2B to bypass dependent typing.
+  show bits_of_binary_float mw ew
+        (binary_float.FF2B (binary_float_of_bits_aux mw ew x) _) = x
+  rw [bits_of_FF2B]
+  -- Now we work with bits_of_full_float, which has no dependent typing.
+  unfold binary_float_of_bits_aux
+  show bits_of_full_float mw ew
+        (if ex = 0 then
+          if mx = 0 then full_float.F754_zero sx
+          else if 0 < mx then
+            full_float.F754_finite sx mx (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1))
+          else full_float.F754_nan false 1
+        else if ex = (2 : ℤ) ^ ew.toNat - 1 then
+          if mx = 0 then full_float.F754_infinity sx
+          else if 0 < mx then full_float.F754_nan sx mx
+          else full_float.F754_nan false 1
+        else
+          if 0 < mx + (2 : ℤ) ^ mw.toNat then
+            full_float.F754_finite sx (mx + (2 : ℤ) ^ mw.toNat)
+              (ex + (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) - 1)
+          else full_float.F754_nan false 1) = x
+  by_cases h_ex0 : ex = 0
+  · rw [if_pos h_ex0]
+    by_cases h_mx0 : mx = 0
+    · rw [if_pos h_mx0]
+      show join_bits mw ew sx 0 0 = x
+      rw [h_mx0, h_ex0] at h_jsb; exact h_jsb
+    · rw [if_neg h_mx0]
+      have h_mx_pos : 0 < mx := lt_of_le_of_ne hmx_nn (Ne.symm h_mx0)
+      rw [if_pos h_mx_pos]
+      -- F754_finite sx mx emin → bits_of_full_float: subnormal branch (mx < 2^mw).
+      have h_mm_neg : ¬ 0 ≤ mx - (2 : ℤ) ^ mw.toNat := by linarith
+      show bits_of_full_float mw ew (full_float.F754_finite sx mx _) = x
+      unfold bits_of_full_float
+      simp only [if_neg h_mm_neg]
+      show join_bits mw ew sx mx 0 = x
+      rw [h_ex0] at h_jsb; exact h_jsb
+  · rw [if_neg h_ex0]
+    by_cases h_ex_max : ex = (2 : ℤ) ^ ew.toNat - 1
+    · rw [if_pos h_ex_max]
+      by_cases h_mx0 : mx = 0
+      · rw [if_pos h_mx0]
+        show join_bits mw ew sx 0 ((2 : ℤ) ^ ew.toNat - 1) = x
+        rw [h_mx0, h_ex_max] at h_jsb; exact h_jsb
+      · rw [if_neg h_mx0]
+        have h_mx_pos : 0 < mx := lt_of_le_of_ne hmx_nn (Ne.symm h_mx0)
+        rw [if_pos h_mx_pos]
+        show join_bits mw ew sx mx ((2 : ℤ) ^ ew.toNat - 1) = x
+        rw [h_ex_max] at h_jsb; exact h_jsb
+    · rw [if_neg h_ex_max]
+      -- Normal: m = mx + 2^mw > 0.
+      have h_m_pos : 0 < mx + (2 : ℤ) ^ mw.toNat := by linarith
+      rw [if_pos h_m_pos]
+      -- F754_finite sx m (ex + emin - 1) → bits_of_full_float: normal branch.
+      have h_mm_nn : 0 ≤ mx + (2 : ℤ) ^ mw.toNat - (2 : ℤ) ^ mw.toNat := by linarith
+      show bits_of_full_float mw ew (full_float.F754_finite sx _ _) = x
+      unfold bits_of_full_float
+      simp only [if_pos h_mm_nn]
+      have h_simp_mx : mx + (2 : ℤ) ^ mw.toNat - (2 : ℤ) ^ mw.toNat = mx := by ring
+      have h_simp_ex : ex + (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) - 1
+            - (3 - (2 : ℤ) ^ (ew - 1).toNat - (mw + 1)) + 1 = ex := by ring
+      rw [h_simp_mx, h_simp_ex]
+      exact h_jsb
 
 end LeanFlocq
