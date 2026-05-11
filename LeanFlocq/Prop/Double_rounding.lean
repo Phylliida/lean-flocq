@@ -825,4 +825,33 @@ theorem round_round_gt_mid_same_place
   rw [Znearest_imp _ H_znear]
   exact h_ceil_x'
 
+/-! ### Notes for the next session
+
+The `_gt_mid_further_place` lemma (weakening to `fexp1(mag x) ≤ mag x`) and
+the main `_gt_mid` dispatcher remain to be ported. The structure:
+
+- `_gt_mid_further_place` case-splits on `x'' < bpow(mag x)` or
+  `bpow(mag x) ≤ x''`. The first case calls `_further_place'`. The second
+  forces `x'' = bpow(mag x)` exactly (integer arithmetic on the mantissa),
+  and both rounds give `bpow(mag x)`.
+
+- The cleanest route for the `x'' = bpow(mag x)` subcase is probably:
+  * LHS: `round_N (bpow(mag x))` at `fexp1` reduces to `bpow(mag x)` via
+    `round_generic` since `bpow(mag x) ∈ F1` (use `generic_format_bpow` with
+    `fexp1(mag x + 1) ≤ mag x` — established by Valid_exp case analysis on
+    `fexp1(mag x) < mag x` vs `fexp1(mag x) = mag x`).
+  * RHS: `round_N x` at `fexp1` = `bpow(mag x)` via `round_N_eq_UP_pt` with
+    explicit DN/UP witnesses, after establishing `x > midp` where
+    midp = `(round_DN x + bpow(mag x))/2`.
+
+The Coq route via `Znearest_imp` twice runs into `mag(x'')` substitution
+issues in Lean (when `rw [Hx''pow]` rewrites `x''`, it also rewrites
+`mag x''`), making the proof unnatural. The `set e := fexp1(mag x'')` trick
+can work around this if needed.
+
+- `_gt_mid` is then a one-line dispatcher matching the structure of
+  `_lt_mid` (case on `fexp2 = fexp1` vs `fexp2 < fexp1`).
+
+End of `_gt_mid` family stub. -/
+
 end LeanFlocq
