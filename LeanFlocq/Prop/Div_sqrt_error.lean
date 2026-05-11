@@ -15,6 +15,7 @@ import LeanFlocq.Core.FLX
 import LeanFlocq.Core.Ulp
 import LeanFlocq.Calc.Operations
 import LeanFlocq.Prop.Relative
+import LeanFlocq.Prop.Mult_error
 
 namespace LeanFlocq
 
@@ -358,5 +359,87 @@ theorem om1ds1p2u_ro_le_u_rod1pu_ro (beta : radix) (prec : ℤ) :
   have h_eq : 1 - 1 / (1 + ε) = ε / (1 + ε) := by
     field_simp; ring
   linarith [h_inv_ge, h_eq]
+
+/-! ### sqrt of bpow at even exponent -/
+
+/-- `√(β^(2e)) = β^e`. -/
+theorem sqrt_bpow_even (beta : radix) (e : ℤ) :
+    Real.sqrt (bpow beta (2 * e)) = bpow beta e := by
+  have h_pos : 0 ≤ bpow beta e := le_of_lt (bpow_gt_0 beta e)
+  rw [show (2 * e : ℤ) = e + e from by ring, bpow_plus, ← sq]
+  exact Real.sqrt_sq h_pos
+
+/-! ### Auxiliary: factoring a positive FLX value as `μ · β^(2e)` -/
+
+/-- For positive `x ∈ FLX`, there exist `μ ∈ FLX` and `e ∈ ℤ` with
+`x = μ · β^(2e)` and `1 ≤ μ < β²`. -/
+theorem sqrt_error_N_FLX_aux1 (beta : radix) (prec : ℤ)
+    {x : ℝ} (Fx : generic_format beta (FLX_exp prec) x) (Px : 0 < x) :
+    ∃ (mu : ℝ) (e : ℤ),
+      generic_format beta (FLX_exp prec) mu ∧
+      x = mu * bpow beta (2 * e) ∧
+      1 ≤ mu ∧ mu < bpow beta 2 := by
+  set e := (mag beta x - 1) / 2 with he_def
+  set mu := x * bpow beta (-2 * e) with hmu_def
+  -- β^(-2e) * β^(2e) = 1
+  have h_bpow_inv : bpow beta (-2 * e) * bpow beta (2 * e) = 1 := by
+    rw [← bpow_plus, show (-2 * e + 2 * e : ℤ) = 0 from by ring]
+    rfl
+  -- μ ∈ FLX (multiplying an FLX value by β^k stays in FLX)
+  have Fmu : generic_format beta (FLX_exp prec) mu :=
+    mult_bpow_exact_FLX beta prec (-2 * e) Fx
+  refine ⟨mu, e, Fmu, ?_, ?_, ?_⟩
+  · -- x = μ * β^(2e)
+    show x = (x * bpow beta (-2 * e)) * bpow beta (2 * e)
+    rw [mul_assoc, h_bpow_inv, mul_one]
+  · -- 1 ≤ μ
+    -- 1 ≤ μ ⟺ β^(2e) ≤ x ⟸ β^(2e) ≤ β^(mag x - 1) ≤ |x| = x.
+    show 1 ≤ x * bpow beta (-2 * e)
+    have h_neg2e_pos : 0 < bpow beta (-2 * e + 0) := bpow_gt_0 _ _
+    have h_bpow_2e_pos : 0 < bpow beta (2 * e) := bpow_gt_0 _ _
+    have h_two_e_le : 2 * e ≤ mag beta x - 1 := by
+      -- 2 * ((mag β x - 1) / 2) ≤ mag β x - 1 (Euclidean ediv property)
+      have h := Int.mul_ediv_add_emod (mag beta x - 1) 2
+      have hmod_nn : 0 ≤ (mag beta x - 1) % 2 := Int.emod_nonneg _ (by decide)
+      omega
+    have h_step1 : bpow beta (2 * e) ≤ bpow beta (mag beta x - 1) :=
+      bpow_le beta h_two_e_le
+    have h_step2 : bpow beta (mag beta x - 1) ≤ |x| := by
+      have h_x_ne : x ≠ 0 := ne_of_gt Px
+      exact (bpow_mag_le beta h_x_ne)
+    have h_abs : |x| = x := abs_of_pos Px
+    have h_le : bpow beta (2 * e) ≤ x := by
+      rw [← h_abs]; linarith [h_step1, h_step2]
+    -- Now want 1 ≤ x * β^(-2e). Multiply both sides of h_le by β^(-2e):
+    have := mul_le_mul_of_nonneg_right h_le (le_of_lt (bpow_gt_0 beta (-2 * e)))
+    rw [show bpow beta (2 * e) * bpow beta (-2 * e)
+          = bpow beta (-2 * e) * bpow beta (2 * e) from by ring,
+        h_bpow_inv] at this
+    exact this
+  · -- μ < β²
+    -- μ < β² ⟺ x < β^(2 + 2e). Note: x < β^(mag x), and mag x ≤ 2 + 2e since
+    -- 2 * ((mag - 1) / 2) ≥ (mag - 1) - 1 = mag - 2.
+    show x * bpow beta (-2 * e) < bpow beta 2
+    have h_two_e_ge : mag beta x ≤ 2 + 2 * e := by
+      have h := Int.mul_ediv_add_emod (mag beta x - 1) 2
+      have hmod_lt : (mag beta x - 1) % 2 < 2 :=
+        Int.emod_lt_of_pos _ (by decide)
+      have hmod_nn : 0 ≤ (mag beta x - 1) % 2 := Int.emod_nonneg _ (by decide)
+      omega
+    have h_step1 : x < bpow beta (mag beta x) := by
+      have h_x_ne : x ≠ 0 := ne_of_gt Px
+      have := bpow_mag_gt beta x
+      rw [abs_of_pos Px] at this
+      exact this
+    have h_step2 : bpow beta (mag beta x) ≤ bpow beta (2 + 2 * e) :=
+      bpow_le beta h_two_e_ge
+    have h_x_lt : x < bpow beta (2 + 2 * e) := lt_of_lt_of_le h_step1 h_step2
+    have h_bpow_neg_pos : 0 < bpow beta (-2 * e) := bpow_gt_0 _ _
+    have h_mul_lt :=
+      (mul_lt_mul_of_pos_right h_x_lt h_bpow_neg_pos)
+    have h_rhs_eq : bpow beta (2 + 2 * e) * bpow beta (-2 * e) = bpow beta 2 := by
+      rw [← bpow_plus, show (2 + 2 * e + -2 * e : ℤ) = 2 from by ring]
+    rw [h_rhs_eq] at h_mul_lt
+    exact h_mul_lt
 
 end LeanFlocq
