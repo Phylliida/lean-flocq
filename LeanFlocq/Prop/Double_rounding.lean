@@ -526,4 +526,303 @@ theorem round_round_lt_mid
     exact round_round_lt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
       Hf2'' Hf1 (Hx' Hf2'')
 
+/-! ### Mirror of `_lt_mid` family: above the midpoint -/
+
+/-- The mirror of `round_round_lt_mid_further_place'`: when `x` is sufficiently
+above `midp'` (the dual midpoint expressed via round-up) and the inner round
+`x''` is below `bpow(mag x)`, double rounding agrees with single rounding. -/
+theorem round_round_gt_mid_further_place'
+    (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2f1 : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1)
+    (Hx1 : round beta fexp2 (Znearest choice2) x < bpow beta (mag beta x))
+    (Hx2' : midp' beta fexp1 x + (1/2) * ulp beta fexp2 x < x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  unfold round_round_eq
+  have h_x_ne : x ≠ 0 := ne_of_gt Px
+  have h_ulp1 : ulp beta fexp1 x = bpow beta (fexp1 (mag beta x)) := by
+    rw [ulp_neq_0 beta fexp1 h_x_ne]; rfl
+  have h_ulp2 : ulp beta fexp2 x = bpow beta (fexp2 (mag beta x)) := by
+    rw [ulp_neq_0 beta fexp2 h_x_ne]; rfl
+  -- Set x' = round_UP x at fexp1.
+  set x' := round beta fexp1 (fun y : ℝ => ⌈y⌉) x with hx'_def
+  -- From Hx2', derive Hx2: x' - x < (1/2) * (bpow(fexp1) - bpow(fexp2))
+  have Hx2 : x' - x < (1/2) * (bpow beta (fexp1 (mag beta x))
+      - bpow beta (fexp2 (mag beta x))) := by
+    unfold midp' at Hx2'
+    rw [h_ulp1, h_ulp2] at Hx2'
+    linarith
+  -- Px'x: 0 ≤ x' - x (since x' = round_UP x ≥ x)
+  have Px'x : 0 ≤ x' - x := by
+    have h_up := (round_UP_pt beta fexp1 Vfexp1 x).2.1
+    rw [← hx'_def] at h_up
+    linarith
+  -- Set x'' = round_N x at fexp2
+  set x'' := round beta fexp2 (Znearest choice2) x with hx''_def
+  -- Hr1: |x'' - x| ≤ (1/2) * bpow(fexp2(mag x))
+  have Hr1 : |x'' - x| ≤ (1/2) * bpow beta (fexp2 (mag beta x)) := by
+    have h := error_le_half_ulp beta fexp2 Vfexp2 choice2 x
+    rw [h_ulp2] at h
+    exact h
+  -- Hr2: |x'' - x'| < (1/2) * bpow(fexp1(mag x))
+  have Hr2 : |x'' - x'| < (1/2) * bpow beta (fexp1 (mag beta x)) := by
+    have h_split : x'' - x' = (x'' - x) + (x - x') := by ring
+    rw [h_split]
+    have h_tri := abs_add_le (x'' - x) (x - x')
+    have h_abs_xx' : |x - x'| = x' - x := by
+      rw [show x - x' = -(x' - x) from by ring, abs_neg, abs_of_nonneg Px'x]
+    rw [h_abs_xx'] at h_tri
+    linarith
+  -- bpow positivity facts
+  have h_bpow_fexp1_pos : 0 < bpow beta (fexp1 (mag beta x)) := bpow_gt_0 _ _
+  have h_bpow_neg_fexp1_pos : 0 < bpow beta (-fexp1 (mag beta x)) := bpow_gt_0 _ _
+  have h_cexp_x : cexp beta fexp1 x = fexp1 (mag beta x) := rfl
+  -- Case split: x'' = 0 vs x'' ≠ 0
+  by_cases Zx'' : x'' = 0
+  · -- x'' = 0: same as _lt case via Znearest_imp with n=0
+    rw [Zx''] at Hr1
+    rw [Zx'', round_0]
+    have h_round_x_zero : round beta fexp1 (Znearest choice1) x = 0 := by
+      have h_z : Znearest choice1 (scaled_mantissa beta fexp1 x) = 0 := by
+        apply Znearest_imp
+        show |scaled_mantissa beta fexp1 x - ((0 : ℤ) : ℝ)| < 1/2
+        push_cast
+        rw [sub_zero]
+        have h_x_abs : |x| ≤ (1/2) * bpow beta (fexp2 (mag beta x)) := by
+          have h := Hr1
+          rw [zero_sub, abs_neg] at h
+          exact h
+        show |x * bpow beta (-cexp beta fexp1 x)| < 1/2
+        rw [h_cexp_x, abs_mul, abs_of_pos h_bpow_neg_fexp1_pos]
+        have h_step1 : |x| * bpow beta (-fexp1 (mag beta x))
+            ≤ (1/2) * bpow beta (fexp2 (mag beta x))
+                * bpow beta (-fexp1 (mag beta x)) :=
+          mul_le_mul_of_nonneg_right h_x_abs (le_of_lt h_bpow_neg_fexp1_pos)
+        have h_step2 : (1/2) * bpow beta (fexp2 (mag beta x))
+            * bpow beta (-fexp1 (mag beta x))
+            = (1/2) * bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x)) := by
+          rw [mul_assoc, ← bpow_plus]; rfl
+        have h_step3 : bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x))
+            ≤ bpow beta (-1 : ℤ) := bpow_le beta (by linarith)
+        have h_bpow_neg1 : bpow beta (-1 : ℤ) ≤ 1/2 := by
+          show (beta.val : ℝ)^(-1 : ℤ) ≤ 1/2
+          rw [zpow_neg, zpow_one, ← one_div]
+          apply one_div_le_one_div_of_le (by norm_num : (0 : ℝ) < 2)
+          exact_mod_cast beta.prop
+        calc |x| * bpow beta (-fexp1 (mag beta x))
+            ≤ (1/2) * bpow beta (fexp2 (mag beta x))
+                * bpow beta (-fexp1 (mag beta x)) := h_step1
+          _ = (1/2) * bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x)) := h_step2
+          _ ≤ (1/2) * bpow beta (-1 : ℤ) := by
+              apply mul_le_mul_of_nonneg_left h_step3 (by linarith)
+          _ ≤ (1/2) * (1/2) := by
+              apply mul_le_mul_of_nonneg_left h_bpow_neg1 (by linarith)
+          _ < 1/2 := by linarith
+      show round beta fexp1 (Znearest choice1) x = 0
+      unfold round
+      rw [h_z]
+      show F2R (beta := beta) ⟨0, cexp beta fexp1 x⟩ = 0
+      unfold F2R
+      push_cast
+      ring
+    exact h_round_x_zero.symm
+  · -- x'' ≠ 0
+    -- mag x'' = mag x
+    have Lx'' : mag beta x'' = mag beta x := by
+      apply le_antisymm
+      · apply mag_le_bpow beta Zx''
+        rw [abs_of_pos]
+        · exact Hx1
+        · -- 0 < x'': from round_N x at fexp2 < bpow(mag x) > 0 and x > 0
+          -- Use round_ge_generic: 0 ≤ x → 0 ≤ x''
+          have h_x''_nn : 0 ≤ x'' := by
+            rw [hx''_def]
+            exact round_ge_generic beta fexp2 Vfexp2 _ (generic_format_0 _ _) (le_of_lt Px)
+          exact lt_of_le_of_ne h_x''_nn (Ne.symm Zx'')
+      · exact mag_round_ge beta fexp2 Vfexp2 (Znearest choice2) Zx''
+    -- Both rounds use cexp = fexp1(mag x) (via Lx'')
+    have h_cexp_x'' : cexp beta fexp1 x'' = fexp1 (mag beta x) := by
+      show fexp1 (mag beta x'') = fexp1 (mag beta x); rw [Lx'']
+    -- ⌈sm fexp1 x⌉ * bpow(fexp1(mag x)) = x'
+    have h_ceil_x' : ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)
+        * bpow beta (fexp1 (mag beta x)) = x' := rfl
+    have h_ceil_real : ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)
+        = x' * bpow beta (-fexp1 (mag beta x)) := by
+      have h_bpow_inv : bpow beta (-fexp1 (mag beta x))
+          = (bpow beta (fexp1 (mag beta x)))⁻¹ := by
+        show (beta.val : ℝ)^(-fexp1 (mag beta x))
+          = ((beta.val : ℝ)^(fexp1 (mag beta x)))⁻¹
+        exact zpow_neg _ _
+      rw [h_bpow_inv, ← div_eq_mul_inv,
+          eq_div_iff (ne_of_gt h_bpow_fexp1_pos)]
+      exact h_ceil_x'
+    -- Both Znearests equal ⌈sm fexp1 x⌉
+    have h_zn_x : Znearest choice1 (scaled_mantissa beta fexp1 x)
+        = ⌈scaled_mantissa beta fexp1 x⌉ := by
+      apply Znearest_imp
+      have h_eq : scaled_mantissa beta fexp1 x
+          - ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)
+          = (x - x') * bpow beta (-fexp1 (mag beta x)) := by
+        show x * bpow beta (-cexp beta fexp1 x)
+            - ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)
+          = (x - x') * bpow beta (-fexp1 (mag beta x))
+        rw [h_cexp_x, h_ceil_real]
+        ring
+      rw [h_eq]
+      -- |sm - ⌈sm⌉| = |(x - x') * bpow(-fexp1)| = (x' - x) * bpow(-fexp1) (since x ≤ x')
+      have h_abs : |(x - x') * bpow beta (-fexp1 (mag beta x))|
+          = (x' - x) * bpow beta (-fexp1 (mag beta x)) := by
+        rw [show (x - x') * bpow beta (-fexp1 (mag beta x))
+            = -((x' - x) * bpow beta (-fexp1 (mag beta x))) from by ring,
+            abs_neg]
+        exact abs_of_nonneg (mul_nonneg Px'x (le_of_lt h_bpow_neg_fexp1_pos))
+      rw [h_abs]
+      have h_bp1 : bpow beta (fexp1 (mag beta x))
+          * bpow beta (-fexp1 (mag beta x)) = 1 := by
+        rw [← bpow_plus]
+        show bpow beta (fexp1 (mag beta x) + -fexp1 (mag beta x)) = 1
+        have h : fexp1 (mag beta x) + -fexp1 (mag beta x) = 0 := by ring
+        rw [h]; rfl
+      have h_bp2 : bpow beta (fexp2 (mag beta x))
+          * bpow beta (-fexp1 (mag beta x))
+          = bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x)) := by
+        rw [← bpow_plus]; rfl
+      have h_step : (x' - x) * bpow beta (-fexp1 (mag beta x))
+          < (1/2) * (bpow beta (fexp1 (mag beta x))
+              - bpow beta (fexp2 (mag beta x)))
+            * bpow beta (-fexp1 (mag beta x)) :=
+        mul_lt_mul_of_pos_right Hx2 h_bpow_neg_fexp1_pos
+      have h_distribute : (1/2) * (bpow beta (fexp1 (mag beta x))
+          - bpow beta (fexp2 (mag beta x))) * bpow beta (-fexp1 (mag beta x))
+          = (1/2) * (1 - bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x))) := by
+        rw [mul_assoc, sub_mul, h_bp1, h_bp2]
+      have h_bpow_pos_diff : 0 ≤ bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x)) :=
+        le_of_lt (bpow_gt_0 _ _)
+      linarith
+    have h_zn_x'' : Znearest choice1 (scaled_mantissa beta fexp1 x'')
+        = ⌈scaled_mantissa beta fexp1 x⌉ := by
+      apply Znearest_imp
+      have h_eq : scaled_mantissa beta fexp1 x''
+          - ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)
+          = (x'' - x') * bpow beta (-fexp1 (mag beta x)) := by
+        show x'' * bpow beta (-cexp beta fexp1 x'')
+            - ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)
+          = (x'' - x') * bpow beta (-fexp1 (mag beta x))
+        rw [show cexp beta fexp1 x'' = fexp1 (mag beta x) from h_cexp_x'',
+            h_ceil_real]
+        ring
+      rw [h_eq]
+      rw [abs_mul, abs_of_pos h_bpow_neg_fexp1_pos]
+      have h_step : |x'' - x'| * bpow beta (-fexp1 (mag beta x))
+          < (1/2) * bpow beta (fexp1 (mag beta x))
+            * bpow beta (-fexp1 (mag beta x)) :=
+        mul_lt_mul_of_pos_right Hr2 h_bpow_neg_fexp1_pos
+      have h_cancel : (1/2) * bpow beta (fexp1 (mag beta x))
+          * bpow beta (-fexp1 (mag beta x)) = 1/2 := by
+        rw [mul_assoc, ← bpow_plus]
+        have : fexp1 (mag beta x) + -fexp1 (mag beta x) = 0 := by ring
+        rw [this]
+        show (1/2) * bpow beta 0 = 1/2
+        show (1/2) * 1 = 1/2
+        ring
+      linarith
+    show round beta fexp1 (Znearest choice1) x''
+       = round beta fexp1 (Znearest choice1) x
+    unfold round
+    rw [h_zn_x, h_zn_x'']
+    show F2R (beta := beta) ⟨⌈scaled_mantissa beta fexp1 x⌉, cexp beta fexp1 x''⟩
+       = F2R (beta := beta) ⟨⌈scaled_mantissa beta fexp1 x⌉, cexp beta fexp1 x⟩
+    rw [h_cexp_x'']
+    rfl
+
+/-- Mirror of `_lt_mid_same_place`: when `fexp2 = fexp1` at `mag x` and `x` is
+strictly above `midp'`, double rounding agrees with single rounding.
+
+Proof: x is above midp1' means x' - x < (1/2) * ulp1, so both Znearests give
+⌈sm fexp1 x⌉. -/
+theorem round_round_gt_mid_same_place
+    (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2f1 : fexp2 (mag beta x) = fexp1 (mag beta x))
+    (Hx' : midp' beta fexp1 x < x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  unfold round_round_eq
+  have h_x_ne : x ≠ 0 := ne_of_gt Px
+  have h_ulp1 : ulp beta fexp1 x = bpow beta (fexp1 (mag beta x)) := by
+    rw [ulp_neq_0 beta fexp1 h_x_ne]; rfl
+  set x' := round beta fexp1 (fun y : ℝ => ⌈y⌉) x with hx'_def
+  have Hx : x' - x < (1/2) * bpow beta (fexp1 (mag beta x)) := by
+    unfold midp' at Hx'
+    rw [h_ulp1] at Hx'
+    linarith
+  have Px'x : 0 ≤ x' - x := by
+    have h_up := (round_UP_pt beta fexp1 Vfexp1 x).2.1
+    rw [← hx'_def] at h_up
+    linarith
+  have h_bpow_pos : 0 < bpow beta (fexp1 (mag beta x)) := bpow_gt_0 _ _
+  have h_bpow_neg_pos : 0 < bpow beta (-fexp1 (mag beta x)) := bpow_gt_0 _ _
+  have h_ceil_x' : ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)
+      * bpow beta (fexp1 (mag beta x)) = x' := rfl
+  have h_ceil_real : ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)
+      = x' * bpow beta (-fexp1 (mag beta x)) := by
+    have h_bpow_inv : bpow beta (-fexp1 (mag beta x))
+        = (bpow beta (fexp1 (mag beta x)))⁻¹ := by
+      show (beta.val : ℝ)^(-fexp1 (mag beta x))
+        = ((beta.val : ℝ)^(fexp1 (mag beta x)))⁻¹
+      exact zpow_neg _ _
+    rw [h_bpow_inv, ← div_eq_mul_inv, eq_div_iff (ne_of_gt h_bpow_pos)]
+    exact h_ceil_x'
+  have H_znear : |scaled_mantissa beta fexp1 x
+        - ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)| < 1/2 := by
+    show |x * bpow beta (-cexp beta fexp1 x)
+        - ((⌈scaled_mantissa beta fexp1 x⌉ : ℤ) : ℝ)| < 1/2
+    have h_cexp : cexp beta fexp1 x = fexp1 (mag beta x) := rfl
+    rw [h_cexp, h_ceil_real]
+    have h_eq : x * bpow beta (-fexp1 (mag beta x))
+        - x' * bpow beta (-fexp1 (mag beta x))
+        = -((x' - x) * bpow beta (-fexp1 (mag beta x))) := by ring
+    rw [h_eq, abs_neg, abs_of_nonneg (mul_nonneg Px'x (le_of_lt h_bpow_neg_pos))]
+    have h_step : (x' - x) * bpow beta (-fexp1 (mag beta x))
+        < (1/2) * bpow beta (fexp1 (mag beta x))
+          * bpow beta (-fexp1 (mag beta x)) :=
+      mul_lt_mul_of_pos_right Hx h_bpow_neg_pos
+    have h_cancel : (1/2) * bpow beta (fexp1 (mag beta x))
+        * bpow beta (-fexp1 (mag beta x)) = 1/2 := by
+      rw [mul_assoc, ← bpow_plus]
+      have : fexp1 (mag beta x) + -fexp1 (mag beta x) = 0 := by ring
+      rw [this]
+      show (1/2) * bpow beta 0 = 1/2
+      show (1/2) * 1 = 1/2
+      ring
+    linarith
+  have h_inner : round beta fexp2 (Znearest choice2) x = x' := by
+    unfold round
+    show F2R (beta := beta) ⟨Znearest choice2 (scaled_mantissa beta fexp2 x),
+                              cexp beta fexp2 x⟩ = x'
+    have h_cexp_eq : cexp beta fexp2 x = fexp1 (mag beta x) := by
+      show fexp2 (mag beta x) = fexp1 (mag beta x); exact Hf2f1
+    have h_sm_eq : scaled_mantissa beta fexp2 x = scaled_mantissa beta fexp1 x := by
+      show x * bpow beta (-cexp beta fexp2 x)
+        = x * bpow beta (-cexp beta fexp1 x)
+      rw [h_cexp_eq]; rfl
+    rw [h_sm_eq, h_cexp_eq]
+    have h_zn : Znearest choice2 (scaled_mantissa beta fexp1 x)
+        = ⌈scaled_mantissa beta fexp1 x⌉ := Znearest_imp _ H_znear
+    rw [h_zn]
+    exact h_ceil_x'
+  rw [h_inner]
+  have h_x'_F : generic_format beta fexp1 x' :=
+    generic_format_round beta fexp1 Vfexp1 _ x
+  rw [round_generic beta fexp1 (Znearest choice1) h_x'_F]
+  symm
+  unfold round
+  show F2R (beta := beta) ⟨Znearest choice1 (scaled_mantissa beta fexp1 x),
+                            cexp beta fexp1 x⟩ = x'
+  rw [Znearest_imp _ H_znear]
+  exact h_ceil_x'
+
 end LeanFlocq
