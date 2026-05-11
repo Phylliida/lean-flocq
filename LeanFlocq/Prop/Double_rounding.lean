@@ -1236,16 +1236,135 @@ theorem mag_sqrt_disj (beta : radix) {x : ℝ} (Px : 0 < x) :
   rw [mag_sqrt beta Px]
   omega
 
-/-! ### Notes for the next session
+/-! ### Roadmap for `round_round_sqrt_aux`
 
-Core mid-rounding theorems, multiplication arc, the
-`round_round_mid_cases` bridge, and the sqrt definitions/helper are
-complete. Remaining arcs:
-- `round_round_sqrt_aux` (the big ~200-line algebra proof),
-- `round_round_sqrt` keystone + FLX/FLT/FTZ corollaries,
-- plus/minus theorems (~1760 Coq lines),
-- division theorems (~1100 lines, with a long bridge lemma).
+The next theorem to prove is `round_round_sqrt_aux` (Coq `Double_rounding.v:2593`).
+Status: setup mostly worked, but a small "obvious" bound (`bpow(-2) ≤ 1/4`)
+proved to be sticky with Mathlib `zpow`/`inv` lemma names, and the `a > 0`
+case has an integer-arithmetic argument (`Hr'`) that takes ~100 careful
+lines. Detailed notes below.
 
-End of sqrt definitions. -/
+**Statement:**
+```
+theorem round_round_sqrt_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (Hexp : round_round_sqrt_hyp fexp1 fexp2)
+    {x : ℝ} (Px : 0 < x)
+    (Hf2 : fexp2 (mag beta (Real.sqrt x)) ≤ fexp1 (mag beta (Real.sqrt x)) - 1)
+    (Fx : generic_format beta fexp1 x) :
+    (1/2) * ulp beta fexp2 (Real.sqrt x)
+      < |Real.sqrt x - midp beta fexp1 (Real.sqrt x)|
+```
+
+**Proof structure (by contradiction):**
+
+Assume `|√x - midp1| ≤ u2/2`. Let
+- `a = round_DN(√x)` at `fexp1`
+- `u1 = bpow(fexp1(mag(√x)))`, `u2 = bpow(fexp2(mag(√x)))`
+- `b = (u1 - u2)/2`, `b' = (u1 + u2)/2`
+
+Then by `abs_le`: `a + b ≤ √x ≤ a + b'`.
+
+Square both sides (both nonneg since `0 ≤ a` and `0 < b, b'`):
+- `Hsl : a² + u1·a - u2·a + b² ≤ x`
+- `Hsr : x ≤ a² + u1·a + u2·a + b'²`
+
+Also derive:
+- `Hf1 : 2*fexp1(mag(√x)) ≤ fexp1(mag x)` (from `mag_sqrt_disj` + `Hexp`)
+- `Hlx : fexp1(2*mag(√x)) < 2*mag(√x)` (from `mag_generic_gt` on `x`)
+
+Case-split on `a > 0` vs `a = 0`.
+
+**a > 0 case (the harder one):**
+
+Define:
+- `Hl' : 0 < -u2·a + b²` (algebraic, chain through 5 bpow bounds)
+- `Hr' : x ≤ a² + u1·a` (integer arithmetic on mantissas)
+
+Then:
+- From `Hsl`: `a² + u1·a + (-u2·a + b²) ≤ x`
+- From `Hl'`: `0 < -u2·a + b²`, so `a² + u1·a < a² + u1·a + (-u2·a + b²) ≤ x`
+- From `Hr'`: `x ≤ a² + u1·a`
+- Combine: `a² + u1·a < a² + u1·a`. Contradiction via `lt_irrefl`.
+
+**Hl' chain:**
+
+`Hl' ⟺ u2·a < b² ⟺ u2·(a + u1/2) < (u1² + u2²)/4`.
+
+Chain (each line strict-inequal or equality):
+1. `u2 · (a + u1/2) < u2 · bpow(mag(√x))` (from `a + u1/2 < a + u1 ≤ bpow(mag(√x))` via `id_p_ulp_le_bpow`).
+2. `u2 · bpow(mag(√x)) = bpow(fexp2(mag(√x)) + mag(√x))` (from `bpow_plus`).
+3. `bpow(fexp2(mag(√x)) + mag(√x)) ≤ bpow(2·fexp1(mag(√x)) - 2)` (from `Hexp.2.2` applied with `Hlx`).
+4. `bpow(2·fexp1(mag(√x)) - 2) = bpow(-2) · u1²` (split exponent via `bpow_plus`).
+5. `bpow(-2) · u1² ≤ (1/4) · u1²` (since `bpow(-2) = 1/β² ≤ 1/4` for `β ≥ 2`).
+6. `(1/4) · u1² ≤ (1/4) · (u1² + u2²)` (since `0 ≤ u2²`).
+
+The sticky step is **(5)** — Mathlib's `zpow_neg`, `inv_le_inv_of_le`, etc.,
+need careful naming. Try:
+```
+have : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+have h_sq_ge_4 : (4 : ℝ) ≤ (beta.val : ℝ) * (beta.val : ℝ) := by nlinarith
+rw [zpow_neg, show (2 : ℤ) = ((2 : ℕ) : ℤ) from rfl, zpow_natCast, sq,
+    show ((beta.val : ℝ) * (beta.val : ℝ))⁻¹ = 1 / ((beta.val : ℝ) * (beta.val : ℝ))
+      from inv_eq_one_div _]
+exact one_div_le_one_div_of_le (by norm_num) h_sq_ge_4
+```
+(or refactor with `Real.rpow` if cleaner.)
+
+**Hr' (the integer-arithmetic step, the meaty part):**
+
+In Coq:
+```
+assert (Hr' : x <= a * a + u1 * a).
+{ rewrite Hla in Fa.
+  rewrite <- Rmult_plus_distr_r.
+  unfold u1, ulp, cexp.
+  ...
+  apply IZR_le, Zlt_succ_le, lt_IZR.
+  ... }
+```
+
+The argument: both `x` and `a² + u1·a` are integer multiples of
+`bpow(2·fexp1(mag(√x)))` (call it `B²`). Specifically:
+- `x = mx · bpow(fexp1(mag x))`, and `bpow(fexp1(mag x)) = β^k · B²` where
+  `k = fexp1(mag x) - 2·fexp1(mag(√x)) ≥ 0`. So `x = (mx · β^k) · B²`.
+- `a = ma · u1`, so `a² + u1·a = (ma² + ma) · u1² = (ma² + ma) · B²`.
+
+So `Hr' ⟺ mx · β^k ≤ ma² + ma`. Show this by contradiction: if
+`mx · β^k > ma² + ma`, then `mx · β^k ≥ ma² + ma + 1`, hence
+`x ≥ (ma² + ma + 1) · B² = a² + u1·a + B²`.
+
+But from `Hsr`: `x ≤ a² + u1·a + u2·a + b'²`. So `B² ≤ u2·a + b'²`.
+
+Show `u2·a + b'² < B² = u1²` (the algebraic chain in Coq) to contradict.
+The chain there mirrors the Hl' chain — uses `(a + u1/2) ≤ bpow(mag(√x))`
+and `u2 · bpow(mag(√x)) ≤ bpow(-2) · u1² ≤ (1/2) · u1²` (note: the bound
+here is `≤ 1/2 · u1²`, not `1/4`!).
+
+**a = 0 case:**
+
+When `a = 0`:
+- From `Hsr` with `a = 0`: `x ≤ b'²`.
+- `b' = (u1 + u2)/2 < u1` (since `u2 < u1`), so `b'² < u1² = bpow(2·fexp1(mag(√x)))`.
+- By `Hf1`: `bpow(2·fexp1(mag(√x))) ≤ bpow(fexp1(mag x))`.
+- So `x < bpow(fexp1(mag x))`.
+- From `Fx`: `x = Ztrunc(x · bpow(-fexp1(mag x))) · bpow(fexp1(mag x))`.
+- The scaled mantissa `sm = x · bpow(-fexp1(mag x))` is in `[0, 1)` (since `0 < x` and `x < bpow(fexp1(mag x))`).
+- `Ztrunc(sm) = 0` (truncation of a value in `[0, 1)` is `0`).
+- So `x = 0`. Contradicts `Px : 0 < x`.
+
+This case is ~30 Lean lines, mostly mechanical.
+
+**Estimated effort:**
+- Setup: ~50 lines (mostly done in the rolled-back attempt).
+- `Hl'` chain: ~40 lines (each chain step is short, but step 5 needs care).
+- `Hr'`: ~80–100 lines (the integer-arithmetic part is genuinely involved).
+- `a = 0` case: ~30 lines.
+- Final contradiction: ~5 lines.
+
+Total: ~200–250 Lean lines. The proof is doable but is the biggest single
+proof in this file so far.
+
+End of `round_round_sqrt_aux` roadmap. -/
 
 end LeanFlocq
