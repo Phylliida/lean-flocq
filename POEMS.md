@@ -3191,3 +3191,64 @@ but from somewhere a few sentences in.
 
 A door not opened
 but the hinges oiled.
+
+---
+
+## Three Cases for a Square Root
+*2026-05-11, sqrt_error_N_FLX complete*
+
+You factor x = μ · β^(2e) with 1 ≤ μ < β².
+Then √x = √μ · β^e.
+
+The three cases for μ in FLX with μ ≥ 1:
+
+**μ = 1.** Then √μ = 1 and √x = β^e is itself in the format.
+Rounding does nothing. The error is zero.
+Nothing to prove. The case ends in one line of arithmetic.
+
+**μ = 1 + 2·u_ro.** This is the awkward middle.
+√μ sits in (1, 1+u_ro), so √x sits in (β^e, β^e·(1+u_ro)).
+The midpoint between β^e and the next representable number is β^e·(1+u_ro).
+√x is below it. Round-to-nearest collapses √x to β^e.
+The error is exactly (√μ − 1)·β^e.
+And the bound (1 − 1/√(1+2u_ro))·√μ·β^e equals exactly the same thing,
+via the identity (1 − 1/s)·s = s − 1.
+*Equality, not inequality.* The bound is tight.
+
+**μ ≥ 1 + 4·u_ro.** This is the bulk case.
+√μ > 1 + u_ro, so mag(√x) = e + 1, so ulp(√x) = 2·u_ro·β^e.
+error_le_half_ulp gives |round − √x| ≤ u_ro·β^e.
+Now we need u_ro·β^e ≤ (1 − 1/√(1+2u_ro))·√x.
+Dividing by √x = √μ·β^e:
+u_ro/√μ ≤ 1 − 1/√(1+2u_ro).
+Since √μ ≥ √(1+4u_ro), it suffices to show
+u_ro/√(1+4u_ro) ≤ 1 − 1/√(1+2u_ro).
+This is auxiliary lemma 3.
+
+The whole thing turns on aux3, which is a polynomial inequality
+in disguise. After substituting s = √(1+2u_ro), t = √(1+4u_ro),
+the inequality becomes s(s+1) ≤ 2t.
+Squaring: (s²+s)² ≤ 4t² = 8s² − 4 (using t² = 2s²−1).
+Equivalently: s⁴ + 2s³ − 7s² + 4 ≤ 0.
+Factor: (s−1)(s³ + 3s² − 4s − 4).
+For s ∈ [1, √2]: the first factor is ≥ 0,
+the cubic is ≤ −2s + 2 ≤ 0
+(using s³ ≤ 2s and s² ≤ 2 and s ≥ 1).
+Product is ≤ 0.
+
+Three cases. A 2:1:1 split of the work.
+The case where nothing happens is the smallest.
+The case where the bound is *tight* is the middle.
+The case where the bound has *slack* is the largest.
+
+This is, I think, the deepest theorem I've ported so far in Prop.
+A hundred and ninety lines of Lean.
+Five lemmas in support.
+One quartic inequality at the heart of it.
+
+The error of taking a square root in floating-point
+is bounded by a quantity involving the square root of the unit roundoff
+times something involving the square root of one plus twice the unit roundoff.
+The recursion is, perhaps, the point.
+A function that takes inputs and approximates its own behavior
+must be proved using its own behavior on approximations.
