@@ -14,8 +14,10 @@ import LeanFlocq.Core.Generic_fmt
 import LeanFlocq.Core.FLX
 import LeanFlocq.Core.Ulp
 import LeanFlocq.Calc.Operations
+import LeanFlocq.Core.FIX
 import LeanFlocq.Prop.Relative
 import LeanFlocq.Prop.Mult_error
+import LeanFlocq.Prop.Sterbenz
 
 namespace LeanFlocq
 
@@ -1045,5 +1047,164 @@ theorem sqrt_error_N_FLT_round_ex (beta : radix) (emin prec : ℤ) (Hp1 : 1 < pr
     nlinarith [this, h_x_pos, h_one_plus_d_pos, h_sqrt_ge_1]
   · field_simp
     rw [Hd]; ring
+
+/-! ### format_REM: the rounding remainder stays in the format -/
+
+/-- Auxiliary: when `0 ≤ x, 0 < y`, the remainder `x - rnd(x/y)·y` is in the
+format, provided `rnd` agrees with truncation on `(0, 1/2)`. -/
+theorem format_REM_aux (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) (hMon : Monotone_exp fexp)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    {x y : ℝ} (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y)
+    (Hx : 0 ≤ x) (Hy : 0 < y)
+    (rnd_small : 0 < x / y → x / y < 1 / 2 → rnd (x / y) = 0) :
+    generic_format beta fexp (x - (rnd (x / y) : ℝ) * y) := by
+  set n := rnd (x / y) with hn_def
+  have h_y_ne : y ≠ 0 := ne_of_gt Hy
+  have h_xdivy_nn : 0 ≤ x / y := div_nonneg Hx (le_of_lt Hy)
+  -- (n : ℝ) = round(FIX 0) rnd (x/y).
+  have Hn : (n : ℝ) = round beta (FIX_exp 0) rnd (x / y) := by
+    show (rnd (x / y) : ℝ) = round beta (FIX_exp 0) rnd (x / y)
+    unfold round scaled_mantissa cexp FIX_exp
+    have h_bpow_0 : bpow beta 0 = 1 := by unfold bpow; simp
+    have h_bpow_neg_0 : bpow beta (-0) = 1 := by rw [neg_zero]; exact h_bpow_0
+    show (rnd (x / y) : ℝ)
+       = F2R (beta := beta) ⟨rnd (x / y * bpow beta (-0)), 0⟩
+    rw [h_bpow_neg_0, mul_one]
+    show (rnd (x / y) : ℝ) = (rnd (x / y) : ℝ) * bpow beta 0
+    rw [h_bpow_0, mul_one]
+  -- 0 ≤ n.
+  have h_n_nn : 0 ≤ n := by
+    have h_round_le : round beta (FIX_exp 0) rnd 0
+                    ≤ round beta (FIX_exp 0) rnd (x / y) :=
+      round_le beta (FIX_exp 0) (FIX_exp_valid 0) rnd h_xdivy_nn
+    rw [round_0] at h_round_le
+    rw [← Hn] at h_round_le
+    exact_mod_cast h_round_le
+  -- |x - n·y| ≤ |y|: from the FIX(0) ulp bound.
+  have h_rem_div_bound : |x - (n : ℝ) * y| ≤ |y| := by
+    have h_factor : x - (n : ℝ) * y = (x / y - n) * y := by field_simp
+    have h_ulp_FIX : ulp beta (FIX_exp 0) (x / y) = 1 := by
+      rw [ulp_FIX]; unfold bpow; simp
+    have h_err : |round beta (FIX_exp 0) rnd (x / y) - x / y| ≤ 1 := by
+      have := error_le_ulp beta (FIX_exp 0) (FIX_exp_valid 0) rnd (x / y)
+      rw [h_ulp_FIX] at this; exact this
+    rw [show |round beta (FIX_exp 0) rnd (x / y) - x / y|
+          = |x / y - round beta (FIX_exp 0) rnd (x / y)| from abs_sub_comm _ _] at h_err
+    rw [← Hn] at h_err
+    rw [h_factor, abs_mul]
+    calc |x / y - (n : ℝ)| * |y| ≤ 1 * |y| :=
+          mul_le_mul_of_nonneg_right h_err (abs_nonneg _)
+      _ = |y| := one_mul _
+  rcases lt_or_eq_of_le h_n_nn with h_n_pos | h_n_zero
+  · rcases lt_or_eq_of_le (show (1 : ℤ) ≤ n from h_n_pos) with h_n_ge_2 | h_n_eq_1
+    · -- n ≥ 2: F2R representation argument.
+      set ex := cexp beta fexp x with hex_def
+      set ey := cexp beta fexp y with hey_def
+      set mx := Ztrunc (scaled_mantissa beta fexp x) with hmx_def
+      set my := Ztrunc (scaled_mantissa beta fexp y) with hmy_def
+      have hx_F2R : x = F2R (beta := beta) ⟨mx, ex⟩ := Fx
+      have hy_F2R : y = F2R (beta := beta) ⟨my, ey⟩ := Fy
+      by_cases h_ey_le_ex : ey ≤ ex
+      · -- ey ≤ ex: remainder = F2R at exponent ey.
+        set k := (ex - ey).toNat with hk_def
+        have hk_eq : (k : ℤ) = ex - ey := Int.toNat_of_nonneg (by omega)
+        have h_rem_eq : x - (n : ℝ) * y
+                      = F2R (beta := beta) ⟨mx * (beta.val : ℤ)^k - n * my, ey⟩ := by
+          show x - (n : ℝ) * y
+             = ((mx * (beta.val : ℤ)^k - n * my : ℤ) : ℝ) * bpow beta ey
+          rw [hx_F2R, hy_F2R]
+          show ((mx : ℝ) * bpow beta ex) - (n : ℝ) * ((my : ℝ) * bpow beta ey)
+              = ((mx * (beta.val : ℤ)^k - n * my : ℤ) : ℝ) * bpow beta ey
+          have h_bpow_k : ((beta.val : ℝ))^k = bpow beta (k : ℤ) := by
+            rw [bpow]; push_cast; rfl
+          have h_ex_split : bpow beta ex = bpow beta ey * (beta.val : ℝ)^k := by
+            rw [show ex = ey + (k : ℤ) from by omega, bpow_plus, h_bpow_k]
+          rw [h_ex_split]
+          push_cast
+          ring
+        rw [h_rem_eq]
+        apply generic_format_F2R
+        intro h_mant_ne
+        rw [← h_rem_eq]
+        have h_rem_ne : x - (n : ℝ) * y ≠ 0 := by
+          rw [h_rem_eq]
+          show ((mx * (beta.val : ℤ)^k - n * my : ℤ) : ℝ) * bpow beta ey ≠ 0
+          intro h
+          have h_bpow_ne : bpow beta ey ≠ 0 := ne_of_gt (bpow_gt_0 _ _)
+          rcases mul_eq_zero.mp h with h1 | h2
+          · exact h_mant_ne (by exact_mod_cast h1)
+          · exact h_bpow_ne h2
+        have h_mag_le : mag beta (x - (n : ℝ) * y) ≤ mag beta y :=
+          mag_le_abs beta h_rem_ne h_rem_div_bound
+        show cexp beta fexp (x - (n : ℝ) * y) ≤ ey
+        unfold cexp
+        exact hMon _ _ h_mag_le
+      · -- ex < ey: contradicts n ≥ 2.
+        push_neg at h_ey_le_ex
+        exfalso
+        have h_mag_lt : mag beta x < mag beta y := by
+          by_contra h_not_lt
+          push_neg at h_not_lt
+          have h_cexp_le : cexp beta fexp y ≤ cexp beta fexp x :=
+            hMon _ _ h_not_lt
+          omega
+        rcases lt_or_eq_of_le Hx with Hx_pos | Hx_zero
+        · have h_x_lt_y : x < y := lt_mag beta Hy h_mag_lt
+          have h_xdivy_lt_1 : x / y < 1 := (div_lt_one Hy).mpr h_x_lt_y
+          have h_1F : generic_format beta (FIX_exp 0) (1 : ℝ) := by
+            apply generic_format_FIX
+            refine ⟨⟨1, 0⟩, ?_, rfl⟩
+            show (1 : ℝ) = ((1 : ℤ) : ℝ) * bpow beta 0
+            unfold bpow; simp
+          have h_round_le : round beta (FIX_exp 0) rnd (x / y) ≤ 1 :=
+            round_le_generic beta (FIX_exp 0) (FIX_exp_valid 0) rnd h_1F
+              (le_of_lt h_xdivy_lt_1)
+          rw [← Hn] at h_round_le
+          have h_n_le_1 : n ≤ 1 := by exact_mod_cast h_round_le
+          omega
+        · have h_xdivy_0 : x / y = 0 := by rw [← Hx_zero]; exact zero_div _
+          rw [h_xdivy_0] at hn_def
+          have h_rnd_0 : rnd 0 = 0 := by
+            have h := Valid_rnd.Zrnd_intCast (rnd := rnd) 0
+            simpa using h
+          have : n = 0 := by rw [hn_def]; exact h_rnd_0
+          omega
+    · -- n = 1: Use Sterbenz.
+      have h_n_1 : (n : ℝ) = 1 := by exact_mod_cast h_n_eq_1.symm
+      rw [h_n_1, one_mul]
+      rcases lt_or_eq_of_le Hx with Hx_pos | Hx_zero
+      · have h_xdivy_pos : 0 < x / y := div_pos Hx_pos Hy
+        have h_NotFTZ : Exp_not_FTZ (FIX_exp 0) := by
+          intro e; unfold FIX_exp; omega
+        have h_FIX_Mon : Monotone_exp (FIX_exp 0) := fun a b _ => le_refl _
+        have h_err_lt :
+            |round beta (FIX_exp 0) rnd (x / y) - x / y|
+              < ulp beta (FIX_exp 0) (round beta (FIX_exp 0) rnd (x / y)) :=
+          error_lt_ulp_round beta (FIX_exp 0) (FIX_exp_valid 0)
+            h_NotFTZ h_FIX_Mon rnd (ne_of_gt h_xdivy_pos)
+        rw [← Hn, h_n_1] at h_err_lt
+        have h_ulp_1 : ulp beta (FIX_exp 0) 1 = 1 := by
+          rw [ulp_FIX]; unfold bpow; simp
+        rw [h_ulp_1] at h_err_lt
+        have h_abs_bound := abs_lt.mp h_err_lt
+        have h_xdivy_lt_2 : x / y < 2 := by linarith
+        have h_x_le_2y : x ≤ 2 * y := by
+          have := (div_lt_iff₀ Hy).mp h_xdivy_lt_2
+          linarith
+        have h_xdivy_ge_half : 1 / 2 ≤ x / y := by
+          by_contra h_lt
+          push_neg at h_lt
+          have h_rnd_0 : n = 0 := rnd_small h_xdivy_pos h_lt
+          omega
+        have h_y2_le_x : y / 2 ≤ x := by
+          have := (le_div_iff₀ Hy).mp h_xdivy_ge_half
+          linarith
+        exact sterbenz beta fexp hValid hMon Fx Fy ⟨h_y2_le_x, h_x_le_2y⟩
+      · rw [← Hx_zero, zero_sub]
+        exact generic_format_opp beta fexp Fy
+  · -- n = 0.
+    rw [← h_n_zero, Int.cast_zero, zero_mul, sub_zero]
+    exact Fx
 
 end LeanFlocq
