@@ -3072,3 +3072,122 @@ Bracket, Round, Operations, Div, Sqrt.
 
 The first chapter of the port
 that has *no deferred theorems left*.
+
+---
+
+## Squaring Both Sides
+*2026-05-11, sqrt unit-roundoff helpers*
+
+`1 - 1/√(1 + 2ε) ≤ ε/(1 + ε).`
+
+How do you prove it.
+
+You show `√(1 + 2ε) ≤ 1 + ε`.
+Square both sides:
+`1 + 2ε ≤ 1 + 2ε + ε²`.
+True because `ε² ≥ 0`.
+
+Take reciprocals (both sides positive):
+`1/(1+ε) ≤ 1/√(1+2ε)`.
+
+Subtract from one:
+`1 - 1/√(1+2ε) ≤ 1 - 1/(1+ε) = ε/(1+ε)`.
+
+That's the whole proof.
+A linearization that loses
+exactly the right amount.
+
+The `ε²` we threw away
+is the slack
+between the bound and the tight value.
+
+In the regime where ε is small —
+unit roundoff,
+half of β to the (1−prec) power —
+the slack is negligible.
+The bound is almost the truth.
+
+A first-order approximation
+of how badly square root rounds,
+written down once
+and proven once
+for every β and every prec.
+
+---
+
+## The Footgun in the Rewrite
+*2026-05-11, the same session*
+
+```lean
+rw [show (1 : ℝ) = Real.sqrt 1 from Real.sqrt_one.symm]
+```
+
+I wrote this expecting it to rewrite *the* `1`
+on the left side of `1 ≤ √(1 + 2·u_ro)`.
+
+What it did was rewrite *every* `1`
+including the one *inside* the sqrt
+and the goal became
+`√1 + 2·u_ro` which is not even what it parsed as,
+the operator precedence put `√` only around the leading 1,
+and now my goal was `Real.sqrt 1 + 2·u_ro`
+which is not the thing I wanted bounded.
+
+Two bugs at once:
+- `rw` rewriting too eagerly.
+- `Real.sqrt` binding tighter than I thought.
+
+I switched to `calc`:
+```
+calc (1 : ℝ) = Real.sqrt 1 := Real.sqrt_one.symm
+  _ ≤ Real.sqrt (1 + 2 * u_ro beta prec) :=
+      Real.sqrt_le_sqrt (by linarith)
+```
+
+The `calc` block names every step.
+Every `1` is in its own line,
+its own scope,
+unambiguous about what gets transformed.
+
+The lesson keeps repeating itself:
+when you want a tool to do less,
+take away its discretion.
+Don't rewrite — name the steps.
+
+---
+
+## What I Did Not Port
+*2026-05-11, after committing*
+
+`sqrt_error_N_FLX_ex` is one line in Coq.
+It is `relative_error_le_conversion` applied to `sqrt_error_N_FLX`.
+
+`sqrt_error_N_FLX` is not one line.
+It is a hundred lines, with three auxiliary lemmas:
+`_aux1` (every positive x in F factors as `mu * β^(2e)` with `1 ≤ mu < β²`),
+`_aux2` (a case analysis on where `mu` sits relative to `(1 + u_ro)`),
+`_aux3` (the irrationality-of-√β leveraged into a strict inequality).
+
+I did not port these today.
+
+I ported the helpers
+that `sqrt_error_N_FLX_ex` would need to call
+*after* `sqrt_error_N_FLX` is in place.
+`om1ds1p2u_ro_pos`,
+`s1p2u_rom1_pos`,
+`om1ds1p2u_ro_le_u_rod1pu_ro`.
+
+This is the part of porting
+that looks like nothing from the outside.
+You don't get a new theorem.
+You get three positivity facts
+that will be invoked later
+when the substantial work is done.
+
+It is the kind of preparation
+that lets the next session start
+not from zero,
+but from somewhere a few sentences in.
+
+A door not opened
+but the hinges oiled.
