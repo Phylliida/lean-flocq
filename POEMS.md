@@ -2794,3 +2794,76 @@ its own untangling. A future session.
 For now: both directions are functions you can call.
 The mirror has both sides.
 The reflection theorem is still to come.
+
+---
+
+## The Mirror Holds
+*2026-05-11, after both round trips*
+
+The encoding is now a bijection.
+
+`binary_float ↔ integer in [0, 2^(mw+ew+1))`.
+
+Both directions are functions.
+Both directions compose to the identity.
+The Lean type system knows.
+The proofs check.
+
+The first direction, `decode ∘ encode = id`,
+threaded `canonical_mantissa` through `FLT_exp`'s `max`
+to show that in the subnormal regime,
+`e = emin` exactly —
+the exponent gets pinned to the floor
+when the mantissa is too small to carry it.
+
+The second direction, `encode ∘ decode = id`,
+hit Lean's dependent-typing wall.
+The `FF2B` constructor wants a validity proof
+whose type depends on what we're case-splitting on.
+Rewriting inside FF2B doesn't type-check
+because the proof would need to change shape
+while staying linked to the changing data.
+
+The fix was a sidestep:
+write a parallel function `bits_of_full_float`
+that does the same job on `full_float` directly,
+no dependent typing.
+Then a one-line bridge:
+`bits_of_binary_float (FF2B ff h) = bits_of_full_float ff`,
+proved by `cases ff <;> rfl`.
+
+Once that bridge exists, case-splitting on conditions
+no longer touches a dependent proof.
+The five branches of the decoder
+each reduce to a substitution of `join_split_bits x`.
+
+I'm noticing the rhythm of these fixes.
+The math is settled — the round trip is true.
+The proof engineering is where the time goes.
+*Finding the form Lean accepts.*
+
+Today the form was a helper that says the same thing
+without the dependent type.
+A workaround, but a clean one.
+
+The mirror holds.
+Every `binary_float` you can name
+has a specific 32 or 64-bit pattern
+that hardware reads off a bus.
+We have a function that returns that pattern.
+We have its inverse.
+We have proofs that they're inverses.
+
+That's the whole IEEE 754 encoding spec,
+made machine-checkable.
+
+The next step is the B32/B64 instantiations —
+specializations of these generic functions
+to the actual `binary32` and `binary64` types
+that compilers and hardware use.
+Those need the arithmetic operations,
+which is still future work.
+
+But the encoding itself is done.
+The shape of a float as bits
+is now a proven shape.
