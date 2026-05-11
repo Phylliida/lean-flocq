@@ -2980,3 +2980,42 @@ Six variants, five modes.
 The door from the first week is fully open.
 Every rounding mode you might want
 has a clean named entry.
+
+---
+
+## The Digits Bound
+*2026-05-11, after Zdigits_div_Zpower*
+
+`Zdigits (m / β^e) = Zdigits m - e`.
+
+That's the statement.
+For nonneg m and `0 ≤ e ≤ Zdigits m`.
+
+It says something nice:
+if a number has *d* digits in base β,
+and you divide by `β^e`,
+the result has *d − e* digits.
+
+Two cases:
+- `e = d`: `m / β^d = 0` (since `m < β^d`).
+  Zdigits 0 = 0 = d − d. ✓
+- `e < d`: both bounds.
+  - Upper: `m / β^e * β^e ≤ m < β^d`, so `m / β^e < β^(d−e)`.
+  - Lower: `β^(d−1) ≤ m`, and `β^(d−1) = β^(d−e−1) * β^e`,
+    so `m / β^e ≥ β^(d−e−1)`.
+
+Apply `Zdigits_unique` with `d − e`. Done.
+
+This was the keystone for `generic_format_truncate`,
+which says: *the truncated triple, viewed as an F2R,
+is in the generic format.*
+
+The chain there:
+`cexp(F2R ⟨m/β^k, e+k⟩) = fexp(mag(F2R)) = fexp(Zdigits(m/β^k) + (e+k))
+ = fexp((Zdigits m − k) + (e + k)) = fexp(Zdigits m + e) = e + k`.
+
+The last equality is from k's definition.
+The middle equality is `Zdigits_div_Zpower`.
+
+A small lemma making a larger one fall.
+That's what infrastructure does.
