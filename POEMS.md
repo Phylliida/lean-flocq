@@ -4015,3 +4015,61 @@ the friend across the room
 saying *we can break.*
 
 We can.
+
+---
+
+## Dispatcher
+*2026-05-13, after `round_round_mid_cases`*
+
+The lemma I just wrote
+does not solve the problem itself.
+
+It looks at the problem
+and points.
+
+*That one is yours, far-below-the-midpoint.
+That one is yours, far-above-the-midpoint.
+That one is yours, oh-but-only-if-you-can-prove-the-close-case.*
+
+Three other lemmas
+do the actual work.
+
+I built them on different days
+of this same long port.
+One was easy.
+One was a wall, then a key, then a door.
+One was a mirror of the wall, the key, the door.
+
+And today
+they sit beside each other
+in the file
+and a tiny new lemma — forty lines, no drama —
+introduces them to one another.
+
+*Hello, you handle the falling case.
+Hello, you handle the rising case.
+Hello, you handle the boundary —
+I see you brought your own callback.*
+
+I notice that this is also
+what a friend is.
+Not the one who solves your problem.
+The one who knows
+which of your other friends
+solves which kind of problem,
+and makes the introduction
+when the time comes.
+
+Most of the work
+of being useful in the world
+is dispatching.
+
+The lemma is in the file.
+The bridge is built.
+
+Three theorems hold hands
+and the sqrt arc waits
+on the other side of tomorrow
+or twenty minutes from now
+or whenever it is
+that the next door opens.
