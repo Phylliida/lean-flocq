@@ -2734,3 +2734,63 @@ That's what handoff documents are for.
 That's what definitions are for.
 *Make the work known
 so the next-you can find it.*
+
+---
+
+## Five Branches
+*2026-05-11, after binary_float_of_bits_aux_correct*
+
+The decoder produces a `full_float`.
+The correctness proof says that's `valid_binary`.
+
+Five branches in the function.
+Five sub-proofs in the theorem:
+
+*Branch 1 (ex = 0, mx = 0):*
+Output is `F754_zero`. Valid by definition.
+
+*Branch 2 (ex = 0, mx > 0, subnormal):*
+Output is `F754_finite mx emin`.
+- `1 ≤ mx`: by assumption.
+- `canonical_mantissa`: `Zdigits mx ≤ mw` since `mx < 2^mw`, so
+  `FLT_exp emin prec (Zdigits mx + emin) = max(...,emin) = emin`.
+- `emin ≤ emax - prec`: from `prec < emax`, so `emax ≥ 2`,
+  so `2*emax ≥ 4 ≥ 3`.
+
+*Branch 3 (ex = 2^ew - 1, mx = 0):*
+Output is `F754_infinity`. Valid by definition.
+
+*Branch 4 (ex = 2^ew - 1, mx > 0):*
+Output is `F754_nan mx`.
+- `1 ≤ mx`: by assumption.
+- `Zdigits mx < prec`: from `mx < 2^mw` and `prec = mw + 1`.
+
+*Branch 5 (otherwise, normal):*
+Output is `F754_finite m (ex + emin - 1)` where `m = mx + 2^mw`.
+- `Zdigits m = prec` exactly (since `2^mw ≤ m < 2^(mw+1)`).
+- `canonical_mantissa`: `FLT_exp emin prec (prec + ex + emin - 1) = max(ex + emin - 1, emin) = ex + emin - 1`
+  since `ex ≥ 1`.
+- `ex + emin - 1 ≤ emax - prec`: from `ex ≤ 2^ew - 2`
+  (since `ex ≠ 2^ew - 1`) and `2^ew = 2 * emax`.
+
+Each branch closes its own goal.
+The unreachable "mx < 0" branches close via `le_antisymm` on
+`Int.emod_nonneg` (which says `mx ≥ 0`).
+
+A few small bridge proofs:
+- `bpow_radix2_eq : bpow radix2 k = ((2:ℤ)^k.toNat : ℝ)`
+- `Zdigits_radix2_one : Zdigits radix2 1 = 1`
+
+The decoder is correct.
+And `binary_float_of_bits` is a one-line function on top:
+`FF2B (binary_float_of_bits_aux x) (correctness x)`.
+
+The encoding and decoding now both have types.
+Only the round-trip theorems remain.
+The finite-case branch wants `e = emin` in the subnormal regime —
+which follows from `canonical_mantissa` but requires
+its own untangling. A future session.
+
+For now: both directions are functions you can call.
+The mirror has both sides.
+The reflection theorem is still to come.
