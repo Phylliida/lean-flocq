@@ -1039,6 +1039,63 @@ theorem generic_format_truncate {m e : ℤ} (l : location) (Hm : 0 ≤ m) :
     -- k ≤ 0 means fexp(Zdigits m + e) ≤ e.
     push_neg at hk; linarith
 
+/-- When `x = F2R ⟨m, e⟩ ∈ F` and `e` is below the canonical threshold,
+truncating recovers the canonical form. -/
+theorem truncate_correct_format {m e : ℤ} (Hm : m ≠ 0)
+    (Fx : generic_format beta fexp (F2R (beta := beta) ⟨m, e⟩))
+    (He : e ≤ fexp (Zdigits beta m + e)) :
+    F2R (beta := beta) ⟨m, e⟩
+      = F2R (beta := beta)
+          ⟨(truncate beta fexp (m, e, location.Exact)).1,
+           (truncate beta fexp (m, e, location.Exact)).2.1⟩
+    ∧ (truncate beta fexp (m, e, location.Exact)).2.1
+        = cexp beta fexp (F2R (beta := beta) ⟨m, e⟩) := by
+  set x := F2R (beta := beta) ⟨m, e⟩ with hx_def
+  have h_cexp_eq : cexp beta fexp x = fexp (Zdigits beta m + e) := by
+    show fexp (mag beta x) = fexp (Zdigits beta m + e)
+    rw [mag_F2R_Zdigits _ _ Hm]
+  unfold truncate
+  by_cases hk : 0 < fexp (Zdigits beta m + e) - e
+  · -- k > 0: truncate_aux applies.
+    rw [if_pos hk]
+    set k := fexp (Zdigits beta m + e) - e with hk_def
+    have h_k_nn : 0 ≤ k := le_of_lt hk
+    show x = F2R (beta := beta) ⟨m / (beta.val : ℤ) ^ k.toNat, e + k⟩
+        ∧ e + k = cexp beta fexp x
+    have h_e_k_eq : e + k = cexp beta fexp x := by
+      rw [h_cexp_eq, hk_def]; ring
+    refine ⟨?_, h_e_k_eq⟩
+    -- From Fx (canonical form) we have x = F2R ⟨trunc_sm, cexp x⟩.
+    -- Combining with x = F2R ⟨m, e⟩ and F2R_change_exp gives the result.
+    set trunc_sm := Ztrunc (scaled_mantissa beta fexp x) with htsm_def
+    have h_Fx_canon : x = F2R (beta := beta) ⟨trunc_sm, cexp beta fexp x⟩ := Fx
+    have h_two_forms : F2R (beta := beta) ⟨m, e⟩
+                    = F2R (beta := beta) ⟨trunc_sm, e + k⟩ := by
+      rw [← hx_def, h_Fx_canon, h_e_k_eq]
+    -- Use F2R_change_exp on the RHS to bring it to exponent e:
+    -- F2R ⟨trunc_sm, e+k⟩ = F2R ⟨trunc_sm * β^k, e⟩.
+    have h_change : F2R (beta := beta) ⟨trunc_sm, e + k⟩
+                  = F2R (beta := beta)
+                      ⟨trunc_sm * (beta.val : ℤ) ^ (e + k - e).toNat, e⟩ :=
+      F2R_change_exp (beta := beta) e trunc_sm (e + k) (by linarith)
+    have h_toNat_simp : (e + k - e).toNat = k.toNat := by congr 1; ring
+    rw [h_toNat_simp] at h_change
+    have h_m_eq : m = trunc_sm * (beta.val : ℤ) ^ k.toNat :=
+      eq_F2R (by rw [← h_change]; exact h_two_forms)
+    -- So m / β^k = trunc_sm (exact division).
+    have hpow_pos : 0 < (beta.val : ℤ) ^ k.toNat := pow_pos (by have := beta.prop; omega) _
+    have h_div_eq : m / (beta.val : ℤ) ^ k.toNat = trunc_sm := by
+      rw [h_m_eq, Int.mul_ediv_cancel _ (ne_of_gt hpow_pos)]
+    rw [h_div_eq, h_e_k_eq]
+    exact h_Fx_canon
+  · -- k ≤ 0: no truncation. But He says e ≤ fexp(...), so k ≥ 0.
+    -- Combined with k ≤ 0, k = 0, so cexp = e.
+    rw [if_neg hk]
+    push_neg at hk
+    show x = F2R (beta := beta) ⟨m, e⟩ ∧ e = cexp beta fexp x
+    refine ⟨rfl, ?_⟩
+    rw [h_cexp_eq]; linarith
+
 /-! ### Truncate-then-round per-mode aliases (Zdigits form) -/
 
 /-- Round-down via truncate. -/
