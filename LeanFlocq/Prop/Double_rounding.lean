@@ -314,4 +314,87 @@ theorem round_round_lt_mid_further_place'
     rw [h_cexp_x'']
     rfl
 
+/-- Refinement of the previous lemma: instead of requiring `x` to be below the
+top of its magnitude window by `ulp2/2`, we just need `fexp1(mag x) ≤ mag x`
+(equivalent to `x` being in the "large" regime where the format has unit
+precision steps). -/
+theorem round_round_lt_mid_further_place
+    (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2f1 : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1)
+    (Hf1 : fexp1 (mag beta x) ≤ mag beta x)
+    (Hx2' : x < midp beta fexp1 x - (1/2) * ulp beta fexp2 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  apply round_round_lt_mid_further_place' beta Vfexp1 Vfexp2 choice1 choice2 Px Hf2f1 ?_ Hx2'
+  -- Show: x < bpow(mag x) - (1/2) * ulp2.
+  have h_x_ne : x ≠ 0 := ne_of_gt Px
+  have h_ulp1 : ulp beta fexp1 x = bpow beta (fexp1 (mag beta x)) := by
+    rw [ulp_neq_0 beta fexp1 h_x_ne]; rfl
+  have h_ulp2 : ulp beta fexp2 x = bpow beta (fexp2 (mag beta x)) := by
+    rw [ulp_neq_0 beta fexp2 h_x_ne]; rfl
+  -- From Hx2', derive x - x' < (1/2) * (ulp1 - ulp2).
+  set x' := round beta fexp1 (fun y : ℝ => ⌊y⌋) x with hx'_def
+  have Hx2 : x - x' < (1/2) * (bpow beta (fexp1 (mag beta x))
+      - bpow beta (fexp2 (mag beta x))) := by
+    unfold midp at Hx2'
+    rw [h_ulp1, h_ulp2] at Hx2'
+    linarith
+  have Pxx' : 0 ≤ x - x' := by
+    have h_dn := (round_DN_pt beta fexp1 Vfexp1 x).2.1
+    rw [← hx'_def] at h_dn
+    linarith
+  have h_x_lt_bpow : x < bpow beta (mag beta x) := by
+    have := bpow_mag_gt beta x
+    rw [abs_of_pos Px] at this
+    exact this
+  -- Case split: x' = 0 or x' ≠ 0
+  by_cases Zx' : x' = 0
+  · -- x' = 0: x < (1/2) * (ulp1 - ulp2)
+    rw [Zx', sub_zero] at Hx2
+    -- Need: x < bpow(mag x) - (1/2) * ulp2.
+    -- We have: x < (1/2) * (ulp1 - ulp2)
+    -- It suffices that (1/2) * (ulp1 - ulp2) ≤ bpow(mag x) - (1/2) * ulp2
+    --   ⟺ (1/2) * ulp1 ≤ bpow(mag x)
+    --   ⟺ ulp1 ≤ 2 * bpow(mag x)
+    --   ⟸ ulp1 ≤ bpow(mag x), i.e., bpow(fexp1(mag x)) ≤ bpow(mag x) (from Hf1).
+    have h_ulp1_le : bpow beta (fexp1 (mag beta x))
+        ≤ bpow beta (mag beta x) := bpow_le beta Hf1
+    rw [h_ulp2]
+    linarith
+  · -- x' ≠ 0: 0 < x' (since x' ≥ 0 and x' ≠ 0).
+    have Px'_nn : 0 ≤ x' := by
+      rw [hx'_def]
+      exact round_ge_generic beta fexp1 Vfexp1 _ (generic_format_0 _ _) (le_of_lt Px)
+    have Px' : 0 < x' := lt_of_le_of_ne Px'_nn (Ne.symm Zx')
+    -- mag x' = mag x (since x' = round_DN x > 0).
+    have h_mag_x' : mag beta x' = mag beta x := by
+      rw [hx'_def]
+      apply mag_DN beta fexp1 Vfexp1
+      rw [← hx'_def]
+      exact Px'
+    -- ulp(x') = ulp(x) since mags agree.
+    have h_ulp_x'_eq : ulp beta fexp1 x' = bpow beta (fexp1 (mag beta x)) := by
+      rw [ulp_neq_0 beta fexp1 (ne_of_gt Px')]
+      show bpow beta (fexp1 (mag beta x')) = bpow beta (fexp1 (mag beta x))
+      rw [h_mag_x']
+    -- x' + ulp1 ≤ bpow(mag x) via id_p_ulp_le_bpow.
+    have h_x'_F : generic_format beta fexp1 x' :=
+      generic_format_round beta fexp1 Vfexp1 _ x
+    have h_x'_le_x : x' ≤ x := by linarith
+    have h_x'_lt_bpow : x' < bpow beta (mag beta x) := lt_of_le_of_lt h_x'_le_x h_x_lt_bpow
+    have h_id_ulp := id_p_ulp_le_bpow beta fexp1 Px' h_x'_F h_x'_lt_bpow
+    rw [h_ulp_x'_eq] at h_id_ulp
+    rw [h_ulp2]
+    -- Goal: x < bpow(mag x) - (1/2) * bpow(fexp2).
+    -- From Hx2: x < x' + (1/2) * (bpow(fexp1) - bpow(fexp2))
+    -- From h_id_ulp: x' + bpow(fexp1) ≤ bpow(mag x), so x' ≤ bpow(mag x) - bpow(fexp1)
+    -- Combine: x < bpow(mag x) - bpow(fexp1) + (1/2) * (bpow(fexp1) - bpow(fexp2))
+    --        = bpow(mag x) - (1/2) * bpow(fexp1) - (1/2) * bpow(fexp2)
+    --        ≤ bpow(mag x) - (1/2) * bpow(fexp2)
+    have h_bpow_fexp1_nn : 0 ≤ bpow beta (fexp1 (mag beta x)) :=
+      le_of_lt (bpow_gt_0 _ _)
+    linarith
+
 end LeanFlocq
