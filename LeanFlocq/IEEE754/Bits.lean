@@ -658,4 +658,11 @@ theorem binary_float_of_bits_aux_correct (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 <
         rw [h_pow_ew] at h_ex_le
         linarith
 
+/-- Decode an integer bit pattern into a `binary_float`. -/
+noncomputable def binary_float_of_bits (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < ew)
+    (Hmax : mw + 1 < (2 : ℤ) ^ (ew - 1).toNat) (x : ℤ) :
+    binary_float (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat) :=
+  binary_float.FF2B (binary_float_of_bits_aux mw ew x)
+    (binary_float_of_bits_aux_correct mw ew Hmw Hew Hmax x)
+
 end LeanFlocq
