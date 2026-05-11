@@ -284,4 +284,146 @@ theorem Zrnd_odd_plus {x y : ℝ} (Hx : x = (⌊x⌋ : ℝ)) (H : Even ⌊x⌋) 
       rw [if_neg h_not_even_xy, if_neg h_even_y, h_floor_sum]
       push_cast; rw [← Hx]
 
+/-! ### Round_odd produces a round-to-odd point -/
+
+/-- The core theorem: rounding `x` with `Zrnd_odd` produces a round-to-odd point.
+
+For `x` not in the format, either round-down or round-up is selected so that
+the canonical mantissa is odd. This is the parity-engineering invariant. -/
+theorem round_odd_pt (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) [Exists_NE beta fexp] (x : ℝ) :
+    Rnd_odd_pt beta fexp x (round beta fexp Zrnd_odd x) := by
+  suffices h_pos : ∀ y : ℝ, 0 < y →
+      Rnd_odd_pt beta fexp y (round beta fexp Zrnd_odd y) by
+    rcases lt_trichotomy x 0 with hx | hx | hx
+    · -- x < 0: reduce via opp_inv.
+      apply Rnd_odd_pt_opp_inv beta fexp
+      rw [← round_odd_opp]
+      have h : 0 < -x := by linarith
+      have := h_pos (-x) h
+      simpa using this
+    · -- x = 0.
+      rw [hx, round_0]
+      exact ⟨generic_format_0 _ _, Or.inl rfl⟩
+    · exact h_pos x hx
+  -- Positive case.
+  intro x Hxp
+  set o := round beta fexp Zrnd_odd x with ho_def
+  have Ho : generic_format beta fexp o :=
+    generic_format_round beta fexp hValid Zrnd_odd x
+  refine ⟨Ho, ?_⟩
+  by_cases Hx_F : o = x
+  · left; exact Hx_F
+  right
+  set sm := scaled_mantissa beta fexp x with hsm_def
+  have h_sm_pos : 0 < sm := mul_pos Hxp (bpow_gt_0 _ _)
+  have h_sm_nn : 0 ≤ sm := le_of_lt h_sm_pos
+  have h_x_not_F : ¬ generic_format beta fexp x := by
+    intro h_x_F; apply Hx_F
+    rw [ho_def, round_generic beta fexp Zrnd_odd h_x_F]
+  have h_sm_not_int : sm ≠ (⌊sm⌋ : ℝ) := by
+    intro h_sm_eq
+    apply h_x_not_F
+    show x = F2R (beta := beta) ⟨Ztrunc sm, cexp beta fexp x⟩
+    rw [Ztrunc_floor h_sm_nn]
+    show x = ((⌊sm⌋ : ℤ) : ℝ) * bpow beta (cexp beta fexp x)
+    rw [← h_sm_eq]
+    exact (scaled_mantissa_mult_bpow beta fexp x).symm
+  set rd := round beta fexp (fun y : ℝ => ⌊y⌋) x with hrd_def
+  set ru := round beta fexp (fun y : ℝ => ⌈y⌉) x with hru_def
+  -- 0 ≤ rd from x > 0 and monotonicity of round.
+  have h_rd_nn : 0 ≤ rd := by
+    rw [hrd_def, show (0 : ℝ) = round beta fexp (fun y : ℝ => ⌊y⌋) 0 from
+          (round_0 _ _ _).symm]
+    exact round_le beta fexp hValid _ (le_of_lt Hxp)
+  -- Round_DN explicit: rd = ⌊sm⌋ · bpow(cexp x).
+  have h_rd_explicit : rd = ((⌊sm⌋ : ℤ) : ℝ) * bpow beta (cexp beta fexp x) := by
+    rw [hrd_def]; rfl
+  have h_bpow_ne : bpow beta (cexp beta fexp x) ≠ 0 := ne_of_gt (bpow_gt_0 _ _)
+  by_cases h_even_floor : Even ⌊sm⌋
+  · -- Even ⌊sm⌋: Zrnd_odd sm = ⌈sm⌉, so o = ru.
+    have h_o_eq_ru : o = ru := by
+      rw [ho_def, hru_def]
+      unfold round
+      congr 2
+      show Zrnd_odd sm = ⌈sm⌉
+      show (if sm = (⌊sm⌋ : ℝ) then ⌊sm⌋
+            else if Even ⌊sm⌋ then ⌈sm⌉ else ⌊sm⌋) = ⌈sm⌉
+      rw [if_neg h_sm_not_int, if_pos h_even_floor]
+    refine ⟨Or.inr (h_o_eq_ru ▸ round_UP_pt beta fexp hValid x), ?_⟩
+    -- Canonical witness for ru.
+    set gu_mant := Ztrunc (scaled_mantissa beta fexp ru) with hgu_mant_def
+    set gu_exp := cexp beta fexp ru with hgu_exp_def
+    set gd_mant := Ztrunc (scaled_mantissa beta fexp rd) with hgd_mant_def
+    set gd_exp := cexp beta fexp rd with hgd_exp_def
+    have h_ru_F2R : ru = F2R (beta := beta) ⟨gu_mant, gu_exp⟩ :=
+      generic_format_round beta fexp hValid _ x
+    have h_rd_F2R : rd = F2R (beta := beta) ⟨gd_mant, gd_exp⟩ :=
+      generic_format_round beta fexp hValid _ x
+    have h_gd_can : canonical beta fexp ⟨gd_mant, gd_exp⟩ := by
+      show gd_exp = cexp beta fexp (F2R (beta := beta) ⟨gd_mant, gd_exp⟩)
+      rw [← h_rd_F2R]
+    have h_gu_can : canonical beta fexp ⟨gu_mant, gu_exp⟩ := by
+      show gu_exp = cexp beta fexp (F2R (beta := beta) ⟨gu_mant, gu_exp⟩)
+      rw [← h_ru_F2R]
+    have h_parity : Even gu_mant ↔ ¬ Even gd_mant :=
+      DN_UP_parity_generic beta fexp hValid x ⟨gd_mant, gd_exp⟩ ⟨gu_mant, gu_exp⟩
+        h_x_not_F h_gd_can h_gu_can h_rd_F2R.symm h_ru_F2R.symm
+    -- gd_mant is Even (= ⌊sm⌋ if rd > 0, = 0 if rd = 0).
+    have h_gd_even : Even gd_mant := by
+      rcases eq_or_lt_of_le h_rd_nn with h_rd_zero | h_rd_pos
+      · -- rd = 0: gd_mant = 0.
+        have h_gd_mant_zero : gd_mant = 0 := by
+          rw [hgd_mant_def, ← h_rd_zero]
+          unfold scaled_mantissa
+          rw [zero_mul, Ztrunc_floor (le_refl 0), Int.floor_zero]
+        rw [h_gd_mant_zero]; exact ⟨0, by ring⟩
+      · -- rd > 0: gd_exp = cexp x, so gd_mant = ⌊sm⌋.
+        have h_cexp_rd : gd_exp = cexp beta fexp x := by
+          rw [hgd_exp_def, hrd_def]
+          exact cexp_DN beta fexp hValid h_rd_pos
+        have h_F2R_eq : ((gd_mant : ℤ) : ℝ) * bpow beta gd_exp
+                      = ((⌊sm⌋ : ℤ) : ℝ) * bpow beta (cexp beta fexp x) := by
+          show F2R (beta := beta) ⟨gd_mant, gd_exp⟩ = _
+          rw [← h_rd_F2R, h_rd_explicit]
+        rw [h_cexp_rd] at h_F2R_eq
+        have h_mant_cast : (gd_mant : ℝ) = (⌊sm⌋ : ℝ) :=
+          mul_right_cancel₀ h_bpow_ne h_F2R_eq
+        have : gd_mant = ⌊sm⌋ := by exact_mod_cast h_mant_cast
+        rw [this]; exact h_even_floor
+    exact ⟨⟨gu_mant, gu_exp⟩, h_o_eq_ru.trans h_ru_F2R, h_gu_can,
+           fun h => (h_parity.mp h) h_gd_even⟩
+  · -- ¬ Even ⌊sm⌋: Zrnd_odd sm = ⌊sm⌋, so o = rd.
+    have h_o_eq_rd : o = rd := by
+      rw [ho_def, hrd_def]
+      unfold round
+      congr 2
+      show Zrnd_odd sm = ⌊sm⌋
+      show (if sm = (⌊sm⌋ : ℝ) then ⌊sm⌋
+            else if Even ⌊sm⌋ then ⌈sm⌉ else ⌊sm⌋) = ⌊sm⌋
+      rw [if_neg h_sm_not_int, if_neg h_even_floor]
+    refine ⟨Or.inl (h_o_eq_rd ▸ round_DN_pt beta fexp hValid x), ?_⟩
+    -- rd > 0 (else ⌊sm⌋ = 0 which is even, contradicting hypothesis).
+    have h_rd_pos : 0 < rd := by
+      rcases eq_or_lt_of_le h_rd_nn with h_rd_zero | h_rd_pos
+      · exfalso
+        have h_zero_eq : ((⌊sm⌋ : ℤ) : ℝ) * bpow beta (cexp beta fexp x) = 0 := by
+          rw [← h_rd_explicit, ← h_rd_zero]
+        have h_floor_zero : ⌊sm⌋ = 0 := by
+          have := (mul_eq_zero.mp h_zero_eq).resolve_right h_bpow_ne
+          exact_mod_cast this
+        apply h_even_floor; rw [h_floor_zero]; exact ⟨0, by ring⟩
+      · exact h_rd_pos
+    refine ⟨⟨⌊sm⌋, cexp beta fexp x⟩, ?_, ?_, h_even_floor⟩
+    · -- o = F2R⟨⌊sm⌋, cexp x⟩.
+      rw [h_o_eq_rd, h_rd_explicit]; rfl
+    · -- canonical: cexp x = cexp(F2R⟨⌊sm⌋, cexp x⟩) = cexp rd.
+      show cexp beta fexp x
+         = cexp beta fexp (F2R (beta := beta) ⟨⌊sm⌋, cexp beta fexp x⟩)
+      have h_F2R_eq_rd : F2R (beta := beta) ⟨⌊sm⌋, cexp beta fexp x⟩ = rd := by
+        show ((⌊sm⌋ : ℤ) : ℝ) * bpow beta (cexp beta fexp x) = rd
+        rw [← h_rd_explicit]
+      rw [h_F2R_eq_rd]
+      exact (cexp_DN beta fexp hValid h_rd_pos).symm
+
 end LeanFlocq
