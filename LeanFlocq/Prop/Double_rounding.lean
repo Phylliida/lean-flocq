@@ -1025,16 +1025,146 @@ theorem round_round_gt_mid
     exact round_round_gt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
       Hf2'' Hf1 (Hx' Hf2'')
 
+/-! ## Multiplication theorems
+
+When `x` and `y` are in the target format `F1`, the product `x * y` is
+representable in `F2` provided `fexp2` is "fine enough" relative to `fexp1`.
+This makes double rounding for multiplication innocuous. -/
+
+/-- The hypothesis on `(fexp1, fexp2)` for `round_round_mult`: `fexp2` must
+be at most `fexp1(ex) + fexp1(ey)` at both possible magnitudes of `x * y`. -/
+def round_round_mult_hyp (fexp1 fexp2 : ℤ → ℤ) : Prop :=
+  (∀ ex ey : ℤ, fexp2 (ex + ey) ≤ fexp1 ex + fexp1 ey)
+  ∧ (∀ ex ey : ℤ, fexp2 (ex + ey - 1) ≤ fexp1 ex + fexp1 ey)
+
+/-- When `x`, `y ∈ F1` and the multiplication hypothesis holds, the product
+`x * y` is in `F2`. -/
+theorem round_round_mult_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Hfexp : round_round_mult_hyp fexp1 fexp2) {x y : ℝ}
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    generic_format beta fexp2 (x * y) := by
+  by_cases Zx : x = 0
+  · rw [Zx, zero_mul]; exact generic_format_0 beta fexp2
+  · by_cases Zy : y = 0
+    · rw [Zy, mul_zero]; exact generic_format_0 beta fexp2
+    · -- Write x = mx * bpow(fexp1(mag x)), y = my * bpow(fexp1(mag y))
+      set mx := Ztrunc (scaled_mantissa beta fexp1 x) with hmx_def
+      set my := Ztrunc (scaled_mantissa beta fexp1 y) with hmy_def
+      have h_Fx : x = (mx : ℝ) * bpow beta (fexp1 (mag beta x)) := Fx
+      have h_Fy : y = (my : ℝ) * bpow beta (fexp1 (mag beta y)) := Fy
+      -- The float representation of x*y at exponent fexp1(mag x) + fexp1(mag y).
+      set fxy : float beta := ⟨mx * my, fexp1 (mag beta x) + fexp1 (mag beta y)⟩
+        with hfxy_def
+      have Hxy : x * y = F2R fxy := by
+        show x * y = ((mx * my : ℤ) : ℝ) * bpow beta
+            (fexp1 (mag beta x) + fexp1 (mag beta y))
+        rw [Int.cast_mul, bpow_plus]
+        have h_assoc : (mx : ℝ) * (my : ℝ)
+              * (bpow beta (fexp1 (mag beta x)) * bpow beta (fexp1 (mag beta y)))
+            = ((mx : ℝ) * bpow beta (fexp1 (mag beta x)))
+                * ((my : ℝ) * bpow beta (fexp1 (mag beta y))) := by ring
+        rw [h_assoc, ← h_Fx, ← h_Fy]
+      apply generic_format_F2R' beta fexp2 fxy Hxy.symm
+      intro h_xy_ne
+      -- cexp(x*y) = fexp2(mag(x*y)).
+      show fexp2 (mag beta (x * y)) ≤ fxy.Fexp
+      show fexp2 (mag beta (x * y)) ≤ fexp1 (mag beta x) + fexp1 (mag beta y)
+      -- By mag_mult, mag(x*y) is in {mag x + mag y - 1, mag x + mag y}.
+      have h_mag := mag_mult beta Zx Zy
+      have h_mag_lo : mag beta x + mag beta y - 1 ≤ mag beta (x * y) := h_mag.1
+      have h_mag_hi : mag beta (x * y) ≤ mag beta x + mag beta y := h_mag.2
+      -- Two cases.
+      rcases lt_or_eq_of_le h_mag_lo with h_strict | h_eq
+      · -- mag(x*y) = mag x + mag y (the upper case).
+        have h_eq2 : mag beta (x * y) = mag beta x + mag beta y := by
+          linarith
+        rw [h_eq2]; exact Hfexp.1 (mag beta x) (mag beta y)
+      · -- mag(x*y) = mag x + mag y - 1 (the lower case).
+        rw [← h_eq]; exact Hfexp.2 (mag beta x) (mag beta y)
+
+/-- The keystone: if both `x` and `y` are in `F1` and the multiplication
+hypothesis holds, then double rounding (first to `F2`, then to `F1`) of
+`x * y` equals direct rounding to `F1`. -/
+theorem round_round_mult (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (Hfexp : round_round_mult_hyp fexp1 fexp2) {x y : ℝ}
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round beta fexp1 rnd (round beta fexp2 rnd (x * y))
+      = round beta fexp1 rnd (x * y) := by
+  have Hxy : round beta fexp2 rnd (x * y) = x * y :=
+    round_generic beta fexp2 rnd (round_round_mult_aux beta fexp1 fexp2 Hfexp Fx Fy)
+  rw [Hxy]
+
+/-! ### Format-specific multiplication corollaries -/
+
+/-- FLX double-rounding for multiplication: when `2 * prec ≤ prec'`, double
+rounding via `FLX prec'` is innocuous for `x * y` with `x, y ∈ FLX prec`. -/
+theorem round_round_mult_FLX (beta : radix) (prec prec' : ℤ)
+    (hprec : 0 < prec) (_hprec' : 0 < prec')
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (Hprec : 2 * prec ≤ prec') {x y : ℝ}
+    (Fx : FLX_format beta prec x) (Fy : FLX_format beta prec y) :
+    round beta (FLX_exp prec) rnd
+        (round beta (FLX_exp prec') rnd (x * y))
+      = round beta (FLX_exp prec) rnd (x * y) := by
+  apply round_round_mult beta (FLX_exp prec) (FLX_exp prec') rnd ?_
+    (generic_format_FLX beta prec hprec Fx) (generic_format_FLX beta prec hprec Fy)
+  refine ⟨?_, ?_⟩ <;> (intro ex ey; unfold FLX_exp; linarith)
+
+/-- FLT double-rounding for multiplication: needs `emin' ≤ 2 * emin` (the
+inner format reaches lower exponents) and `2 * prec ≤ prec'` (the inner
+format has at least twice the precision). -/
+theorem round_round_mult_FLT (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (_hprec' : 0 < prec')
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (Hemin : emin' ≤ 2 * emin) (Hprec : 2 * prec ≤ prec') {x y : ℝ}
+    (Fx : FLT_format beta emin prec x) (Fy : FLT_format beta emin prec y) :
+    round beta (FLT_exp emin prec) rnd
+        (round beta (FLT_exp emin' prec') rnd (x * y))
+      = round beta (FLT_exp emin prec) rnd (x * y) := by
+  apply round_round_mult beta (FLT_exp emin prec) (FLT_exp emin' prec') rnd ?_
+    (generic_format_FLT beta emin prec hprec Fx)
+    (generic_format_FLT beta emin prec hprec Fy)
+  refine ⟨?_, ?_⟩
+  all_goals
+    intro ex ey
+    unfold FLT_exp
+    rw [max_le_iff]
+    refine ⟨?_, ?_⟩
+    · have h1 : ex - prec ≤ max (ex - prec) emin := le_max_left _ _
+      have h2 : ey - prec ≤ max (ey - prec) emin := le_max_left _ _
+      linarith
+    · have h1 : emin ≤ max (ex - prec) emin := le_max_right _ _
+      have h2 : emin ≤ max (ey - prec) emin := le_max_right _ _
+      linarith
+
+/-- FTZ double-rounding for multiplication: needs `emin' + prec' ≤ 2*emin + prec`
+and `2 * prec ≤ prec'`. -/
+theorem round_round_mult_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (_hprec' : 0 < prec')
+    (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (Hemin : emin' + prec' ≤ 2 * emin + prec) (Hprec : 2 * prec ≤ prec') {x y : ℝ}
+    (Fx : FTZ_format beta emin prec x) (Fy : FTZ_format beta emin prec y) :
+    round beta (FTZ_exp emin prec) rnd
+        (round beta (FTZ_exp emin' prec') rnd (x * y))
+      = round beta (FTZ_exp emin prec) rnd (x * y) := by
+  apply round_round_mult beta (FTZ_exp emin prec) (FTZ_exp emin' prec') rnd ?_
+    (generic_format_FTZ beta emin prec hprec Fx)
+    (generic_format_FTZ beta emin prec hprec Fy)
+  refine ⟨?_, ?_⟩
+  all_goals
+    intro ex ey
+    unfold FTZ_exp
+    split_ifs <;> omega
+
 /-! ### Notes for the next session
 
-The core mid-rounding theorems are complete: `_lt_mid` and `_gt_mid` families
-with their dispatchers. After this point, the next big arcs of
-`Double_rounding.v` are:
-- multiplication theorems (`Double_round_mult` section),
+Core mid-rounding theorems + multiplication arc are complete. Remaining big
+arcs of `Double_rounding.v`:
 - plus/minus theorems (the largest section, ~1760 Coq lines),
-- sqrt theorems,
-- division theorems.
+- sqrt theorems (~870 lines),
+- division theorems (~1100 lines, with a long bridge lemma).
 
-End of core mid-rounding theorems. -/
+End of multiplication arc. -/
 
 end LeanFlocq

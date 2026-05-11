@@ -340,6 +340,35 @@ theorem mag_mult_bpow (beta : radix) {x : ℝ} (hx : x ≠ 0) (e : ℤ) :
           mul_lt_mul_of_pos_right h_high (bpow_gt_0 _ _)
       _ = bpow beta (mag beta x + e) := by rw [← bpow_plus]
 
+/-- `mag β (x*y) ∈ {mag β x + mag β y - 1, mag β x + mag β y}` for nonzero `x`, `y`. -/
+theorem mag_mult (beta : radix) {x y : ℝ} (hx : x ≠ 0) (hy : y ≠ 0) :
+    mag beta x + mag beta y - 1 ≤ mag beta (x * y)
+    ∧ mag beta (x * y) ≤ mag beta x + mag beta y := by
+  have h_x_low : bpow beta (mag beta x - 1) ≤ |x| := bpow_mag_le beta hx
+  have h_x_high : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+  have h_y_low : bpow beta (mag beta y - 1) ≤ |y| := bpow_mag_le beta hy
+  have h_y_high : |y| < bpow beta (mag beta y) := bpow_mag_gt beta y
+  have h_x_abs_nn : 0 ≤ |x| := abs_nonneg x
+  have h_y_abs_nn : 0 ≤ |y| := abs_nonneg y
+  have h_bpow_x_nn : 0 ≤ bpow beta (mag beta x - 1) := bpow_ge_0 _ _
+  have h_bpow_y_nn : 0 ≤ bpow beta (mag beta y - 1) := bpow_ge_0 _ _
+  -- bpow(mag x + mag y - 1 - 1) ≤ |x * y|
+  have h_low : bpow beta (mag beta x + mag beta y - 1 - 1) ≤ |x * y| := by
+    rw [abs_mul]
+    have h_split : mag beta x + mag beta y - 1 - 1
+        = (mag beta x - 1) + (mag beta y - 1) := by ring
+    rw [h_split, bpow_plus]
+    exact mul_le_mul h_x_low h_y_low h_bpow_y_nn h_x_abs_nn
+  -- |x * y| < bpow(mag x + mag y)
+  have h_high : |x * y| < bpow beta (mag beta x + mag beta y) := by
+    rw [abs_mul, bpow_plus]
+    exact mul_lt_mul'' h_x_high h_y_high h_x_abs_nn h_y_abs_nn
+  have h_xy_ne : x * y ≠ 0 := mul_ne_zero hx hy
+  refine ⟨?_, ?_⟩
+  · have h := mag_ge_bpow beta (e := mag beta x + mag beta y - 1) h_low
+    linarith
+  · exact mag_le_bpow beta h_xy_ne h_high
+
 /-- `mag β (√x) = ⌊(mag β x + 1) / 2⌋` for `0 < x`. -/
 theorem mag_sqrt (beta : radix) {x : ℝ} (hx : 0 < x) :
     mag beta (Real.sqrt x) = (mag beta x + 1) / 2 := by
