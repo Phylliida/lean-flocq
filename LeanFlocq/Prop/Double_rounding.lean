@@ -1560,4 +1560,92 @@ theorem round_round_sqrt_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
     have h_chain : a * a + u1 * a < x := by linarith [Hsl, Hl']
     linarith [h_chain, Hr']
 
+/-- **The sqrt double-rounding theorem.**
+
+Given the `round_round_sqrt_hyp` precision condition and `x ∈ F1`,
+double-rounding `Real.sqrt x` is innocuous. -/
+theorem round_round_sqrt (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_sqrt_hyp fexp1 fexp2)
+    {x : ℝ} (Fx : generic_format beta fexp1 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (Real.sqrt x) := by
+  rcases le_or_gt x 0 with Npx | Px
+  · -- x ≤ 0: √x = 0
+    have h_sqrt_zero : Real.sqrt x = 0 := by
+      rw [Real.sqrt_eq_zero']; exact Npx
+    rw [h_sqrt_zero]
+    unfold round_round_eq
+    rw [round_0, round_0]
+  · -- 0 < x
+    have h_s_pos : 0 < Real.sqrt x := Real.sqrt_pos.mpr Px
+    have h_x_ne : x ≠ 0 := ne_of_gt Px
+    -- Hfx : fexp1(mag x) < mag x
+    have Hfx : fexp1 (mag beta x) < mag beta x :=
+      mag_generic_gt beta fexp1 Vfexp1 h_x_ne Fx
+    -- Hfsx : fexp1(mag √x) < mag √x
+    have Hfsx : fexp1 (mag beta (Real.sqrt x)) < mag beta (Real.sqrt x) := by
+      rcases le_or_gt x 1 with hx1 | hx1
+      · -- x ≤ 1: √x ≥ x, so mag √x ≥ mag x
+        have h_x_le_sqrt : x ≤ Real.sqrt x := by
+          have h_eq : Real.sqrt x * Real.sqrt x = x := Real.mul_self_sqrt (le_of_lt Px)
+          have h1 : Real.sqrt x ≤ 1 := by
+            rw [show (1 : ℝ) = Real.sqrt 1 from Real.sqrt_one.symm]
+            exact Real.sqrt_le_sqrt hx1
+          nlinarith [Real.sqrt_nonneg x, h_eq, h1]
+        have h_mag : mag beta x ≤ mag beta (Real.sqrt x) := by
+          apply mag_le_abs beta h_x_ne
+          rw [abs_of_pos Px, abs_of_pos h_s_pos]
+          exact h_x_le_sqrt
+        exact valid_exp_large Vfexp1 Hfx h_mag
+      · -- 1 < x: √x ≥ 1, so mag √x ≥ 1. Derive fexp1 1 < 1 from Hexp.2.1 at ex=1.
+        obtain ⟨_, Hex21, _⟩ := Hexp
+        have h_fexp1_at_1 : 2 * fexp1 1 ≤ fexp1 (2 * 1 - 1) := Hex21 1
+        have h_fexp1_1_lt : fexp1 1 < 1 := by
+          have : fexp1 (2 * 1 - 1) = fexp1 1 := by norm_num
+          linarith [h_fexp1_at_1, this]
+        have h_sqrt_ge_1 : 1 ≤ Real.sqrt x := by
+          rw [show (1 : ℝ) = Real.sqrt 1 from Real.sqrt_one.symm]
+          exact Real.sqrt_le_sqrt (le_of_lt hx1)
+        have h_mag_ge_1 : 1 ≤ mag beta (Real.sqrt x) := by
+          apply mag_ge_bpow beta
+          show bpow beta (1 - 1) ≤ |Real.sqrt x|
+          rw [show (1 : ℤ) - 1 = 0 from by norm_num, bpow_zero,
+              abs_of_nonneg (Real.sqrt_nonneg x)]
+          exact h_sqrt_ge_1
+        exact valid_exp_large Vfexp1 h_fexp1_1_lt h_mag_ge_1
+    -- Hf2 : fexp2(mag √x) ≤ fexp1(mag √x) - 1
+    have Hf2 : fexp2 (mag beta (Real.sqrt x)) ≤ fexp1 (mag beta (Real.sqrt x)) - 1 := by
+      obtain ⟨_, _, Hex22⟩ := Hexp
+      have Hlx : fexp1 (2 * mag beta (Real.sqrt x)) < 2 * mag beta (Real.sqrt x) := by
+        rcases mag_sqrt_disj beta Px with h | h
+        · have h_mx_le : mag beta x ≤ 2 * mag beta (Real.sqrt x) := by linarith
+          exact valid_exp_large Vfexp1 Hfx h_mx_le
+        · rw [← h]; exact Hfx
+      have h := Hex22 (mag beta (Real.sqrt x)) Hlx
+      linarith [h, Hfsx]
+    -- Dispatch via round_round_mid_cases. The Cmid callback uses _aux for contradiction.
+    apply round_round_mid_cases beta Vfexp1 Vfexp2 choice1 choice2 h_s_pos Hf2 (le_of_lt Hfsx)
+    intro Hmid
+    exfalso
+    have h_aux := round_round_sqrt_aux beta fexp1 fexp2 Vfexp1 Vfexp2 Hexp Px Hf2 Fx
+    linarith [h_aux, Hmid]
+
+/-- **`round_round_sqrt` for FLX format.** -/
+theorem round_round_sqrt_FLX (beta : radix) (prec prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hprec : 2 * prec + 2 ≤ prec')
+    {x : ℝ} (Fx : FLX_format beta prec x) :
+    round_round_eq beta (FLX_exp prec) (FLX_exp prec') choice1 choice2 (Real.sqrt x) := by
+  apply round_round_sqrt beta (FLX_exp_valid prec hprec) (FLX_exp_valid prec' hprec')
+    choice1 choice2
+  · -- round_round_sqrt_hyp via FLX
+    unfold round_round_sqrt_hyp FLX_exp
+    refine ⟨?_, ?_, ?_⟩
+    · intro ex; omega
+    · intro ex; omega
+    · intro ex _; omega
+  · exact generic_format_FLX beta prec hprec Fx
+
 end LeanFlocq
