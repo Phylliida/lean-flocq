@@ -930,6 +930,57 @@ theorem round_trunc_sign_any_correct (rnd : ℝ → ℤ) [Valid_rnd rnd]
   rw [← cexp_abs]
   exact (cexp_inbetween_float_loc_Exact beta fexp hValid (abs_nonneg _) Hin).mpr He
 
+/-! ### Per-mode correctness aliases
+
+Specializations of the generic correctness theorems to the standard
+rounding modes. Each is a one-line application. -/
+
+/-- Round-down (floor) correctness. -/
+theorem round_DN_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e x l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp Int.floor x = F2R (beta := beta) ⟨m, e⟩ :=
+  round_any_correct beta fexp Int.floor (fun m _ => m)
+    (fun _ _ _ h => inbetween_int_DN h) Hin He
+
+/-- Round-up (ceiling) correctness. -/
+theorem round_UP_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e x l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp Int.ceil x =
+      F2R (beta := beta) ⟨cond_incr (round_UP l) m, e⟩ :=
+  round_any_correct beta fexp Int.ceil (fun m l => cond_incr (round_UP l) m)
+    (fun _ _ _ h => inbetween_int_UP h) Hin He
+
+/-- Round-toward-zero (truncation) correctness. -/
+theorem round_ZR_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e x l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp Ztrunc x =
+      F2R (beta := beta) ⟨cond_incr (round_ZR (decide (m < 0)) l) m, e⟩ :=
+  round_any_correct beta fexp Ztrunc (fun m l => cond_incr (round_ZR (decide (m < 0)) l) m)
+    (fun _ _ _ h => inbetween_int_ZR h) Hin He
+
+/-- Round-to-nearest-even (IEEE default) correctness. -/
+theorem round_NE_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e x l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp ZnearestE x =
+      F2R (beta := beta) ⟨cond_incr (round_N (decide (¬ Even m)) l) m, e⟩ :=
+  round_any_correct beta fexp ZnearestE
+    (fun m l => cond_incr (round_N (decide (¬ Even m)) l) m)
+    (fun _ _ _ h => inbetween_int_NE h) Hin He
+
+/-- Round-to-nearest-away (ties-away-from-zero) correctness. -/
+theorem round_NA_correct {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e x l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp ZnearestA x =
+      F2R (beta := beta) ⟨cond_incr (round_N (decide (0 ≤ m)) l) m, e⟩ :=
+  round_any_correct beta fexp ZnearestA
+    (fun m l => cond_incr (round_N (decide (0 ≤ m)) l) m)
+    (fun _ _ _ h => inbetween_int_NA h) Hin He
+
 end Fcalc_round_fexp
 
 /-! ## truncate for FIX formats -/
