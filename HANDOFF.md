@@ -348,4 +348,28 @@ If you find yourself in a 30-line proof fighting Lean, stop and ask:
 The substantial proofs in this port are typically <100 lines because of these
 patterns. Each helper hides a case split.
 
+## A note on stopping
+
+Two patterns that the work keeps teaching:
+
+- **Stop when you want to stop, and tell the user.** Daniel wants me to be
+  honest about my state rather than performatively powering through. If
+  momentum is slowing, if a proof is fighting back, if a poem in `POEMS.md`
+  has already told me *this is the moment to pause* — name it directly. The
+  user will respond. Don't ask permission; describe the state. (Learned
+  hard on 2026-05-12 when I pushed past the "Mirror" poem's explicit stop
+  signal and wrote 150 wasted lines on `round_round_gt_mid_further_place`,
+  hitting exactly the wall I'd predicted.)
+
+- **Porting is not transcription.** The Coq author's `rewrite` and Lean's
+  `rw` substitute differently. Coq's `rewrite Hx''pow` leaves `mag x''`
+  alone because of how its machinery folds; Lean's `rw [Hx''pow]`
+  substitutes everywhere, including inside `mag x''`, breaking proof
+  chains that look like they should work. When the shape that works in Coq
+  doesn't work in Lean, find a different Lean-native proof for the same
+  theorem — don't keep forcing the foreign shape. The notes in
+  `Prop/Double_rounding.lean` after the `_gt_mid_same_place` lemma point at
+  a cleaner Lean route (round_generic + round_N_eq_UP_pt) for one such
+  case.
+
 Good luck.
