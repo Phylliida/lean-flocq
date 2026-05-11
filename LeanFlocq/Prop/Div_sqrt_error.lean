@@ -442,4 +442,86 @@ theorem sqrt_error_N_FLX_aux1 (beta : radix) (prec : ℤ)
     rw [h_rhs_eq] at h_mul_lt
     exact h_mul_lt
 
+/-! ### Auxiliary: case analysis on `μ ∈ FLX` with `μ ≥ 1` -/
+
+/-- For `μ ∈ FLX` with `1 ≤ μ` (and `prec > 1`), one of three cases holds:
+`μ = 1`, `μ = 1 + 2·u_ro`, or `μ ≥ 1 + 4·u_ro`. -/
+theorem sqrt_error_N_FLX_aux2 (beta : radix) (prec : ℤ) (Hp1 : 1 < prec)
+    {mu : ℝ} (Fmu : generic_format beta (FLX_exp prec) mu)
+    (HmuGe1 : 1 ≤ mu) :
+    mu = 1 ∨ mu = 1 + 2 * u_ro beta prec ∨ 1 + 4 * u_ro beta prec ≤ mu := by
+  have Hp : 0 < prec := by linarith
+  have Pu_ro : 0 ≤ u_ro beta prec := u_ro_pos beta prec
+  -- 2 * u_ro = bpow(-prec + 1) = bpow(1 - prec).
+  have h_2u_ro : 2 * u_ro beta prec = bpow beta (1 - prec) := by
+    unfold u_ro
+    rw [show (1 - prec : ℤ) = -prec + 1 from by ring]
+    ring
+  -- 2 * u_ro < 1, since 1 - prec < 0.
+  have h_2u_lt_1 : 2 * u_ro beta prec < 1 := by
+    rw [h_2u_ro]
+    have h_bpow_0 : bpow beta 0 = 1 := by unfold bpow; simp
+    rw [show (1 : ℝ) = bpow beta 0 from h_bpow_0.symm]
+    exact bpow_lt beta (by omega)
+  -- β ≥ 2.
+  have h_beta_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by
+    have := beta.prop
+    have : (2 : ℤ) ≤ beta.val := this
+    exact_mod_cast this
+  -- 1 ∈ FLX
+  have F1 : generic_format beta (FLX_exp prec) 1 :=
+    generic_format_FLX_1 beta prec Hp
+  -- Case split: μ ≤ 1 or μ > 1.
+  by_cases HxLe1 : mu ≤ 1
+  · left; linarith
+  · push_neg at HxLe1
+    right
+    -- succ_FLX_1: succ 1 = 1 + bpow(1 - prec) = 1 + 2 * u_ro
+    have h_succ_1 : succ beta (FLX_exp prec) 1 = 1 + 2 * u_ro beta prec := by
+      rw [succ_FLX_1, h_2u_ro]
+    have HmuGe1p2eps : 1 + 2 * u_ro beta prec ≤ mu := by
+      rw [← h_succ_1]
+      exact succ_le_lt beta (FLX_exp prec) (FLX_exp_valid prec Hp) F1 Fmu HxLe1
+    by_cases HxLe1p2eps : mu ≤ 1 + 2 * u_ro beta prec
+    · left; linarith
+    · push_neg at HxLe1p2eps
+      right
+      -- 1 + 2u_ro is in F as succ of 1.
+      have h_1p2u_ro_F : generic_format beta (FLX_exp prec)
+          (1 + 2 * u_ro beta prec) := by
+        rw [← h_succ_1]
+        exact generic_format_succ beta (FLX_exp prec)
+          (FLX_exp_valid prec Hp) F1
+      -- succ(1 + 2u_ro) ≤ μ by succ_le_lt.
+      have h_succ_le : succ beta (FLX_exp prec) (1 + 2 * u_ro beta prec) ≤ mu :=
+        succ_le_lt beta (FLX_exp prec) (FLX_exp_valid prec Hp)
+          h_1p2u_ro_F Fmu HxLe1p2eps
+      -- succ(1 + 2u_ro) = 1 + 4u_ro: since 1 ≤ 1 + 2u_ro < β, mag = 1, and
+      -- ulp(1 + 2u_ro) = bpow(1 - prec) = 2u_ro.
+      have h_1p2u_ro_pos : 0 < 1 + 2 * u_ro beta prec := by linarith
+      have h_1p2u_ro_lt_beta : 1 + 2 * u_ro beta prec < (beta.val : ℝ) := by
+        linarith
+      have h_mag_eq : mag beta (1 + 2 * u_ro beta prec) = 1 := by
+        apply mag_unique_pos beta
+        · show bpow beta (1 - 1) ≤ 1 + 2 * u_ro beta prec
+          rw [show (1 - 1 : ℤ) = 0 from by ring]
+          have h_bpow_0 : bpow beta 0 = 1 := by unfold bpow; simp
+          rw [h_bpow_0]; linarith
+        · show 1 + 2 * u_ro beta prec < bpow beta 1
+          have h_bpow_1 : bpow beta 1 = (beta.val : ℝ) := by
+            unfold bpow; simp
+          rw [h_bpow_1]; exact h_1p2u_ro_lt_beta
+      have h_ulp_eq : ulp beta (FLX_exp prec) (1 + 2 * u_ro beta prec)
+          = 2 * u_ro beta prec := by
+        rw [ulp_neq_0 beta (FLX_exp prec) (ne_of_gt h_1p2u_ro_pos)]
+        show bpow beta (cexp beta (FLX_exp prec) (1 + 2 * u_ro beta prec))
+            = 2 * u_ro beta prec
+        unfold cexp FLX_exp
+        rw [h_mag_eq, h_2u_ro]
+      have h_succ_eq : succ beta (FLX_exp prec) (1 + 2 * u_ro beta prec)
+          = 1 + 4 * u_ro beta prec := by
+        rw [succ_eq_pos beta (FLX_exp prec) (le_of_lt h_1p2u_ro_pos), h_ulp_eq]
+        ring
+      linarith [h_succ_le, h_succ_eq]
+
 end LeanFlocq
