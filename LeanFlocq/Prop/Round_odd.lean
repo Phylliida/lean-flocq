@@ -426,4 +426,170 @@ theorem round_odd_pt (beta : radix) (fexp : ℤ → ℤ)
       rw [h_F2R_eq_rd]
       exact (cexp_DN beta fexp hValid h_rd_pos).symm
 
+/-! ### Uniqueness and monotonicity of round-to-odd -/
+
+/-- The round-to-odd point of `x` is unique. -/
+theorem Rnd_odd_pt_unique (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) [Exists_NE beta fexp]
+    {x f1 f2 : ℝ} (H1 : Rnd_odd_pt beta fexp x f1)
+    (H2 : Rnd_odd_pt beta fexp x f2) :
+    f1 = f2 := by
+  obtain ⟨Ff1, H1'⟩ := H1
+  obtain ⟨Ff2, H2'⟩ := H2
+  -- Case 1: x is in the format. Then both f1 and f2 must equal x.
+  rcases generic_format_EM beta fexp hValid x with L | L
+  · have h_f1_eq_x : f1 = x := by
+      rcases H1' with h | ⟨h_du, _⟩
+      · exact h
+      · rcases h_du with h_dn | h_up
+        · exact Rnd_DN_pt_idempotent _ h_dn L
+        · exact Rnd_UP_pt_idempotent _ h_up L
+    have h_f2_eq_x : f2 = x := by
+      rcases H2' with h | ⟨h_du, _⟩
+      · exact h
+      · rcases h_du with h_dn | h_up
+        · exact Rnd_DN_pt_idempotent _ h_dn L
+        · exact Rnd_UP_pt_idempotent _ h_up L
+    rw [h_f1_eq_x, h_f2_eq_x]
+  -- Case 2: x ∉ format. Both f1 and f2 are in the DN/UP case.
+  rcases H1' with h | ⟨h1_du, g1, hg1_f, hg1_can, hg1_odd⟩
+  · exfalso; apply L; rw [← h]; exact Ff1
+  rcases H2' with h | ⟨h2_du, g2, hg2_f, hg2_can, hg2_odd⟩
+  · exfalso; apply L; rw [← h]; exact Ff2
+  -- Both DN, both UP, or mixed.
+  rcases h1_du with h1_dn | h1_up <;> rcases h2_du with h2_dn | h2_up
+  · -- Both DN: unique.
+    exact Rnd_DN_pt_unique _ h1_dn h2_dn
+  · -- f1 DN, f2 UP: contradicts parity.
+    exfalso
+    set gd_mant := Ztrunc (scaled_mantissa beta fexp
+                    (round beta fexp (fun y : ℝ => ⌊y⌋) x)) with hgd_def
+    set gd_exp := cexp beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x) with hgde_def
+    set gu_mant := Ztrunc (scaled_mantissa beta fexp
+                    (round beta fexp (fun y : ℝ => ⌈y⌉) x)) with hgu_def
+    set gu_exp := cexp beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x) with hgue_def
+    have h_rd_F2R : round beta fexp (fun y : ℝ => ⌊y⌋) x
+                  = F2R (beta := beta) ⟨gd_mant, gd_exp⟩ :=
+      generic_format_round beta fexp hValid _ x
+    have h_ru_F2R : round beta fexp (fun y : ℝ => ⌈y⌉) x
+                  = F2R (beta := beta) ⟨gu_mant, gu_exp⟩ :=
+      generic_format_round beta fexp hValid _ x
+    have h_gd_can : canonical beta fexp ⟨gd_mant, gd_exp⟩ := by
+      show gd_exp = cexp beta fexp (F2R (beta := beta) ⟨gd_mant, gd_exp⟩)
+      rw [← h_rd_F2R]
+    have h_gu_can : canonical beta fexp ⟨gu_mant, gu_exp⟩ := by
+      show gu_exp = cexp beta fexp (F2R (beta := beta) ⟨gu_mant, gu_exp⟩)
+      rw [← h_ru_F2R]
+    have h_parity : Even gu_mant ↔ ¬ Even gd_mant :=
+      DN_UP_parity_generic beta fexp hValid x ⟨gd_mant, gd_exp⟩ ⟨gu_mant, gu_exp⟩
+        L h_gd_can h_gu_can h_rd_F2R.symm h_ru_F2R.symm
+    -- f1 = F2R g1 (DN) so g1 ≡ ⟨gd_mant, gd_exp⟩ as canonical reps.
+    have h_f1_eq_rd : f1 = round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+      Rnd_DN_pt_unique _ h1_dn (round_DN_pt beta fexp hValid x)
+    have h_f2_eq_ru : f2 = round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+      Rnd_UP_pt_unique _ h2_up (round_UP_pt beta fexp hValid x)
+    -- From g1 canonical = canonical of round_DN: their Fnums match.
+    have h_g1_eq_gd : g1.Fnum = gd_mant := by
+      have h1 : F2R g1 = F2R (beta := beta) ⟨gd_mant, gd_exp⟩ := by
+        rw [← hg1_f, h_f1_eq_rd, h_rd_F2R]
+      have h_exp_eq : g1.Fexp = gd_exp := by
+        have h_can : g1.Fexp = cexp beta fexp (F2R g1) := hg1_can
+        rw [h_can, ← hg1_f, h_f1_eq_rd]
+      have h_bpow_ne : bpow beta g1.Fexp ≠ 0 := ne_of_gt (bpow_gt_0 _ _)
+      have h_eq : (g1.Fnum : ℝ) * bpow beta g1.Fexp
+                = (gd_mant : ℝ) * bpow beta gd_exp := h1
+      rw [h_exp_eq] at h_eq
+      have h_mant_real : (g1.Fnum : ℝ) = (gd_mant : ℝ) :=
+        mul_right_cancel₀ (h_exp_eq ▸ h_bpow_ne) h_eq
+      exact_mod_cast h_mant_real
+    have h_g2_eq_gu : g2.Fnum = gu_mant := by
+      have h1 : F2R g2 = F2R (beta := beta) ⟨gu_mant, gu_exp⟩ := by
+        rw [← hg2_f, h_f2_eq_ru, h_ru_F2R]
+      have h_exp_eq : g2.Fexp = gu_exp := by
+        have h_can : g2.Fexp = cexp beta fexp (F2R g2) := hg2_can
+        rw [h_can, ← hg2_f, h_f2_eq_ru]
+      have h_bpow_ne : bpow beta g2.Fexp ≠ 0 := ne_of_gt (bpow_gt_0 _ _)
+      have h_eq : (g2.Fnum : ℝ) * bpow beta g2.Fexp
+                = (gu_mant : ℝ) * bpow beta gu_exp := h1
+      rw [h_exp_eq] at h_eq
+      have h_mant_real : (g2.Fnum : ℝ) = (gu_mant : ℝ) :=
+        mul_right_cancel₀ (h_exp_eq ▸ h_bpow_ne) h_eq
+      exact_mod_cast h_mant_real
+    rw [h_g1_eq_gd] at hg1_odd
+    rw [h_g2_eq_gu] at hg2_odd
+    -- gd_mant odd ∧ gu_mant odd, but parity says gu even ↔ gd not even, contradiction.
+    have h_gu_even : Even gu_mant := h_parity.mpr hg1_odd
+    exact hg2_odd h_gu_even
+  · -- f1 UP, f2 DN: symmetric. By Rnd_UP_pt_unique/Rnd_DN_pt_unique, just swap.
+    exfalso
+    set gd_mant := Ztrunc (scaled_mantissa beta fexp
+                    (round beta fexp (fun y : ℝ => ⌊y⌋) x)) with hgd_def
+    set gd_exp := cexp beta fexp (round beta fexp (fun y : ℝ => ⌊y⌋) x) with hgde_def
+    set gu_mant := Ztrunc (scaled_mantissa beta fexp
+                    (round beta fexp (fun y : ℝ => ⌈y⌉) x)) with hgu_def
+    set gu_exp := cexp beta fexp (round beta fexp (fun y : ℝ => ⌈y⌉) x) with hgue_def
+    have h_rd_F2R : round beta fexp (fun y : ℝ => ⌊y⌋) x
+                  = F2R (beta := beta) ⟨gd_mant, gd_exp⟩ :=
+      generic_format_round beta fexp hValid _ x
+    have h_ru_F2R : round beta fexp (fun y : ℝ => ⌈y⌉) x
+                  = F2R (beta := beta) ⟨gu_mant, gu_exp⟩ :=
+      generic_format_round beta fexp hValid _ x
+    have h_gd_can : canonical beta fexp ⟨gd_mant, gd_exp⟩ := by
+      show gd_exp = cexp beta fexp (F2R (beta := beta) ⟨gd_mant, gd_exp⟩)
+      rw [← h_rd_F2R]
+    have h_gu_can : canonical beta fexp ⟨gu_mant, gu_exp⟩ := by
+      show gu_exp = cexp beta fexp (F2R (beta := beta) ⟨gu_mant, gu_exp⟩)
+      rw [← h_ru_F2R]
+    have h_parity : Even gu_mant ↔ ¬ Even gd_mant :=
+      DN_UP_parity_generic beta fexp hValid x ⟨gd_mant, gd_exp⟩ ⟨gu_mant, gu_exp⟩
+        L h_gd_can h_gu_can h_rd_F2R.symm h_ru_F2R.symm
+    have h_f1_eq_ru : f1 = round beta fexp (fun y : ℝ => ⌈y⌉) x :=
+      Rnd_UP_pt_unique _ h1_up (round_UP_pt beta fexp hValid x)
+    have h_f2_eq_rd : f2 = round beta fexp (fun y : ℝ => ⌊y⌋) x :=
+      Rnd_DN_pt_unique _ h2_dn (round_DN_pt beta fexp hValid x)
+    have h_g1_eq_gu : g1.Fnum = gu_mant := by
+      have h1 : F2R g1 = F2R (beta := beta) ⟨gu_mant, gu_exp⟩ := by
+        rw [← hg1_f, h_f1_eq_ru, h_ru_F2R]
+      have h_exp_eq : g1.Fexp = gu_exp := by
+        have h_can : g1.Fexp = cexp beta fexp (F2R g1) := hg1_can
+        rw [h_can, ← hg1_f, h_f1_eq_ru]
+      have h_bpow_ne : bpow beta g1.Fexp ≠ 0 := ne_of_gt (bpow_gt_0 _ _)
+      have h_eq : (g1.Fnum : ℝ) * bpow beta g1.Fexp
+                = (gu_mant : ℝ) * bpow beta gu_exp := h1
+      rw [h_exp_eq] at h_eq
+      have h_mant_real : (g1.Fnum : ℝ) = (gu_mant : ℝ) :=
+        mul_right_cancel₀ (h_exp_eq ▸ h_bpow_ne) h_eq
+      exact_mod_cast h_mant_real
+    have h_g2_eq_gd : g2.Fnum = gd_mant := by
+      have h1 : F2R g2 = F2R (beta := beta) ⟨gd_mant, gd_exp⟩ := by
+        rw [← hg2_f, h_f2_eq_rd, h_rd_F2R]
+      have h_exp_eq : g2.Fexp = gd_exp := by
+        have h_can : g2.Fexp = cexp beta fexp (F2R g2) := hg2_can
+        rw [h_can, ← hg2_f, h_f2_eq_rd]
+      have h_bpow_ne : bpow beta g2.Fexp ≠ 0 := ne_of_gt (bpow_gt_0 _ _)
+      have h_eq : (g2.Fnum : ℝ) * bpow beta g2.Fexp
+                = (gd_mant : ℝ) * bpow beta gd_exp := h1
+      rw [h_exp_eq] at h_eq
+      have h_mant_real : (g2.Fnum : ℝ) = (gd_mant : ℝ) :=
+        mul_right_cancel₀ (h_exp_eq ▸ h_bpow_ne) h_eq
+      exact_mod_cast h_mant_real
+    rw [h_g1_eq_gu] at hg1_odd
+    rw [h_g2_eq_gd] at hg2_odd
+    have h_gu_even : Even gu_mant := h_parity.mpr hg2_odd
+    exact hg1_odd h_gu_even
+  · -- Both UP: unique.
+    exact Rnd_UP_pt_unique _ h1_up h2_up
+
+/-- Round-to-odd is monotone. -/
+theorem Rnd_odd_pt_monotone (beta : radix) (fexp : ℤ → ℤ)
+    (hValid : Valid_exp fexp) [Exists_NE beta fexp] :
+    round_pred_monotone (Rnd_odd_pt beta fexp) := by
+  intro x y f g H1 H2 Hxy
+  have h_f_eq : f = round beta fexp Zrnd_odd x :=
+    Rnd_odd_pt_unique beta fexp hValid H1 (round_odd_pt beta fexp hValid x)
+  have h_g_eq : g = round beta fexp Zrnd_odd y :=
+    Rnd_odd_pt_unique beta fexp hValid H2 (round_odd_pt beta fexp hValid y)
+  rw [h_f_eq, h_g_eq]
+  exact round_le beta fexp hValid Zrnd_odd Hxy
+
 end LeanFlocq
