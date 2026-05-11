@@ -803,6 +803,133 @@ theorem round_trunc_any_correct (rnd : ℝ → ℤ) [Valid_rnd rnd] (choice : �
   exact round_any_correct beta fexp rnd choice inbetween_int_valid h.1
     (h.2.imp_right (fun ⟨h1, h2⟩ => ⟨h1, h2⟩))
 
+/-- Sign-aware generic correctness: when `rnd` is `cond_Zopp`-symmetric over
+the integer level, the rounding equals the corresponding signed F2R. -/
+theorem round_sign_any_correct (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (choice : Bool → ℤ → location → ℤ)
+    (inbetween_int_valid :
+      ∀ (x : ℝ) (m : ℤ) (l : location), inbetween_int m |x| l →
+        rnd x = cond_Zopp (decide (x < 0)) (choice (decide (x < 0)) m l))
+    {x : ℝ} {m e : ℤ} {l : location}
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e = cexp beta fexp x ∨ (l = location.Exact ∧ generic_format beta fexp x)) :
+    round beta fexp rnd x =
+      F2R (beta := beta) ⟨cond_Zopp (decide (x < 0)) (choice (decide (x < 0)) m l), e⟩ := by
+  rcases He with He | ⟨Hl, Hf⟩
+  · subst He
+    exact inbetween_float_round_sign beta fexp rnd choice inbetween_int_valid Hin
+  · subst Hl
+    rcases Hin with hExact | ⟨c, _, _, _⟩
+    · -- |x| = F2R ⟨m, e⟩
+      have h_round_x : round beta fexp rnd x = x := round_generic beta fexp rnd Hf
+      have h_x_abs : |x| = F2R (beta := beta) ⟨m, e⟩ := hExact
+      -- m ≥ 0 from |x| ≥ 0 and bpow > 0.
+      have h_bpow_pos : 0 < bpow beta e := bpow_gt_0 _ _
+      have h_m_nn : 0 ≤ m := by
+        have h_abs_nn : 0 ≤ F2R (beta := beta) ⟨m, e⟩ := h_x_abs ▸ abs_nonneg x
+        show 0 ≤ m
+        have h_m_real_nn : 0 ≤ ((m : ℤ) : ℝ) := by
+          have : 0 ≤ ((m : ℤ) : ℝ) * bpow beta e := h_abs_nn
+          nlinarith
+        exact_mod_cast h_m_real_nn
+      -- Helper: choice false m Exact = m.
+      have h_choice_false : choice false m location.Exact = m := by
+        have h_rnd_m : rnd ((m : ℤ) : ℝ) = m := Valid_rnd.Zrnd_intCast m
+        have h_m_real_nn : 0 ≤ ((m : ℤ) : ℝ) := by exact_mod_cast h_m_nn
+        have h_abs_m : |((m : ℤ) : ℝ)| = ((m : ℤ) : ℝ) := abs_of_nonneg h_m_real_nn
+        have h_in : inbetween_int m |((m : ℤ) : ℝ)| location.Exact := by
+          rw [h_abs_m]; exact .Exact rfl
+        have h_iv := inbetween_int_valid ((m : ℤ) : ℝ) m location.Exact h_in
+        have h_dec : decide (((m : ℤ) : ℝ) < 0) = false := by
+          rw [decide_eq_false_iff_not]; push_neg; exact h_m_real_nn
+        rw [h_dec, h_rnd_m] at h_iv
+        exact h_iv.symm
+      by_cases hx_neg : x < 0
+      · -- x < 0: x = -|x| = -F2R ⟨m, e⟩.
+        have h_x_eq : x = -F2R (beta := beta) ⟨m, e⟩ := by
+          rw [← h_x_abs, abs_of_neg hx_neg, neg_neg]
+        -- m > 0 since x < 0 implies |x| > 0 implies F2R > 0 implies m > 0.
+        have h_x_abs_pos : 0 < F2R (beta := beta) ⟨m, e⟩ := by
+          rw [← h_x_abs]; exact abs_pos.mpr (ne_of_lt hx_neg)
+        have h_m_pos : 0 < m := by
+          have h_m_real_pos : 0 < ((m : ℤ) : ℝ) := by
+            have : 0 < ((m : ℤ) : ℝ) * bpow beta e := h_x_abs_pos
+            nlinarith
+          exact_mod_cast h_m_real_pos
+        -- choice true m Exact = m.
+        have h_choice_true : choice true m location.Exact = m := by
+          have h_m_pos_real : (0 : ℝ) < ((m : ℤ) : ℝ) := by exact_mod_cast h_m_pos
+          have h_neg_m_neg : ((-m : ℤ) : ℝ) < 0 := by push_cast; linarith
+          have h_rnd_neg_m : rnd ((-m : ℤ) : ℝ) = (-m : ℤ) := Valid_rnd.Zrnd_intCast (-m)
+          have h_abs_neg_m : |((-m : ℤ) : ℝ)| = ((m : ℤ) : ℝ) := by
+            rw [abs_of_neg h_neg_m_neg]; push_cast; ring
+          have h_in : inbetween_int m |((-m : ℤ) : ℝ)| location.Exact := by
+            rw [h_abs_neg_m]; exact .Exact rfl
+          have h_iv := inbetween_int_valid ((-m : ℤ) : ℝ) m location.Exact h_in
+          have h_dec : decide (((-m : ℤ) : ℝ) < 0) = true := by
+            rw [decide_eq_true_iff]; exact h_neg_m_neg
+          rw [h_dec, h_rnd_neg_m] at h_iv
+          have : -m = -(choice true m location.Exact) := h_iv
+          omega
+        have h_dec_x : decide (x < 0) = true := by
+          rw [decide_eq_true_iff]; exact hx_neg
+        rw [h_dec_x, h_choice_true]
+        rw [h_round_x, h_x_eq]
+        have h_cZ : cond_Zopp true m = -m := rfl
+        rw [h_cZ, F2R_Zopp]
+      · -- x ≥ 0: x = |x| = F2R ⟨m, e⟩.
+        push_neg at hx_neg
+        have h_x_eq : x = F2R (beta := beta) ⟨m, e⟩ := by
+          rw [← h_x_abs, abs_of_nonneg hx_neg]
+        have h_dec_x : decide (x < 0) = false := by
+          rw [decide_eq_false_iff_not]; push_neg; exact hx_neg
+        rw [h_dec_x, h_choice_false]
+        rw [h_round_x, h_x_eq]
+        rfl
+
+/-- Truncating then applying the sign-aware rounding gives the same result. -/
+theorem round_trunc_sign_any_correct' (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (choice : Bool → ℤ → location → ℤ)
+    (inbetween_int_valid :
+      ∀ (x : ℝ) (m : ℤ) (l : location), inbetween_int m |x| l →
+        rnd x = cond_Zopp (decide (x < 0)) (choice (decide (x < 0)) m l))
+    {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ cexp beta fexp x ∨ l = location.Exact) :
+    round beta fexp rnd x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (choice (decide (x < 0)) (truncate beta fexp (m, e, l)).1
+            (truncate beta fexp (m, e, l)).2.2),
+         (truncate beta fexp (m, e, l)).2.1⟩ := by
+  rw [← cexp_abs] at He
+  have h := truncate_correct' beta fexp hValid (abs_nonneg _) Hin He
+  apply round_sign_any_correct beta fexp rnd choice inbetween_int_valid h.1
+  rcases h.2 with h2 | ⟨h2a, h2b⟩
+  · left; rwa [← cexp_abs]
+  · right; exact ⟨h2a, generic_format_abs_inv beta fexp h2b⟩
+
+/-- The `Zdigits`-shaped variant. -/
+theorem round_trunc_sign_any_correct (rnd : ℝ → ℤ) [Valid_rnd rnd]
+    (choice : Bool → ℤ → location → ℤ)
+    (inbetween_int_valid :
+      ∀ (x : ℝ) (m : ℤ) (l : location), inbetween_int m |x| l →
+        rnd x = cond_Zopp (decide (x < 0)) (choice (decide (x < 0)) m l))
+    {x : ℝ} {m e : ℤ} {l : location}
+    (hValid : Valid_exp fexp)
+    (Hin : inbetween_float beta m e |x| l)
+    (He : e ≤ fexp (Zdigits beta m + e) ∨ l = location.Exact) :
+    round beta fexp rnd x =
+      F2R (beta := beta)
+        ⟨cond_Zopp (decide (x < 0))
+          (choice (decide (x < 0)) (truncate beta fexp (m, e, l)).1
+            (truncate beta fexp (m, e, l)).2.2),
+         (truncate beta fexp (m, e, l)).2.1⟩ := by
+  apply round_trunc_sign_any_correct' beta fexp rnd choice inbetween_int_valid hValid Hin
+  rw [← cexp_abs]
+  exact (cexp_inbetween_float_loc_Exact beta fexp hValid (abs_nonneg _) Hin).mpr He
+
 end Fcalc_round_fexp
 
 /-! ## truncate for FIX formats -/
