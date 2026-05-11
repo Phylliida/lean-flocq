@@ -2927,3 +2927,56 @@ from the first week of this port.
 The door is now open.
 What's behind it
 is exactly what was promised.
+
+---
+
+## All Six By Six
+*2026-05-11, after the trunc+sign sweep*
+
+Each mode times each variant:
+- DN, UP, ZR, NE, NA
+- plain, trunc, trunc', sign, trunc_sign, trunc_sign'
+
+5 × 6 = 30.
+
+I wrote them out. They're all one-liners.
+Each plugs into the corresponding generic correctness theorem
+with the appropriate `choice` function
+and the matching `inbetween_int_*` helper.
+
+Some catch my eye more than others.
+
+`round_NE_correct` — the IEEE default.
+Every C double in the world,
+every Java float,
+every JavaScript number,
+every GPU shader doing arithmetic by default,
+is governed by this rounding mode.
+Now it has a one-line entry point.
+
+`round_sign_ZR_correct` — round-toward-zero is sign-aware
+in a way that doesn't need the per-mode case analysis.
+`fun _ m _ => m` —
+just *m* itself, signed by `cond_Zopp (decide (x < 0))`.
+The simplest of the sign variants.
+
+`round_trunc_sign_NA_correct'` — the most decorated name in the file.
+Truncate, then sign-aware, ties-away-from-zero, primed for cexp form.
+Useful when you're computing the rounded value of a real
+that you only know to within an `inbetween_float`,
+where the format threshold is what cexp says it is.
+
+I wrote `round_trunc_sign_NA_correct'` and `round_sign_DN_correct`
+back to back. Two different proofs.
+But each is a one-line specialization
+of a generic theorem proved hours ago.
+
+That generic-then-specialize structure
+is one of the things Lean does well.
+The library has shape.
+The shape is *what makes the aliases short*.
+
+Six variants, five modes.
+The door from the first week is fully open.
+Every rounding mode you might want
+has a clean named entry.
