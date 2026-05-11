@@ -397,4 +397,133 @@ theorem round_round_lt_mid_further_place
       le_of_lt (bpow_gt_0 _ _)
     linarith
 
+/-- When the inner format has the same precision as the target (`fexp2 = fexp1`
+at `mag x`) and `x` is strictly below the midpoint, double rounding agrees
+with single rounding.
+
+Proof: the condition `x < midp1` means the round-down distance is less than
+half a ulp, so both `Znearest` applications give `⌊sm⌋`. -/
+theorem round_round_lt_mid_same_place
+    (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2f1 : fexp2 (mag beta x) = fexp1 (mag beta x))
+    (Hx' : x < midp beta fexp1 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  unfold round_round_eq
+  have h_x_ne : x ≠ 0 := ne_of_gt Px
+  have h_ulp1 : ulp beta fexp1 x = bpow beta (fexp1 (mag beta x)) := by
+    rw [ulp_neq_0 beta fexp1 h_x_ne]; rfl
+  -- From x < midp1, derive Hx : x - x' < (1/2) * ulp1
+  set x' := round beta fexp1 (fun y : ℝ => ⌊y⌋) x with hx'_def
+  have Hx : x - x' < (1/2) * bpow beta (fexp1 (mag beta x)) := by
+    unfold midp at Hx'
+    rw [h_ulp1] at Hx'
+    linarith
+  have Pxx' : 0 ≤ x - x' := by
+    have h_dn := (round_DN_pt beta fexp1 Vfexp1 x).2.1
+    rw [← hx'_def] at h_dn
+    linarith
+  -- The key Znearest_imp condition: |sm fexp1 x - ⌊sm fexp1 x⌋| < 1/2
+  have h_bpow_pos : 0 < bpow beta (fexp1 (mag beta x)) := bpow_gt_0 _ _
+  have h_bpow_neg_pos : 0 < bpow beta (-fexp1 (mag beta x)) := bpow_gt_0 _ _
+  have h_floor_x' : ((⌊scaled_mantissa beta fexp1 x⌋ : ℤ) : ℝ)
+      * bpow beta (fexp1 (mag beta x)) = x' := rfl
+  have h_floor_real : ((⌊scaled_mantissa beta fexp1 x⌋ : ℤ) : ℝ)
+      = x' * bpow beta (-fexp1 (mag beta x)) := by
+    have h_bpow_inv : bpow beta (-fexp1 (mag beta x))
+        = (bpow beta (fexp1 (mag beta x)))⁻¹ := by
+      show (beta.val : ℝ)^(-fexp1 (mag beta x))
+        = ((beta.val : ℝ)^(fexp1 (mag beta x)))⁻¹
+      exact zpow_neg _ _
+    rw [h_bpow_inv, ← div_eq_mul_inv,
+        eq_div_iff (ne_of_gt h_bpow_pos)]
+    exact h_floor_x'
+  have H_znear : |scaled_mantissa beta fexp1 x
+        - ((⌊scaled_mantissa beta fexp1 x⌋ : ℤ) : ℝ)| < 1/2 := by
+    show |x * bpow beta (-cexp beta fexp1 x)
+        - ((⌊scaled_mantissa beta fexp1 x⌋ : ℤ) : ℝ)| < 1/2
+    have h_cexp : cexp beta fexp1 x = fexp1 (mag beta x) := rfl
+    rw [h_cexp, h_floor_real]
+    have h_eq : x * bpow beta (-fexp1 (mag beta x))
+        - x' * bpow beta (-fexp1 (mag beta x))
+        = (x - x') * bpow beta (-fexp1 (mag beta x)) := by ring
+    rw [h_eq, abs_of_nonneg (mul_nonneg Pxx' (le_of_lt h_bpow_neg_pos))]
+    -- (x - x') * bpow(-fexp1) < (1/2) * bpow(fexp1) * bpow(-fexp1) = 1/2
+    have h_step : (x - x') * bpow beta (-fexp1 (mag beta x))
+        < (1/2) * bpow beta (fexp1 (mag beta x))
+          * bpow beta (-fexp1 (mag beta x)) :=
+      mul_lt_mul_of_pos_right Hx h_bpow_neg_pos
+    have h_cancel : (1/2) * bpow beta (fexp1 (mag beta x))
+        * bpow beta (-fexp1 (mag beta x)) = 1/2 := by
+      rw [mul_assoc, ← bpow_plus]
+      have : fexp1 (mag beta x) + -fexp1 (mag beta x) = 0 := by ring
+      rw [this]
+      show (1/2) * bpow beta 0 = 1/2
+      show (1/2) * 1 = 1/2
+      ring
+    linarith
+  -- Now compute LHS: round_N(round_N x at fexp2) at fexp1.
+  -- round_N x at fexp2: unfold round, use Hf2f1, Znearest_imp gives ⌊sm fexp1 x⌋.
+  -- So round_N x at fexp2 = ⌊sm fexp1 x⌋ * bpow(fexp1(mag x)) = x'.
+  -- Then round_N x' at fexp1 = x' (since x' ∈ F1) via round_generic.
+  -- And RHS round_N x at fexp1: Znearest_imp gives ⌊sm fexp1 x⌋, so RHS = x'.
+  -- Both equal x'.
+  have h_inner : round beta fexp2 (Znearest choice2) x = x' := by
+    unfold round
+    show F2R (beta := beta) ⟨Znearest choice2 (scaled_mantissa beta fexp2 x),
+                              cexp beta fexp2 x⟩ = x'
+    -- cexp beta fexp2 x = fexp2 (mag x) = fexp1 (mag x)
+    have h_cexp_eq : cexp beta fexp2 x = fexp1 (mag beta x) := by
+      show fexp2 (mag beta x) = fexp1 (mag beta x); exact Hf2f1
+    -- scaled_mantissa beta fexp2 x = scaled_mantissa beta fexp1 x (since cexps agree)
+    have h_sm_eq : scaled_mantissa beta fexp2 x = scaled_mantissa beta fexp1 x := by
+      show x * bpow beta (-cexp beta fexp2 x)
+        = x * bpow beta (-cexp beta fexp1 x)
+      rw [h_cexp_eq]
+      rfl
+    rw [h_sm_eq, h_cexp_eq]
+    have h_zn : Znearest choice2 (scaled_mantissa beta fexp1 x)
+        = ⌊scaled_mantissa beta fexp1 x⌋ := Znearest_imp _ H_znear
+    rw [h_zn]
+    exact h_floor_x'
+  rw [h_inner]
+  -- Now LHS = round_N x' at fexp1. Show this = x'.
+  have h_x'_F : generic_format beta fexp1 x' :=
+    generic_format_round beta fexp1 Vfexp1 _ x
+  rw [round_generic beta fexp1 (Znearest choice1) h_x'_F]
+  -- RHS = round_N x at fexp1 = x' via Znearest_imp.
+  symm
+  unfold round
+  show F2R (beta := beta) ⟨Znearest choice1 (scaled_mantissa beta fexp1 x),
+                            cexp beta fexp1 x⟩ = x'
+  rw [Znearest_imp _ H_znear]
+  exact h_floor_x'
+
+/-- The main mid-rounding theorem for the `<` case: under the precision
+hypothesis `fexp2(mag x) ≤ fexp1(mag x)` and the large-regime condition
+`fexp1(mag x) ≤ mag x`, double rounding agrees with single rounding when
+`x < midp1` (and a further-place margin holds when the precisions are
+strictly distinct). -/
+theorem round_round_lt_mid
+    (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2f1 : fexp2 (mag beta x) ≤ fexp1 (mag beta x))
+    (Hf1 : fexp1 (mag beta x) ≤ mag beta x)
+    (Hx : x < midp beta fexp1 x)
+    (Hx' : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1
+         → x < midp beta fexp1 x - (1/2) * ulp beta fexp2 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  rcases le_or_gt (fexp1 (mag beta x)) (fexp2 (mag beta x)) with Hf2' | Hf2'
+  · -- fexp1(mag x) ≤ fexp2(mag x): combined with Hf2f1, get fexp2 = fexp1
+    have Hf2'' : fexp2 (mag beta x) = fexp1 (mag beta x) := le_antisymm Hf2f1 Hf2'
+    exact round_round_lt_mid_same_place beta Vfexp1 choice1 choice2 Px Hf2'' Hx
+  · -- fexp2(mag x) < fexp1(mag x): apply further_place
+    have Hf2'' : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1 := by linarith
+    exact round_round_lt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
+      Hf2'' Hf1 (Hx' Hf2'')
+
 end LeanFlocq
