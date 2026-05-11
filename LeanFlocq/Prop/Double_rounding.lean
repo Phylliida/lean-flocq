@@ -825,33 +825,216 @@ theorem round_round_gt_mid_same_place
   rw [Znearest_imp _ H_znear]
   exact h_ceil_x'
 
+/-- The full `_gt_mid_further_place`: weakens the upper bound on `x''` to the
+structural hypothesis `fexp1(mag x) ≤ mag x`. Case-splits on whether
+`x'' < bpow(mag x)` (defers to `_further_place'`) or `bpow(mag x) ≤ x''`
+(the edge case: integer arithmetic forces `x'' = bpow(mag x)`, then both
+rounds yield `bpow(mag x)`).
+
+Lean-native route for the edge case: rewrite `x'' = bpow(mag x)`, then use
+`round_generic` on the LHS (since `bpow(mag x) ∈ F1`) and `Znearest_imp` on
+the RHS with witness `β^(mag x - fexp1(mag x))`. -/
+theorem round_round_gt_mid_further_place
+    (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2f1 : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1)
+    (Hf1 : fexp1 (mag beta x) ≤ mag beta x)
+    (Hx2' : midp' beta fexp1 x + (1/2) * ulp beta fexp2 x < x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  by_cases Hx1 : round beta fexp2 (Znearest choice2) x < bpow beta (mag beta x)
+  · -- Easy case: defer to _further_place'.
+    exact round_round_gt_mid_further_place' beta Vfexp1 Vfexp2 choice1 choice2 Px Hf2f1 Hx1 Hx2'
+  · -- Edge case: bpow(mag x) ≤ x''. We show x'' = bpow(mag x) exactly.
+    push_neg at Hx1
+    unfold round_round_eq
+    have h_x_ne : x ≠ 0 := ne_of_gt Px
+    have h_ulp2 : ulp beta fexp2 x = bpow beta (fexp2 (mag beta x)) := by
+      rw [ulp_neq_0 beta fexp2 h_x_ne]; rfl
+    have h_x_lt_bpow : x < bpow beta (mag beta x) := by
+      have := bpow_mag_gt beta x
+      rw [abs_of_pos Px] at this; exact this
+    have h_bp_f2_pos : 0 < bpow beta (fexp2 (mag beta x)) := bpow_gt_0 _ _
+    have h_bp_neg_f1_pos : 0 < bpow beta (-fexp1 (mag beta x)) := bpow_gt_0 _ _
+    -- Error bound at fexp2: |x'' - x| ≤ (1/2) * bpow(fexp2(mag x))
+    have h_err2 : |round beta fexp2 (Znearest choice2) x - x|
+        ≤ (1/2) * bpow beta (fexp2 (mag beta x)) := by
+      have h := error_le_half_ulp beta fexp2 Vfexp2 choice2 x
+      rw [h_ulp2] at h; exact h
+    -- Upper bound: x'' < bpow(mag x) + (1/2) * bpow(fexp2(mag x))
+    have h_upper : round beta fexp2 (Znearest choice2) x
+        < bpow beta (mag beta x) + (1/2) * bpow beta (fexp2 (mag beta x)) := by
+      have h_abs := abs_le.mp h_err2
+      linarith
+    -- x'' = (Znearest choice2 sm) * bpow(fexp2(mag x))
+    set n_m := Znearest choice2 (scaled_mantissa beta fexp2 x) with hn_m_def
+    have h_x''_form : round beta fexp2 (Znearest choice2) x
+        = (n_m : ℝ) * bpow beta (fexp2 (mag beta x)) := by
+      show F2R (beta := beta) ⟨n_m, cexp beta fexp2 x⟩
+        = (n_m : ℝ) * bpow beta (fexp2 (mag beta x))
+      unfold F2R; rfl
+    -- k = mag x - fexp2(mag x); nonneg and bpow(mag x) = bpow(k) * bpow(fexp2)
+    have h_k_nn : 0 ≤ mag beta x - fexp2 (mag beta x) := by linarith
+    set k := mag beta x - fexp2 (mag beta x) with hk_def
+    have h_bp_mag_eq : bpow beta (mag beta x)
+        = bpow beta k * bpow beta (fexp2 (mag beta x)) := by
+      rw [← bpow_plus]
+      have h : k + fexp2 (mag beta x) = mag beta x := by rw [hk_def]; ring
+      rw [h]
+    have h_pow_eq : ((beta.val ^ k.toNat : ℤ) : ℝ) = bpow beta k :=
+      IZR_Zpower beta h_k_nn
+    -- Lower: bpow(k) ≤ (n_m : ℝ) from Hx1.
+    have h_lower : bpow beta k ≤ (n_m : ℝ) := by
+      have h := Hx1
+      rw [h_x''_form, h_bp_mag_eq] at h
+      exact (mul_le_mul_iff_of_pos_right h_bp_f2_pos).mp h
+    -- Upper: (n_m : ℝ) < bpow(k) + 1/2 from h_upper.
+    have h_n_m_real_lt : (n_m : ℝ) < bpow beta k + 1/2 := by
+      have h := h_upper
+      rw [h_x''_form, h_bp_mag_eq] at h
+      have h_arith : (n_m : ℝ) * bpow beta (fexp2 (mag beta x))
+          < (bpow beta k + 1/2) * bpow beta (fexp2 (mag beta x)) := by
+        have : (bpow beta k + 1/2) * bpow beta (fexp2 (mag beta x))
+            = bpow beta k * bpow beta (fexp2 (mag beta x))
+              + 1/2 * bpow beta (fexp2 (mag beta x)) := by ring
+        linarith
+      exact (mul_lt_mul_iff_of_pos_right h_bp_f2_pos).mp h_arith
+    -- Integer arithmetic: n_m = β^k.toNat.
+    have h_n_m_eq : n_m = (beta.val ^ k.toNat : ℤ) := by
+      have h_lower_int : (beta.val ^ k.toNat : ℤ) ≤ n_m := by
+        have h := h_lower
+        rw [← h_pow_eq] at h
+        exact_mod_cast h
+      have h_upper_int : n_m ≤ (beta.val ^ k.toNat : ℤ) := by
+        by_contra h_gt
+        push_neg at h_gt
+        have h_real : ((beta.val ^ k.toNat : ℤ) : ℝ) + 1 ≤ (n_m : ℝ) := by
+          exact_mod_cast h_gt
+        rw [h_pow_eq] at h_real
+        linarith
+      omega
+    -- Combine: x'' = bpow(mag x).
+    have h_x''_eq : round beta fexp2 (Znearest choice2) x = bpow beta (mag beta x) := by
+      rw [h_x''_form, h_bp_mag_eq]
+      have h_real : (n_m : ℝ) = bpow beta k := by
+        rw [← h_pow_eq]; exact_mod_cast h_n_m_eq
+      rw [h_real]
+    -- Step 2: bpow(mag x) ∈ F1 via fexp1(mag x + 1) ≤ mag x.
+    have h_fexp1_succ : fexp1 (mag beta x + 1) ≤ mag beta x := by
+      rcases lt_or_eq_of_le Hf1 with h_lt | h_eq
+      · exact (Vfexp1 (mag beta x)).1 h_lt
+      · have h_le : mag beta x ≤ fexp1 (mag beta x) := h_eq.ge
+        have hsta := (Vfexp1 (mag beta x)).2 h_le
+        have h1 : fexp1 (fexp1 (mag beta x) + 1) ≤ fexp1 (mag beta x) := hsta.1
+        rw [h_eq] at h1
+        exact h1
+    have h_bpow_F1 : generic_format beta fexp1 (bpow beta (mag beta x)) :=
+      generic_format_bpow beta fexp1 (mag beta x) h_fexp1_succ
+    -- Step 3: substitute x'' = bpow(mag x) on LHS; both sides reduce to bpow(mag x).
+    rw [h_x''_eq]
+    rw [round_generic beta fexp1 _ h_bpow_F1]
+    -- Goal: bpow(mag x) = round beta fexp1 (Znearest choice1) x
+    -- Use Znearest_imp with n = β^(mag x - fexp1(mag x)).
+    have h_k1_nn : 0 ≤ mag beta x - fexp1 (mag beta x) := by linarith
+    set k1 := mag beta x - fexp1 (mag beta x) with hk1_def
+    have h_pow_k1 : ((beta.val ^ k1.toNat : ℤ) : ℝ) = bpow beta k1 :=
+      IZR_Zpower beta h_k1_nn
+    have h_bp_mag_eq_1 : bpow beta (mag beta x)
+        = bpow beta k1 * bpow beta (fexp1 (mag beta x)) := by
+      rw [← bpow_plus]
+      have h : k1 + fexp1 (mag beta x) = mag beta x := by rw [hk1_def]; ring
+      rw [h]
+    have h_zn1 : Znearest choice1 (scaled_mantissa beta fexp1 x)
+        = (beta.val ^ k1.toNat : ℤ) := by
+      apply Znearest_imp
+      have h_cexp : cexp beta fexp1 x = fexp1 (mag beta x) := rfl
+      show |x * bpow beta (-cexp beta fexp1 x) - ((beta.val ^ k1.toNat : ℤ) : ℝ)| < 1/2
+      rw [h_cexp, h_pow_k1]
+      have h_bp_k1_form : bpow beta k1
+          = bpow beta (mag beta x) * bpow beta (-fexp1 (mag beta x)) := by
+        rw [← bpow_plus]
+        have : mag beta x + -fexp1 (mag beta x) = k1 := by rw [hk1_def]; ring
+        rw [this]
+      rw [h_bp_k1_form]
+      have h_eq_split : x * bpow beta (-fexp1 (mag beta x))
+          - bpow beta (mag beta x) * bpow beta (-fexp1 (mag beta x))
+          = (x - bpow beta (mag beta x)) * bpow beta (-fexp1 (mag beta x)) := by ring
+      rw [h_eq_split, abs_mul, abs_of_pos h_bp_neg_f1_pos]
+      have h_abs_x : |x - bpow beta (mag beta x)| = bpow beta (mag beta x) - x := by
+        rw [show x - bpow beta (mag beta x) = -(bpow beta (mag beta x) - x) from by ring,
+            abs_neg, abs_of_nonneg (by linarith)]
+      rw [h_abs_x]
+      have h_diff_le : bpow beta (mag beta x) - x
+          ≤ (1/2) * bpow beta (fexp2 (mag beta x)) := by
+        have h_abs := abs_le.mp h_err2
+        rw [h_x''_eq] at h_abs
+        linarith
+      have h_step : (bpow beta (mag beta x) - x) * bpow beta (-fexp1 (mag beta x))
+          ≤ (1/2) * bpow beta (fexp2 (mag beta x)) * bpow beta (-fexp1 (mag beta x)) :=
+        mul_le_mul_of_nonneg_right h_diff_le (le_of_lt h_bp_neg_f1_pos)
+      have h_combine : (1/2) * bpow beta (fexp2 (mag beta x))
+            * bpow beta (-fexp1 (mag beta x))
+          = (1/2) * bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x)) := by
+        rw [mul_assoc, ← bpow_plus]; rfl
+      have h_bpow_le : bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x))
+          ≤ bpow beta (-1 : ℤ) := bpow_le beta (by linarith)
+      have h_bpow_neg1 : bpow beta (-1 : ℤ) ≤ 1/2 := by
+        show (beta.val : ℝ)^(-1 : ℤ) ≤ 1/2
+        rw [zpow_neg, zpow_one, ← one_div]
+        apply one_div_le_one_div_of_le (by norm_num : (0 : ℝ) < 2)
+        exact_mod_cast beta.prop
+      calc (bpow beta (mag beta x) - x) * bpow beta (-fexp1 (mag beta x))
+          ≤ (1/2) * bpow beta (fexp2 (mag beta x)) * bpow beta (-fexp1 (mag beta x)) := h_step
+        _ = (1/2) * bpow beta (fexp2 (mag beta x) - fexp1 (mag beta x)) := h_combine
+        _ ≤ (1/2) * bpow beta (-1 : ℤ) := by
+            apply mul_le_mul_of_nonneg_left h_bpow_le (by linarith)
+        _ ≤ (1/2) * (1/2) := by
+            apply mul_le_mul_of_nonneg_left h_bpow_neg1 (by linarith)
+        _ < 1/2 := by linarith
+    -- Compute round_N x at fexp1 = bpow(mag x).
+    show bpow beta (mag beta x) = round beta fexp1 (Znearest choice1) x
+    unfold round
+    rw [h_zn1]
+    show bpow beta (mag beta x)
+       = F2R (beta := beta) ⟨(beta.val ^ k1.toNat : ℤ), cexp beta fexp1 x⟩
+    unfold F2R
+    show bpow beta (mag beta x)
+       = ((beta.val ^ k1.toNat : ℤ) : ℝ) * bpow beta (fexp1 (mag beta x))
+    rw [h_pow_k1, ← h_bp_mag_eq_1]
+
+/-- The mirror of `round_round_lt_mid`: dispatches on whether `fexp2(mag x)`
+equals `fexp1(mag x)` (same-place) or is strictly below (further-place). -/
+theorem round_round_gt_mid
+    (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2f1 : fexp2 (mag beta x) ≤ fexp1 (mag beta x))
+    (Hf1 : fexp1 (mag beta x) ≤ mag beta x)
+    (Hx : midp' beta fexp1 x < x)
+    (Hx' : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1
+         → midp' beta fexp1 x + (1/2) * ulp beta fexp2 x < x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  rcases le_or_gt (fexp1 (mag beta x)) (fexp2 (mag beta x)) with Hf2' | Hf2'
+  · -- fexp1(mag x) ≤ fexp2(mag x): combined with Hf2f1, fexp2 = fexp1
+    have Hf2'' : fexp2 (mag beta x) = fexp1 (mag beta x) := le_antisymm Hf2f1 Hf2'
+    exact round_round_gt_mid_same_place beta Vfexp1 choice1 choice2 Px Hf2'' Hx
+  · -- fexp2(mag x) < fexp1(mag x): apply further_place
+    have Hf2'' : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1 := by linarith
+    exact round_round_gt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
+      Hf2'' Hf1 (Hx' Hf2'')
+
 /-! ### Notes for the next session
 
-The `_gt_mid_further_place` lemma (weakening to `fexp1(mag x) ≤ mag x`) and
-the main `_gt_mid` dispatcher remain to be ported. The structure:
+The core mid-rounding theorems are complete: `_lt_mid` and `_gt_mid` families
+with their dispatchers. After this point, the next big arcs of
+`Double_rounding.v` are:
+- multiplication theorems (`Double_round_mult` section),
+- plus/minus theorems (the largest section, ~1760 Coq lines),
+- sqrt theorems,
+- division theorems.
 
-- `_gt_mid_further_place` case-splits on `x'' < bpow(mag x)` or
-  `bpow(mag x) ≤ x''`. The first case calls `_further_place'`. The second
-  forces `x'' = bpow(mag x)` exactly (integer arithmetic on the mantissa),
-  and both rounds give `bpow(mag x)`.
-
-- The cleanest route for the `x'' = bpow(mag x)` subcase is probably:
-  * LHS: `round_N (bpow(mag x))` at `fexp1` reduces to `bpow(mag x)` via
-    `round_generic` since `bpow(mag x) ∈ F1` (use `generic_format_bpow` with
-    `fexp1(mag x + 1) ≤ mag x` — established by Valid_exp case analysis on
-    `fexp1(mag x) < mag x` vs `fexp1(mag x) = mag x`).
-  * RHS: `round_N x` at `fexp1` = `bpow(mag x)` via `round_N_eq_UP_pt` with
-    explicit DN/UP witnesses, after establishing `x > midp` where
-    midp = `(round_DN x + bpow(mag x))/2`.
-
-The Coq route via `Znearest_imp` twice runs into `mag(x'')` substitution
-issues in Lean (when `rw [Hx''pow]` rewrites `x''`, it also rewrites
-`mag x''`), making the proof unnatural. The `set e := fexp1(mag x'')` trick
-can work around this if needed.
-
-- `_gt_mid` is then a one-line dispatcher matching the structure of
-  `_lt_mid` (case on `fexp2 = fexp1` vs `fexp2 < fexp1`).
-
-End of `_gt_mid` family stub. -/
+End of core mid-rounding theorems. -/
 
 end LeanFlocq
