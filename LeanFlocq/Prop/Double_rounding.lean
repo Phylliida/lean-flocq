@@ -1252,16 +1252,25 @@ private theorem bpow_neg_two_le_quarter (beta : radix) :
   rw [h_inv]
   exact one_div_le_one_div_of_le (by norm_num) h_b2_ge_4
 
-/-! ### Roadmap for `round_round_sqrt_aux`
+/-- **The sqrt mid-rounding auxiliary lemma.**
 
-The next theorem to prove is `round_round_sqrt_aux` (Coq `Double_rounding.v:2593`).
-Status: setup mostly worked, but a small "obvious" bound (`bpow(-2) ≤ 1/4`)
-proved to be sticky with Mathlib `zpow`/`inv` lemma names, and the `a > 0`
-case has an integer-arithmetic argument (`Hr'`) that takes ~100 careful
-lines. Detailed notes below.
+`√x` is more than `(1/2)·ulp2(√x)` away from the F1 midpoint, given the
+`round_round_sqrt_hyp` precision condition and a precision gap of at least 1
+between fexp2 and fexp1 at `mag(√x)`.
 
-**Statement:**
-```
+Proof structure (by contradiction):
+- Setup: `a := round_DN(√x)` at fexp1, `u1 := ulp1(√x)`, `u2 := ulp2(√x)`,
+  `b := (u1 - u2)/2`, `b' := (u1 + u2)/2`.
+- Hypothesis gives `a + b ≤ √x ≤ a + b'`. Squaring (both sides ≥ 0):
+  `Hsl : a² + u1·a - u2·a + b² ≤ x` and `Hsr : x ≤ a² + u1·a + u2·a + b'²`.
+- Derive `Hf1 : 2·fexp1(mag √x) ≤ fexp1(mag x)` (from `mag_sqrt_disj` + Hexp.1/2.1)
+  and `Hlx : fexp1(2·mag √x) < 2·mag √x` (from `mag_generic_gt` + `valid_exp_large`).
+- Case `a = 0`: `x ≤ b'² < u1² ≤ bpow(fexp1 mag_x)`. Then `Ztrunc(scaled) = 0`,
+  so `Fx` gives `x = 0` — contradiction.
+- Case `a > 0`: derive `Hl' : 0 < -u2·a + b²` algebraically, and `Hr' : x ≤ a² + u1·a`
+  by an integer-multiple-of-`u1²` argument (both `x` and `a² + u1·a` are integer
+  multiples of `bpow(2·fexp1 mag_s)`, and the gap `u2·a + b'² < u1²`). Combining
+  `Hsl + Hl'` gives `a² + u1·a < x`; with `Hr'` we get a contradiction. -/
 theorem round_round_sqrt_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
     (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
     (Hexp : round_round_sqrt_hyp fexp1 fexp2)
@@ -1269,118 +1278,286 @@ theorem round_round_sqrt_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
     (Hf2 : fexp2 (mag beta (Real.sqrt x)) ≤ fexp1 (mag beta (Real.sqrt x)) - 1)
     (Fx : generic_format beta fexp1 x) :
     (1/2) * ulp beta fexp2 (Real.sqrt x)
-      < |Real.sqrt x - midp beta fexp1 (Real.sqrt x)|
-```
-
-**Proof structure (by contradiction):**
-
-Assume `|√x - midp1| ≤ u2/2`. Let
-- `a = round_DN(√x)` at `fexp1`
-- `u1 = bpow(fexp1(mag(√x)))`, `u2 = bpow(fexp2(mag(√x)))`
-- `b = (u1 - u2)/2`, `b' = (u1 + u2)/2`
-
-Then by `abs_le`: `a + b ≤ √x ≤ a + b'`.
-
-Square both sides (both nonneg since `0 ≤ a` and `0 < b, b'`):
-- `Hsl : a² + u1·a - u2·a + b² ≤ x`
-- `Hsr : x ≤ a² + u1·a + u2·a + b'²`
-
-Also derive:
-- `Hf1 : 2*fexp1(mag(√x)) ≤ fexp1(mag x)` (from `mag_sqrt_disj` + `Hexp`)
-- `Hlx : fexp1(2*mag(√x)) < 2*mag(√x)` (from `mag_generic_gt` on `x`)
-
-Case-split on `a > 0` vs `a = 0`.
-
-**a > 0 case (the harder one):**
-
-Define:
-- `Hl' : 0 < -u2·a + b²` (algebraic, chain through 5 bpow bounds)
-- `Hr' : x ≤ a² + u1·a` (integer arithmetic on mantissas)
-
-Then:
-- From `Hsl`: `a² + u1·a + (-u2·a + b²) ≤ x`
-- From `Hl'`: `0 < -u2·a + b²`, so `a² + u1·a < a² + u1·a + (-u2·a + b²) ≤ x`
-- From `Hr'`: `x ≤ a² + u1·a`
-- Combine: `a² + u1·a < a² + u1·a`. Contradiction via `lt_irrefl`.
-
-**Hl' chain:**
-
-`Hl' ⟺ u2·a < b² ⟺ u2·(a + u1/2) < (u1² + u2²)/4`.
-
-Chain (each line strict-inequal or equality):
-1. `u2 · (a + u1/2) < u2 · bpow(mag(√x))` (from `a + u1/2 < a + u1 ≤ bpow(mag(√x))` via `id_p_ulp_le_bpow`).
-2. `u2 · bpow(mag(√x)) = bpow(fexp2(mag(√x)) + mag(√x))` (from `bpow_plus`).
-3. `bpow(fexp2(mag(√x)) + mag(√x)) ≤ bpow(2·fexp1(mag(√x)) - 2)` (from `Hexp.2.2` applied with `Hlx`).
-4. `bpow(2·fexp1(mag(√x)) - 2) = bpow(-2) · u1²` (split exponent via `bpow_plus`).
-5. `bpow(-2) · u1² ≤ (1/4) · u1²` (since `bpow(-2) = 1/β² ≤ 1/4` for `β ≥ 2`).
-6. `(1/4) · u1² ≤ (1/4) · (u1² + u2²)` (since `0 ≤ u2²`).
-
-The sticky step is **(5)** — Mathlib's `zpow_neg`, `inv_le_inv_of_le`, etc.,
-need careful naming. Try:
-```
-have : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
-have h_sq_ge_4 : (4 : ℝ) ≤ (beta.val : ℝ) * (beta.val : ℝ) := by nlinarith
-rw [zpow_neg, show (2 : ℤ) = ((2 : ℕ) : ℤ) from rfl, zpow_natCast, sq,
-    show ((beta.val : ℝ) * (beta.val : ℝ))⁻¹ = 1 / ((beta.val : ℝ) * (beta.val : ℝ))
-      from inv_eq_one_div _]
-exact one_div_le_one_div_of_le (by norm_num) h_sq_ge_4
-```
-(or refactor with `Real.rpow` if cleaner.)
-
-**Hr' (the integer-arithmetic step, the meaty part):**
-
-In Coq:
-```
-assert (Hr' : x <= a * a + u1 * a).
-{ rewrite Hla in Fa.
-  rewrite <- Rmult_plus_distr_r.
-  unfold u1, ulp, cexp.
-  ...
-  apply IZR_le, Zlt_succ_le, lt_IZR.
-  ... }
-```
-
-The argument: both `x` and `a² + u1·a` are integer multiples of
-`bpow(2·fexp1(mag(√x)))` (call it `B²`). Specifically:
-- `x = mx · bpow(fexp1(mag x))`, and `bpow(fexp1(mag x)) = β^k · B²` where
-  `k = fexp1(mag x) - 2·fexp1(mag(√x)) ≥ 0`. So `x = (mx · β^k) · B²`.
-- `a = ma · u1`, so `a² + u1·a = (ma² + ma) · u1² = (ma² + ma) · B²`.
-
-So `Hr' ⟺ mx · β^k ≤ ma² + ma`. Show this by contradiction: if
-`mx · β^k > ma² + ma`, then `mx · β^k ≥ ma² + ma + 1`, hence
-`x ≥ (ma² + ma + 1) · B² = a² + u1·a + B²`.
-
-But from `Hsr`: `x ≤ a² + u1·a + u2·a + b'²`. So `B² ≤ u2·a + b'²`.
-
-Show `u2·a + b'² < B² = u1²` (the algebraic chain in Coq) to contradict.
-The chain there mirrors the Hl' chain — uses `(a + u1/2) ≤ bpow(mag(√x))`
-and `u2 · bpow(mag(√x)) ≤ bpow(-2) · u1² ≤ (1/2) · u1²` (note: the bound
-here is `≤ 1/2 · u1²`, not `1/4`!).
-
-**a = 0 case:**
-
-When `a = 0`:
-- From `Hsr` with `a = 0`: `x ≤ b'²`.
-- `b' = (u1 + u2)/2 < u1` (since `u2 < u1`), so `b'² < u1² = bpow(2·fexp1(mag(√x)))`.
-- By `Hf1`: `bpow(2·fexp1(mag(√x))) ≤ bpow(fexp1(mag x))`.
-- So `x < bpow(fexp1(mag x))`.
-- From `Fx`: `x = Ztrunc(x · bpow(-fexp1(mag x))) · bpow(fexp1(mag x))`.
-- The scaled mantissa `sm = x · bpow(-fexp1(mag x))` is in `[0, 1)` (since `0 < x` and `x < bpow(fexp1(mag x))`).
-- `Ztrunc(sm) = 0` (truncation of a value in `[0, 1)` is `0`).
-- So `x = 0`. Contradicts `Px : 0 < x`.
-
-This case is ~30 Lean lines, mostly mechanical.
-
-**Estimated effort:**
-- Setup: ~50 lines (mostly done in the rolled-back attempt).
-- `Hl'` chain: ~40 lines (each chain step is short, but step 5 needs care).
-- `Hr'`: ~80–100 lines (the integer-arithmetic part is genuinely involved).
-- `a = 0` case: ~30 lines.
-- Final contradiction: ~5 lines.
-
-Total: ~200–250 Lean lines. The proof is doable but is the biggest single
-proof in this file so far.
-
-End of `round_round_sqrt_aux` roadmap. -/
+      < |Real.sqrt x - midp beta fexp1 (Real.sqrt x)| := by
+  by_contra Hcontra
+  push_neg at Hcontra
+  -- Hcontra : |√x - midp1| ≤ (1/2) * ulp2(√x)
+  obtain ⟨Hex1, Hex21, Hex22⟩ := Hexp
+  -- Setup: s := √x, basic positivity
+  set s := Real.sqrt x with hs_def
+  have Ps : 0 < s := Real.sqrt_pos.mpr Px
+  have Ps_ne : s ≠ 0 := ne_of_gt Ps
+  have Ps_nonneg : 0 ≤ s := le_of_lt Ps
+  have h_s_sq : s * s = x := Real.mul_self_sqrt (le_of_lt Px)
+  -- Set u1, u2 as bpow values
+  set mag_s := mag beta s with hms_def
+  set u1 := bpow beta (fexp1 mag_s) with hu1_def
+  set u2 := bpow beta (fexp2 mag_s) with hu2_def
+  have h_u1_pos : 0 < u1 := bpow_gt_0 _ _
+  have h_u2_pos : 0 < u2 := bpow_gt_0 _ _
+  have h_u2_lt_u1 : u2 < u1 := bpow_lt beta (by linarith [Hf2])
+  -- ulps in terms of u1, u2
+  have h_ulp1_s : ulp beta fexp1 s = u1 := by rw [ulp_neq_0 beta fexp1 Ps_ne]; rfl
+  have h_ulp2_s : ulp beta fexp2 s = u2 := by rw [ulp_neq_0 beta fexp2 Ps_ne]; rfl
+  -- Set a = round_DN(s) at fexp1; basic properties
+  set a := round beta fexp1 (fun y : ℝ => ⌊y⌋) s with ha_def
+  have h_DN : Rnd_DN_pt (generic_format beta fexp1) s a := round_DN_pt beta fexp1 Vfexp1 s
+  have h_a_format : generic_format beta fexp1 a := h_DN.1
+  have h_a_le_s : a ≤ s := h_DN.2.1
+  have h_a_nonneg : 0 ≤ a := by
+    have h_0_F1 : generic_format beta fexp1 0 := generic_format_0 beta fexp1
+    exact h_DN.2.2 0 h_0_F1 Ps_nonneg
+  -- midp = a + u1/2
+  have h_midp : midp beta fexp1 s = a + (1/2) * u1 := by
+    unfold midp
+    rw [h_ulp1_s]
+  -- b, b'
+  set b := (u1 - u2) / 2 with hb_def
+  set b' := (u1 + u2) / 2 with hb'_def
+  have h_b_pos : 0 < b := by show (u1 - u2) / 2 > 0; linarith
+  have h_b'_pos : 0 < b' := by show (u1 + u2) / 2 > 0; linarith
+  -- Extract Hl/Hr from Hcontra via abs_le
+  rw [h_ulp2_s, h_midp] at Hcontra
+  -- Hcontra : |s - (a + (1/2) * u1)| ≤ (1/2) * u2
+  rw [abs_le] at Hcontra
+  obtain ⟨h_Hcl, h_Hcr⟩ := Hcontra
+  have Hl : a + b ≤ s := by show a + (u1 - u2)/2 ≤ s; linarith
+  have Hr : s ≤ a + b' := by show s ≤ a + (u1 + u2)/2; linarith
+  -- Squaring step: Hsl, Hsr
+  have h_ab_nonneg : 0 ≤ a + b := by linarith
+  have h_ab'_nonneg : 0 ≤ a + b' := by linarith
+  have Hsl : a * a + u1 * a - u2 * a + b * b ≤ x := by
+    have h1 : (a + b) * (a + b) ≤ s * s :=
+      mul_self_le_mul_self h_ab_nonneg Hl
+    have h2 : (a + b) * (a + b) = a * a + u1 * a - u2 * a + b * b := by
+      show (a + (u1 - u2)/2) * (a + (u1 - u2)/2)
+        = a * a + u1 * a - u2 * a + (u1 - u2)/2 * ((u1 - u2)/2)
+      ring
+    linarith [h1, h2.symm, h_s_sq]
+  have Hsr : x ≤ a * a + u1 * a + u2 * a + b' * b' := by
+    have h1 : s * s ≤ (a + b') * (a + b') :=
+      mul_self_le_mul_self Ps_nonneg Hr
+    have h2 : (a + b') * (a + b') = a * a + u1 * a + u2 * a + b' * b' := by
+      show (a + (u1 + u2)/2) * (a + (u1 + u2)/2)
+        = a * a + u1 * a + u2 * a + (u1 + u2)/2 * ((u1 + u2)/2)
+      ring
+    linarith [h1, h2, h_s_sq]
+  -- Hf1, Hlx
+  have h_x_ne : x ≠ 0 := ne_of_gt Px
+  have h_mag_lt : fexp1 (mag beta x) < mag beta x :=
+    mag_generic_gt beta fexp1 Vfexp1 h_x_ne Fx
+  have Hf1 : 2 * fexp1 mag_s ≤ fexp1 (mag beta x) := by
+    rcases mag_sqrt_disj beta Px with h | h
+    · rw [h]; exact Hex21 mag_s
+    · rw [h]; exact Hex1 mag_s
+  have Hlx : fexp1 (2 * mag_s) < 2 * mag_s := by
+    rcases mag_sqrt_disj beta Px with h | h
+    · -- mag x = 2*mag_s - 1, so 2*mag_s = mag x + 1
+      have h_mx_le : mag beta x ≤ 2 * mag_s := by linarith
+      exact valid_exp_large Vfexp1 h_mag_lt h_mx_le
+    · -- mag x = 2*mag_s
+      have h_mx_eq : mag beta x = 2 * mag_s := h
+      rw [← h_mx_eq]; exact h_mag_lt
+  -- Hexp.2.2 applied at mag_s with Hlx
+  have h_hexp22 : fexp2 mag_s + mag_s ≤ 2 * fexp1 mag_s - 2 := Hex22 mag_s Hlx
+  -- Case split on a = 0
+  by_cases Za : a = 0
+  · -- a = 0 case
+    -- From Hsr: x ≤ b'²
+    have Hsr_a0 : x ≤ b' * b' := by
+      rw [Za] at Hsr
+      have : a * a + u1 * a + u2 * a + b' * b' = b' * b' := by rw [Za]; ring
+      linarith [Hsr, this]
+    -- b' < u1
+    have h_b'_lt_u1 : b' < u1 := by
+      show (u1 + u2)/2 < u1
+      linarith
+    -- b'² < u1²
+    have h_b'_sq_lt : b' * b' < u1 * u1 :=
+      mul_lt_mul' (le_of_lt h_b'_lt_u1) h_b'_lt_u1 (le_of_lt h_b'_pos) h_u1_pos
+    -- u1*u1 = bpow(2*fexp1 mag_s) ≤ bpow(fexp1 mag_x)
+    have h_u1_sq_eq : u1 * u1 = bpow beta (2 * fexp1 mag_s) := by
+      show bpow beta (fexp1 mag_s) * bpow beta (fexp1 mag_s) = bpow beta (2 * fexp1 mag_s)
+      rw [← bpow_plus]; congr 1; ring
+    have h_x_lt : x < bpow beta (fexp1 (mag beta x)) := by
+      calc x ≤ b' * b' := Hsr_a0
+        _ < u1 * u1 := h_b'_sq_lt
+        _ = bpow beta (2 * fexp1 mag_s) := h_u1_sq_eq
+        _ ≤ bpow beta (fexp1 (mag beta x)) := bpow_le beta Hf1
+    -- Scaled mantissa is in (0, 1), so Ztrunc = 0
+    have h_bpow_pos : 0 < bpow beta (-fexp1 (mag beta x)) := bpow_gt_0 _ _
+    have h_bpow_prod : bpow beta (fexp1 (mag beta x)) * bpow beta (-fexp1 (mag beta x)) = 1 := by
+      rw [← bpow_plus]; simp
+    have h_sm_pos : 0 < x * bpow beta (-fexp1 (mag beta x)) :=
+      mul_pos Px h_bpow_pos
+    have h_sm_lt_1 : x * bpow beta (-fexp1 (mag beta x)) < 1 := by
+      have := (mul_lt_mul_iff_of_pos_right h_bpow_pos).mpr h_x_lt
+      rw [h_bpow_prod] at this
+      exact this
+    have h_ztrunc_0 : Ztrunc (x * bpow beta (-fexp1 (mag beta x))) = 0 := by
+      unfold Ztrunc
+      rw [if_neg (not_lt.mpr (le_of_lt h_sm_pos))]
+      exact Int.floor_eq_zero_iff.mpr ⟨le_of_lt h_sm_pos, h_sm_lt_1⟩
+    -- Derive x = 0
+    have h_x_eq_0 : x = 0 := by
+      have hFx : x = (Ztrunc (x * bpow beta (-fexp1 (mag beta x))) : ℝ)
+          * bpow beta (fexp1 (mag beta x)) := Fx
+      rw [h_ztrunc_0] at hFx
+      simp at hFx
+      exact hFx
+    exact absurd h_x_eq_0 h_x_ne
+  · -- a > 0 case
+    have Pa : 0 < a := lt_of_le_of_ne h_a_nonneg (Ne.symm Za)
+    -- mag a = mag s = mag_s
+    have h_mag_a : mag beta a = mag_s := by
+      show mag beta a = mag beta s
+      have h_round_pos : 0 < round beta fexp1 (fun y : ℝ => ⌊y⌋) s := by rw [← ha_def]; exact Pa
+      exact mag_DN beta fexp1 Vfexp1 h_round_pos
+    -- ulp a = u1
+    have h_ulp_a : ulp beta fexp1 a = u1 := by
+      rw [ulp_neq_0 beta fexp1 (ne_of_gt Pa)]
+      show bpow beta (fexp1 (mag beta a)) = u1
+      rw [h_mag_a]
+    -- a < bpow(mag s) (since 0 < a ≤ s < bpow(mag s))
+    have h_s_lt_bpow_mag_s : s < bpow beta mag_s := by
+      have := bpow_mag_gt beta s
+      rw [abs_of_nonneg Ps_nonneg] at this
+      exact this
+    have h_a_lt_bpow_mag_s : a < bpow beta mag_s :=
+      lt_of_le_of_lt h_a_le_s h_s_lt_bpow_mag_s
+    -- a + u1 ≤ bpow(mag s) (via id_p_ulp_le_bpow on a in F1)
+    have h_a_u1_le : a + u1 ≤ bpow beta mag_s := by
+      rw [← h_ulp_a]
+      exact id_p_ulp_le_bpow beta fexp1 Pa h_a_format h_a_lt_bpow_mag_s
+    -- ===== Hl' chain =====
+    -- u2 · (a + u1/2) ≤ bpow(-2) · u1² (and < u2 · bpow(mag_s))
+    have h_amid_lt_bpow : a + (1/2) * u1 < bpow beta mag_s := by linarith
+    have h_amid_u2 : (a + (1/2) * u1) * u2 < bpow beta mag_s * u2 :=
+      (mul_lt_mul_iff_of_pos_right h_u2_pos).mpr h_amid_lt_bpow
+    have h_bpow_u2_eq : bpow beta mag_s * u2 = bpow beta (fexp2 mag_s + mag_s) := by
+      show bpow beta mag_s * bpow beta (fexp2 mag_s) = bpow beta (fexp2 mag_s + mag_s)
+      rw [← bpow_plus]; congr 1; ring
+    have h_bpow_le : bpow beta (fexp2 mag_s + mag_s) ≤ bpow beta (2 * fexp1 mag_s - 2) :=
+      bpow_le beta h_hexp22
+    have h_u1_sq_eq : u1 * u1 = bpow beta (2 * fexp1 mag_s) := by
+      show bpow beta (fexp1 mag_s) * bpow beta (fexp1 mag_s) = bpow beta (2 * fexp1 mag_s)
+      rw [← bpow_plus]; congr 1; ring
+    have h_bpow_split : bpow beta (2 * fexp1 mag_s - 2) = bpow beta (-2) * (u1 * u1) := by
+      rw [h_u1_sq_eq]
+      show bpow beta (2 * fexp1 mag_s - 2) = bpow beta (-2) * bpow beta (2 * fexp1 mag_s)
+      rw [← bpow_plus]; congr 1; ring
+    have h_u1_sq_nonneg : 0 ≤ u1 * u1 := mul_nonneg (le_of_lt h_u1_pos) (le_of_lt h_u1_pos)
+    have h_bpow_neg_2_le : bpow beta (-2) ≤ 1 / 4 := bpow_neg_two_le_quarter beta
+    have h_bpow_u1_sq_le : bpow beta (-2) * (u1 * u1) ≤ (1/4) * (u1 * u1) :=
+      mul_le_mul_of_nonneg_right h_bpow_neg_2_le h_u1_sq_nonneg
+    -- Combine: u2·(a + u1/2) < (1/4) · u1²
+    have h_amid_u2_lt_quarter : (a + (1/2) * u1) * u2 < (1/4) * (u1 * u1) := by
+      calc (a + (1/2) * u1) * u2
+          < bpow beta mag_s * u2 := h_amid_u2
+        _ = bpow beta (fexp2 mag_s + mag_s) := h_bpow_u2_eq
+        _ ≤ bpow beta (2 * fexp1 mag_s - 2) := h_bpow_le
+        _ = bpow beta (-2) * (u1 * u1) := h_bpow_split
+        _ ≤ (1/4) * (u1 * u1) := h_bpow_u1_sq_le
+    -- Hl' : 0 < -(u2·a) + b²
+    have Hl' : 0 < -(u2 * a) + b * b := by
+      have h_expand : (a + (1/2) * u1) * u2 = u2 * a + u1 * u2 / 2 := by ring
+      have h_combined : u2 * a + u1 * u2 / 2 < (1/4) * (u1 * u1) := by
+        rw [← h_expand]; exact h_amid_u2_lt_quarter
+      have h_u2_sq_nonneg : 0 ≤ u2 * u2 :=
+        mul_nonneg (le_of_lt h_u2_pos) (le_of_lt h_u2_pos)
+      have h_b_sq_eq : b * b = (u1 * u1 - 2 * u1 * u2 + u2 * u2) / 4 := by
+        show (u1 - u2)/2 * ((u1 - u2)/2) = (u1 * u1 - 2 * u1 * u2 + u2 * u2) / 4
+        ring
+      linarith [h_combined, h_u2_sq_nonneg, h_b_sq_eq]
+    -- ===== Hr' chain =====
+    -- Show u2·a + b'² < u1² (the algebraic step for Hr')
+    have h_u2_sq_lt : u2 * u2 < u1 * u1 :=
+      mul_lt_mul' (le_of_lt h_u2_lt_u1) h_u2_lt_u1 (le_of_lt h_u2_pos) h_u1_pos
+    have h_bpow_neg_2_le_half : bpow beta (-2) ≤ 1 / 2 := by
+      have h1 : (1 : ℝ) / 4 ≤ 1 / 2 := by norm_num
+      linarith [h_bpow_neg_2_le, h1]
+    have h_bpow_u1_sq_le_half : bpow beta (-2) * (u1 * u1) ≤ (1/2) * (u1 * u1) :=
+      mul_le_mul_of_nonneg_right h_bpow_neg_2_le_half h_u1_sq_nonneg
+    have h_amid_u2_lt_half : (a + (1/2) * u1) * u2 ≤ (1/2) * (u1 * u1) := by
+      calc (a + (1/2) * u1) * u2
+          ≤ bpow beta mag_s * u2 := le_of_lt h_amid_u2
+        _ = bpow beta (fexp2 mag_s + mag_s) := h_bpow_u2_eq
+        _ ≤ bpow beta (2 * fexp1 mag_s - 2) := h_bpow_le
+        _ = bpow beta (-2) * (u1 * u1) := h_bpow_split
+        _ ≤ (1/2) * (u1 * u1) := h_bpow_u1_sq_le_half
+    have Hr_step : u2 * a + b' * b' < u1 * u1 := by
+      have h_expand : (a + (1/2) * u1) * u2 = u2 * a + u1 * u2 / 2 := by ring
+      have h_combined : u2 * a + u1 * u2 / 2 ≤ (1/2) * (u1 * u1) := by
+        rw [← h_expand]; exact h_amid_u2_lt_half
+      have h_b'_sq_eq : b' * b' = (u1 * u1 + 2 * u1 * u2 + u2 * u2) / 4 := by
+        show (u1 + u2)/2 * ((u1 + u2)/2) = (u1 * u1 + 2 * u1 * u2 + u2 * u2) / 4
+        ring
+      linarith [h_combined, h_u2_sq_lt, h_b'_sq_eq]
+    -- Now derive Hr' via integer-multiple argument
+    -- x and a²+u1·a are both integer multiples of B := bpow(2·fexp1 mag_s) = u1²
+    -- Express x = (mx · β^k) · u1² and a²+u1·a = (ma²+ma) · u1²
+    set fexp_x := fexp1 (mag beta x) with hfx_def
+    have h_k_nonneg : 0 ≤ fexp_x - 2 * fexp1 mag_s := by linarith [Hf1]
+    set k_nat := (fexp_x - 2 * fexp1 mag_s).toNat with hkn_def
+    have h_k_eq : (k_nat : ℤ) = fexp_x - 2 * fexp1 mag_s :=
+      Int.toNat_of_nonneg h_k_nonneg
+    -- bpow(fexp_x) = bpow(2·fexp1 mag_s) · β^k_nat
+    have h_bpow_fexpx_split : bpow beta fexp_x =
+        bpow beta (2 * fexp1 mag_s) * ((beta.val : ℝ) ^ k_nat) := by
+      have h1 : fexp_x = 2 * fexp1 mag_s + (k_nat : ℤ) := by linarith [h_k_eq]
+      rw [h1, bpow_plus]
+      have h2 : bpow beta ((k_nat : ℤ)) = (beta.val : ℝ) ^ k_nat := by
+        unfold bpow; exact zpow_natCast _ _
+      rw [h2]
+    -- x = mx · bpow(fexp_x) from Fx
+    set mx := Ztrunc (x * bpow beta (-fexp_x)) with hmx_def
+    have hFx' : x = (mx : ℝ) * bpow beta fexp_x := Fx
+    -- a = ma · u1 from Fa (using h_mag_a)
+    set ma := Ztrunc (a * bpow beta (-fexp1 mag_s)) with hma_def
+    have h_ma_eq : a = (ma : ℝ) * u1 := by
+      have hFa : a = (Ztrunc (a * bpow beta (-cexp beta fexp1 a)) : ℝ)
+          * bpow beta (cexp beta fexp1 a) := h_a_format
+      unfold cexp at hFa
+      rw [h_mag_a] at hFa
+      exact hFa
+    -- B := u1*u1
+    set B := u1 * u1 with hB_def
+    have h_B_pos : 0 < B := mul_pos h_u1_pos h_u1_pos
+    have h_B_eq : B = bpow beta (2 * fexp1 mag_s) := h_u1_sq_eq
+    -- x = (mx · β^k_nat) · B
+    set kx := mx * ((beta.val : ℤ) ^ k_nat) with hkx_def
+    have h_x_kxB : x = (kx : ℝ) * B := by
+      rw [hFx', h_bpow_fexpx_split, h_B_eq]
+      show (mx : ℝ) * (bpow beta (2 * fexp1 mag_s) * ((beta.val : ℝ) ^ k_nat))
+        = ((mx * ((beta.val : ℤ) ^ k_nat) : ℤ) : ℝ) * bpow beta (2 * fexp1 mag_s)
+      push_cast
+      ring
+    -- a²+u1·a = (ma²+ma) · B
+    set ka := ma * ma + ma with hka_def
+    have h_aapua_eq : a * a + u1 * a = (ka : ℝ) * B := by
+      rw [h_ma_eq, hB_def]
+      show ((ma : ℝ) * u1) * ((ma : ℝ) * u1) + u1 * ((ma : ℝ) * u1) = ((ma * ma + ma : ℤ) : ℝ) * (u1 * u1)
+      push_cast
+      ring
+    -- From Hsr + Hr_step: x < a²+u1·a + u1² = (ka+1) · B
+    have h_x_strict : x < a * a + u1 * a + B := by
+      have := Hsr
+      linarith [Hr_step]
+    have h_x_strict' : (kx : ℝ) * B < ((ka : ℝ) + 1) * B := by
+      have h_eq1 : x = (kx : ℝ) * B := h_x_kxB
+      have h_eq2 : a * a + u1 * a = (ka : ℝ) * B := h_aapua_eq
+      have h_add : ((ka : ℝ) + 1) * B = (ka : ℝ) * B + B := by ring
+      linarith [h_x_strict, h_eq1, h_eq2, h_add]
+    have h_kx_lt : (kx : ℝ) < (ka : ℝ) + 1 :=
+      (mul_lt_mul_iff_of_pos_right h_B_pos).mp h_x_strict'
+    have h_kx_lt_int : kx < ka + 1 := by exact_mod_cast h_kx_lt
+    have h_kx_le_int : kx ≤ ka := Int.lt_add_one_iff.mp h_kx_lt_int
+    have h_kx_le : (kx : ℝ) ≤ (ka : ℝ) := by exact_mod_cast h_kx_le_int
+    have Hr' : x ≤ a * a + u1 * a := by
+      rw [h_x_kxB, h_aapua_eq]
+      exact (mul_le_mul_iff_of_pos_right h_B_pos).mpr h_kx_le
+    -- Combine: a²+u1·a < x (from Hsl + Hl') and x ≤ a²+u1·a (Hr'). Contradiction.
+    have h_chain : a * a + u1 * a < x := by linarith [Hsl, Hl']
+    linarith [h_chain, Hr']
 
 end LeanFlocq
