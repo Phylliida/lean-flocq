@@ -304,4 +304,59 @@ theorem sqrt_error_FLX_N (beta : radix) (prec : ℤ) (Hp1 : 1 < prec)
         mul_lt_mul' h_err h_sum_lt (abs_nonneg _) h_lhs_pos
       linarith [h_product, h_pow_id]
 
+/-! ### Square-root unit-roundoff helpers
+
+These positivity and comparison lemmas about
+`1 - 1 / sqrt(1 + 2·u_ro)` and `sqrt(1 + 2·u_ro) - 1` are used by
+`sqrt_error_N_FLX_ex` and `sqrt_error_N_round_ex_derive`. -/
+
+/-- `1 - 1 / sqrt(1 + 2·u_ro) ≥ 0`. -/
+theorem om1ds1p2u_ro_pos (beta : radix) (prec : ℤ) :
+    0 ≤ 1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec) := by
+  have h_u_ro_nn : 0 ≤ u_ro beta prec := u_ro_pos beta prec
+  have h_arg_pos : 0 < 1 + 2 * u_ro beta prec := by linarith
+  have h_sqrt_pos : 0 < Real.sqrt (1 + 2 * u_ro beta prec) :=
+    Real.sqrt_pos.mpr h_arg_pos
+  have h_sqrt_ge_one : 1 ≤ Real.sqrt (1 + 2 * u_ro beta prec) := by
+    have h_one_eq : (1 : ℝ) = Real.sqrt 1 := Real.sqrt_one.symm
+    calc (1 : ℝ) = Real.sqrt 1 := h_one_eq
+      _ ≤ Real.sqrt (1 + 2 * u_ro beta prec) :=
+          Real.sqrt_le_sqrt (by linarith)
+  have h_inv_le : 1 / Real.sqrt (1 + 2 * u_ro beta prec) ≤ 1 := by
+    rw [div_le_one h_sqrt_pos]; exact h_sqrt_ge_one
+  linarith
+
+/-- `sqrt(1 + 2·u_ro) - 1 ≥ 0`. -/
+theorem s1p2u_rom1_pos (beta : radix) (prec : ℤ) :
+    0 ≤ Real.sqrt (1 + 2 * u_ro beta prec) - 1 := by
+  have h_u_ro_nn : 0 ≤ u_ro beta prec := u_ro_pos beta prec
+  have h_sqrt_ge_one : 1 ≤ Real.sqrt (1 + 2 * u_ro beta prec) := by
+    calc (1 : ℝ) = Real.sqrt 1 := Real.sqrt_one.symm
+      _ ≤ Real.sqrt (1 + 2 * u_ro beta prec) :=
+          Real.sqrt_le_sqrt (by linarith)
+  linarith
+
+/-- `1 - 1 / sqrt(1 + 2·u_ro) ≤ u_ro / (1 + u_ro)`. -/
+theorem om1ds1p2u_ro_le_u_rod1pu_ro (beta : radix) (prec : ℤ) :
+    1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec)
+      ≤ u_ro beta prec / (1 + u_ro beta prec) := by
+  set ε := u_ro beta prec with hε_def
+  have h_u_ro_nn : 0 ≤ ε := u_ro_pos beta prec
+  have h_arg_pos : 0 < 1 + 2 * ε := by linarith
+  have h_sqrt_pos : 0 < Real.sqrt (1 + 2 * ε) := Real.sqrt_pos.mpr h_arg_pos
+  have h_one_plus_pos : 0 < 1 + ε := by linarith
+  -- Key algebraic step: sqrt(1 + 2ε) ≤ 1 + ε  (squaring both sides).
+  have h_sqrt_le : Real.sqrt (1 + 2 * ε) ≤ 1 + ε := by
+    calc Real.sqrt (1 + 2 * ε)
+        ≤ Real.sqrt ((1 + ε)^2) :=
+          Real.sqrt_le_sqrt (by nlinarith [sq_nonneg ε])
+      _ = 1 + ε := Real.sqrt_sq (le_of_lt h_one_plus_pos)
+  -- 1 / sqrt(1 + 2ε) ≥ 1 / (1 + ε)
+  have h_inv_ge : 1 / (1 + ε) ≤ 1 / Real.sqrt (1 + 2 * ε) :=
+    one_div_le_one_div_of_le h_sqrt_pos h_sqrt_le
+  -- 1 - 1/(1+ε) = ε/(1+ε), so 1 - 1/sqrt(...) ≤ 1 - 1/(1+ε) = ε/(1+ε)
+  have h_eq : 1 - 1 / (1 + ε) = ε / (1 + ε) := by
+    field_simp; ring
+  linarith [h_inv_ge, h_eq]
+
 end LeanFlocq
