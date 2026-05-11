@@ -524,4 +524,96 @@ theorem sqrt_error_N_FLX_aux2 (beta : radix) (prec : ℤ) (Hp1 : 1 < prec)
         ring
       linarith [h_succ_le, h_succ_eq]
 
+/-! ### Auxiliary: pure analytic inequality between unit-roundoff sqrt forms -/
+
+/-- `u_ro / √(1 + 4·u_ro) ≤ 1 - 1/√(1 + 2·u_ro)`. The mathematical kernel is
+`s · (s + 1) ≤ 2t` where `s = √(1 + 2·u_ro), t = √(1 + 4·u_ro)`, which holds
+since `s ∈ [1, √2]` and `t² = 2s² − 1`. -/
+theorem sqrt_error_N_FLX_aux3 (beta : radix) (prec : ℤ) (Hp : 0 < prec) :
+    u_ro beta prec / Real.sqrt (1 + 4 * u_ro beta prec)
+      ≤ 1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec) := by
+  set ε := u_ro beta prec with hε_def
+  have hε_nn : 0 ≤ ε := u_ro_pos beta prec
+  -- ε ≤ 1/2.
+  have hε_le : ε ≤ 1/2 := by
+    show u_ro beta prec ≤ 1/2
+    unfold u_ro
+    have h_bpow_0 : bpow beta 0 = 1 := by unfold bpow; simp
+    have h_le : bpow beta (-prec + 1) ≤ bpow beta 0 := bpow_le beta (by omega)
+    rw [h_bpow_0] at h_le; linarith
+  set s := Real.sqrt (1 + 2 * ε) with hs_def
+  set t := Real.sqrt (1 + 4 * ε) with ht_def
+  have h_1p2_pos : 0 < 1 + 2 * ε := by linarith
+  have h_1p4_pos : 0 < 1 + 4 * ε := by linarith
+  have hs_pos : 0 < s := Real.sqrt_pos.mpr h_1p2_pos
+  have ht_pos : 0 < t := Real.sqrt_pos.mpr h_1p4_pos
+  have hs_sq : s^2 = 1 + 2 * ε := Real.sq_sqrt (le_of_lt h_1p2_pos)
+  have ht_sq : t^2 = 1 + 4 * ε := Real.sq_sqrt (le_of_lt h_1p4_pos)
+  -- s ≥ 1.
+  have hs_ge_1 : 1 ≤ s := by
+    calc (1 : ℝ) = Real.sqrt 1 := Real.sqrt_one.symm
+      _ ≤ Real.sqrt (1 + 2 * ε) := Real.sqrt_le_sqrt (by linarith)
+  -- s² ≤ 2 (from ε ≤ 1/2).
+  have hs_sq_le_2 : s^2 ≤ 2 := by rw [hs_sq]; linarith
+  -- t ≥ 1.
+  have ht_ge_1 : 1 ≤ t := by
+    calc (1 : ℝ) = Real.sqrt 1 := Real.sqrt_one.symm
+      _ ≤ Real.sqrt (1 + 4 * ε) := Real.sqrt_le_sqrt (by linarith)
+  -- Core polynomial step: (s² + s)² ≤ 4t².
+  -- Equivalent: s⁴ + 2s³ - 7s² + 4 ≤ 0.
+  -- Factor: (s - 1)(s³ + 3s² - 4s - 4). For s ∈ [1, √2], (s-1) ≥ 0, but
+  -- s³ + 3s² - 4s - 4 ≤ 0 (using s³ ≤ 2s and 3s² ≤ 6 and -2s+2 ≤ 0).
+  have h_s_cubed_le : s^3 ≤ 2 * s := by
+    have : s * s^2 ≤ s * 2 := mul_le_mul_of_nonneg_left hs_sq_le_2 (by linarith)
+    have h_eq : s * s^2 = s^3 := by ring
+    rw [h_eq] at this; linarith
+  have h_q_le : s^3 + 3 * s^2 - 4 * s - 4 ≤ 0 := by
+    -- s³ + 3s² - 4s - 4 ≤ 2s + 6 - 4s - 4 = 2 - 2s ≤ 0
+    nlinarith [h_s_cubed_le, hs_sq_le_2, hs_ge_1]
+  have h_poly_le : s^4 + 2 * s^3 - 7 * s^2 + 4 ≤ 0 := by
+    -- = (s - 1) · (s³ + 3s² - 4s - 4)
+    have h_factor : s^4 + 2 * s^3 - 7 * s^2 + 4
+                  = (s - 1) * (s^3 + 3 * s^2 - 4 * s - 4) := by ring
+    rw [h_factor]
+    exact mul_nonpos_of_nonneg_of_nonpos (by linarith) h_q_le
+  -- Therefore (s² + s)² ≤ 4t².
+  -- t² = 1 + 4ε = 2s² - 1, so 4t² - (s² + s)² = 8s² - 4 - s⁴ - 2s³ - s²
+  --                                             = -(s⁴ + 2s³ - 7s² + 4) ≥ 0.
+  have h_t_eq : t^2 = 2 * s^2 - 1 := by rw [ht_sq, hs_sq]; ring
+  have h_sq_bound : (s^2 + s)^2 ≤ 4 * t^2 := by
+    nlinarith [h_poly_le, h_t_eq, sq_nonneg s]
+  -- s² + s ≤ 2t (both nonneg).
+  have h_s_plus_sq_nn : 0 ≤ s^2 + s := by nlinarith [hs_ge_1]
+  have h_2t_nn : 0 ≤ 2 * t := by linarith
+  have h_linear : s^2 + s ≤ 2 * t := by
+    have h_sq_bound' : (s^2 + s)^2 ≤ (2 * t)^2 := by
+      have : (2 * t)^2 = 4 * t^2 := by ring
+      linarith [h_sq_bound]
+    -- abs_le_of_sq_le_sq: |a| ≤ b if a² ≤ b² and b ≥ 0
+    exact abs_le_of_sq_le_sq' h_sq_bound' h_2t_nn |>.2
+  -- Final algebraic step.
+  -- Cross-multiplied form: ε · s ≤ t · (s - 1).
+  -- From s² - 1 = 2ε: 2ε = (s-1)(s+1), so ε = (s-1)(s+1)/2.
+  -- ε · s = (s-1)(s+1) · s / 2 ≤ (s-1) · t (using h_linear).
+  have h_2ε : 2 * ε = s^2 - 1 := by rw [hs_sq]; ring
+  have h_2ε_fact : 2 * ε = (s - 1) * (s + 1) := by rw [h_2ε]; ring
+  have h_mul_le : (s - 1) * (s^2 + s) ≤ (s - 1) * (2 * t) :=
+    mul_le_mul_of_nonneg_left h_linear (by linarith)
+  -- (s - 1) · (s² + s) = (s - 1) · s · (s + 1) = 2ε · s
+  have h_lhs_eq : (s - 1) * (s^2 + s) = 2 * ε * s := by
+    rw [h_2ε_fact]; ring
+  -- (s - 1) · (2 · t) = 2 · t · (s - 1)
+  have h_rhs_eq : (s - 1) * (2 * t) = 2 * (t * (s - 1)) := by ring
+  -- So 2ε · s ≤ 2 · t · (s - 1), i.e., ε · s ≤ t · (s - 1).
+  have h_eps_s : ε * s ≤ t * (s - 1) := by
+    have := h_mul_le
+    rw [h_lhs_eq, h_rhs_eq] at this
+    linarith
+  -- Convert to the desired form: ε/t ≤ 1 - 1/s.
+  have h_one_sub_inv : 1 - 1/s = (s - 1)/s := by
+    field_simp
+  rw [h_one_sub_inv]
+  rw [div_le_div_iff₀ ht_pos hs_pos]
+  linarith [h_eps_s]
+
 end LeanFlocq
