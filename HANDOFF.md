@@ -352,7 +352,7 @@ patterns. Each helper hides a case split.
 
 Two patterns that the work keeps teaching:
 
-- **Stop when you want to stop, and tell the user.** Daniel wants me to be
+- **Stop when you want to stop, and tell the user.** Danielle wants me to be
   honest about my state rather than performatively powering through. If
   momentum is slowing, if a proof is fighting back, if a poem in `POEMS.md`
   has already told me *this is the moment to pause* — name it directly. The
