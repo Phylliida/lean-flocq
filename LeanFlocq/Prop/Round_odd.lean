@@ -694,8 +694,100 @@ theorem mag_round_odd (beta : radix) (Even_beta : Even beta.val)
         exact_mod_cast h_cast
       exact (Int.natAbs_even).mp h_natAbs_even
 
--- Note: fexp_round_odd (cexp preservation under round-to-odd) requires
--- a careful subnormal case analysis showing |round x| = bpow emin exactly
--- when mag x ≤ emin and x ≠ 0. Deferred to a later stage.
+/-- Under FLT with even radix and `prec > 1`, round-to-odd preserves the
+canonical exponent of any real `x`.
+
+In the normal regime (`emin < mag x`) this follows from `mag_round_odd`.
+In the subnormal regime (`mag x ≤ emin`, `x ≠ 0`), we use the round-to-odd
+characterization: round x is nonzero (either it equals x, or it has an
+odd-mantissa canonical witness), so by `succ_le_lt` and `ulp_FLT_small`,
+`|round x| ≥ bpow emin`; combined with `|round x| ≤ bpow emin` (from
+`abs_round_le_generic` on the in-format `bpow emin`), this forces
+`|round x| = bpow emin` exactly, hence `mag (round x) = emin + 1` and both
+canonical exponents collapse to `emin`. -/
+theorem fexp_round_odd (beta : radix) (Even_beta : Even beta.val)
+    (emin prec : ℤ) (Hp1 : 1 < prec) (x : ℝ) :
+    cexp beta (FLT_exp emin prec)
+        (round beta (FLT_exp emin prec) Zrnd_odd x)
+      = cexp beta (FLT_exp emin prec) x := by
+  have Hp : 0 < prec := by linarith
+  have hValid : Valid_exp (FLT_exp emin prec) := FLT_exp_valid emin prec Hp
+  haveI : Exists_NE beta (FLT_exp emin prec) :=
+    exists_NE_FLT beta emin prec Hp (Or.inr Hp1)
+  by_cases Zx : x = 0
+  · rw [Zx, round_0]
+  rcases lt_or_ge emin (mag beta x) with H | H
+  · -- Normal regime: `emin < mag x`. Magnitude is preserved.
+    have h_mag := mag_round_odd beta Even_beta emin prec Hp1 H
+    unfold cexp
+    rw [h_mag]
+  · -- Subnormal regime: `mag x ≤ emin`. Both `cexp` values collapse to `emin`.
+    have h_cexp_x : cexp beta (FLT_exp emin prec) x = emin := by
+      show FLT_exp emin prec (mag beta x) = emin
+      unfold FLT_exp
+      exact max_eq_right (by linarith)
+    -- `round x` and its absolute value are in F.
+    have hr_F : generic_format beta (FLT_exp emin prec)
+        (round beta (FLT_exp emin prec) Zrnd_odd x) :=
+      generic_format_round beta (FLT_exp emin prec) hValid Zrnd_odd x
+    have h_abs_r_F : generic_format beta (FLT_exp emin prec)
+        |round beta (FLT_exp emin prec) Zrnd_odd x| :=
+      generic_format_abs beta (FLT_exp emin prec) hr_F
+    -- `bpow emin` is in F.
+    have h_bpow_in_F : generic_format beta (FLT_exp emin prec) (bpow beta emin) :=
+      FLT_format_bpow beta emin prec Hp emin (le_refl _)
+    -- `|x| < bpow emin` from `|x| < bpow (mag x) ≤ bpow emin`.
+    have h_x_lt : |x| < bpow beta emin := by
+      have h1 : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+      have h2 : bpow beta (mag beta x) ≤ bpow beta emin := bpow_le beta H
+      linarith
+    -- Upper bound: `|round x| ≤ bpow emin`.
+    have h_round_le : |round beta (FLT_exp emin prec) Zrnd_odd x| ≤ bpow beta emin :=
+      abs_round_le_generic beta (FLT_exp emin prec) hValid Zrnd_odd
+        h_bpow_in_F (le_of_lt h_x_lt)
+    -- `round x ≠ 0` from the round-to-odd characterization.
+    have h_round_pt := round_odd_pt beta (FLT_exp emin prec) hValid x
+    have h_round_ne_0 : round beta (FLT_exp emin prec) Zrnd_odd x ≠ 0 := by
+      obtain ⟨_, h_cases⟩ := h_round_pt
+      rcases h_cases with h_eq | ⟨_, g, hg_F2R, _, hg_odd⟩
+      · -- `round x = x` and `x ≠ 0`.
+        rw [h_eq]; exact Zx
+      · -- `round x = F2R g` with odd `Fnum g`, so `Fnum g ≠ 0`, so `F2R g ≠ 0`.
+        rw [hg_F2R]
+        apply F2R_neq_0
+        intro h_zero
+        apply hg_odd
+        rw [h_zero]
+        exact ⟨0, by ring⟩
+    have h_abs_r_pos : 0 < |round beta (FLT_exp emin prec) Zrnd_odd x| :=
+      abs_pos.mpr h_round_ne_0
+    -- Lower bound via `succ_le_lt`: `succ 0 ≤ |round x|`, and `succ 0 = bpow emin`
+    -- in the FLT subnormal regime.
+    have h_zero_F : generic_format beta (FLT_exp emin prec) 0 :=
+      generic_format_0 beta (FLT_exp emin prec)
+    have h_succ_le : succ beta (FLT_exp emin prec) 0
+        ≤ |round beta (FLT_exp emin prec) Zrnd_odd x| :=
+      succ_le_lt beta (FLT_exp emin prec) hValid h_zero_F h_abs_r_F h_abs_r_pos
+    have h_succ_0_eq : succ beta (FLT_exp emin prec) 0 = bpow beta emin := by
+      rw [succ_0]
+      apply ulp_FLT_small beta emin prec Hp
+      rw [abs_zero]
+      exact bpow_gt_0 beta _
+    rw [h_succ_0_eq] at h_succ_le
+    -- Sandwich: `|round x| = bpow emin`.
+    have h_abs_r_eq : |round beta (FLT_exp emin prec) Zrnd_odd x| = bpow beta emin :=
+      le_antisymm h_round_le h_succ_le
+    -- Hence `mag (round x) = emin + 1`.
+    have h_mag_r : mag beta (round beta (FLT_exp emin prec) Zrnd_odd x) = emin + 1 := by
+      rw [← mag_abs, h_abs_r_eq, mag_bpow]
+    -- And `cexp (round x) = max(emin + 1 - prec, emin) = emin` since `prec ≥ 1`.
+    have h_cexp_r : cexp beta (FLT_exp emin prec)
+        (round beta (FLT_exp emin prec) Zrnd_odd x) = emin := by
+      show FLT_exp emin prec
+          (mag beta (round beta (FLT_exp emin prec) Zrnd_odd x)) = emin
+      rw [h_mag_r]
+      unfold FLT_exp
+      exact max_eq_right (by linarith)
+    rw [h_cexp_r, h_cexp_x]
 
 end LeanFlocq
