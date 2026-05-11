@@ -1179,6 +1179,53 @@ theorem round_N_odd_pos (beta : radix) (Even_beta : Even beta.val)
         round_N_eq_UP_pt beta fexp hValid choice Hd Hu hxm
       rw [h_round_o, h_round_x]
 
+/-- The no-double-rounding theorem (general form, no sign restriction).
+
+Rounding to nearest at target precision after rounding to odd at finer precision
+equals direct rounding to nearest, when the precision gap is at least 2 and
+`β` is even. -/
+theorem round_N_odd (beta : radix) (Even_beta : Even beta.val)
+    (fexp fexpe : ℤ → ℤ) (hValid : Valid_exp fexp) [Exists_NE beta fexp]
+    (hValide : Valid_exp fexpe) [Exists_NE beta fexpe]
+    (fexpe_fexp : ∀ e, fexpe e ≤ fexp e - 2)
+    (choice : ℤ → Bool) (x : ℝ) :
+    round beta fexp (Znearest choice) (round beta fexpe Zrnd_odd x)
+      = round beta fexp (Znearest choice) x := by
+  rcases lt_trichotomy x 0 with hx | hx | hx
+  · -- x < 0: reduce to positive via opp symmetry
+    have h_neg_pos : 0 < -x := by linarith
+    -- round_odd x = -round_odd(-x)
+    have h_ro : round beta fexpe Zrnd_odd x = -round beta fexpe Zrnd_odd (-x) := by
+      have h := round_odd_opp beta fexpe (-x); rwa [neg_neg] at h
+    rw [h_ro, round_N_opp]
+    conv_rhs => rw [show x = -(-x) from (neg_neg x).symm, round_N_opp]
+    congr 1
+    obtain ⟨d, Hd1, Hd2⟩ := canonical_generic_format beta fexp
+      (generic_format_round beta fexp hValid (fun y : ℝ => ⌊y⌋) (-x))
+    obtain ⟨u, Hu1, Hu2⟩ := canonical_generic_format beta fexp
+      (generic_format_round beta fexp hValid (fun y : ℝ => ⌈y⌉) (-x))
+    exact round_N_odd_pos beta Even_beta fexp fexpe hValid hValide
+      fexpe_fexp _
+      (by rw [← Hd1]; exact round_DN_pt beta fexp hValid (-x))
+      Hd2
+      (by rw [← Hu1]; exact round_UP_pt beta fexp hValid (-x))
+      Hu2
+      h_neg_pos
+  · -- x = 0
+    rw [hx, round_0, round_0]
+  · -- x > 0: direct application
+    obtain ⟨d, Hd1, Hd2⟩ := canonical_generic_format beta fexp
+      (generic_format_round beta fexp hValid (fun y : ℝ => ⌊y⌋) x)
+    obtain ⟨u, Hu1, Hu2⟩ := canonical_generic_format beta fexp
+      (generic_format_round beta fexp hValid (fun y : ℝ => ⌈y⌉) x)
+    exact round_N_odd_pos beta Even_beta fexp fexpe hValid hValide
+      fexpe_fexp choice
+      (by rw [← Hd1]; exact round_DN_pt beta fexp hValid x)
+      Hd2
+      (by rw [← Hu1]; exact round_UP_pt beta fexp hValid x)
+      Hu2
+      hx
+
 /-! ### Magnitude and canonical exponent preservation under round-to-odd -/
 
 /-- Under FLT with even radix and `prec > 1`, round-to-odd preserves the
