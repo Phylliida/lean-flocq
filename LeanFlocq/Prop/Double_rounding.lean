@@ -1648,4 +1648,111 @@ theorem round_round_sqrt_FLX (beta : radix) (prec prec' : ℤ)
     · intro ex _; omega
   · exact generic_format_FLX beta prec hprec Fx
 
+/-- **`round_round_sqrt` for FLT format.**
+Requires `emin ≤ 0`, `2*prec + 2 ≤ prec'`, and either
+`emin' ≤ emin - prec - 2` or `2*emin' ≤ emin - 4*prec - 2`. -/
+theorem round_round_sqrt_FLT (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin ≤ 0)
+    (Hemin' : emin' ≤ emin - prec - 2 ∨ 2 * emin' ≤ emin - 4 * prec - 2)
+    (Hprec : 2 * prec + 2 ≤ prec')
+    {x : ℝ} (Fx : FLT_format beta emin prec x) :
+    round_round_eq beta (FLT_exp emin prec) (FLT_exp emin' prec')
+      choice1 choice2 (Real.sqrt x) := by
+  apply round_round_sqrt beta (FLT_exp_valid emin prec hprec)
+    (FLT_exp_valid emin' prec' hprec') choice1 choice2
+  · -- round_round_sqrt_hyp via FLT
+    unfold round_round_sqrt_hyp FLT_exp
+    refine ⟨?_, ?_, ?_⟩
+    · intro ex
+      rcases le_or_gt (ex - prec) emin with h1 | h1
+      · rcases le_or_gt (2 * ex - prec) emin with h2 | h2
+        · rw [max_eq_right h1, max_eq_right h2]; omega
+        · rw [max_eq_right h1, max_eq_left (le_of_lt h2)]; omega
+      · rcases le_or_gt (2 * ex - prec) emin with h2 | h2
+        · rw [max_eq_left (le_of_lt h1), max_eq_right h2]; omega
+        · rw [max_eq_left (le_of_lt h1), max_eq_left (le_of_lt h2)]; omega
+    · intro ex
+      rcases le_or_gt (ex - prec) emin with h1 | h1
+      · rcases le_or_gt (2 * ex - 1 - prec) emin with h2 | h2
+        · rw [max_eq_right h1, max_eq_right h2]; omega
+        · rw [max_eq_right h1, max_eq_left (le_of_lt h2)]; omega
+      · rcases le_or_gt (2 * ex - 1 - prec) emin with h2 | h2
+        · rw [max_eq_left (le_of_lt h1), max_eq_right h2]; omega
+        · rw [max_eq_left (le_of_lt h1), max_eq_left (le_of_lt h2)]; omega
+    · intro ex Hlx
+      -- Extract emin < 2*ex from Hlx (in both branches of the inner max).
+      have h_emin_lt : emin < 2 * ex := by
+        rcases le_or_gt (2 * ex - prec) emin with h | h
+        · rw [max_eq_right h] at Hlx; exact Hlx
+        · linarith
+      -- Now 4 cases on (ex - prec) vs emin and (ex - prec') vs emin'.
+      rcases le_or_gt (ex - prec) emin with h1 | h1
+      · rcases le_or_gt (ex - prec') emin' with h2 | h2
+        · rw [max_eq_right h2, max_eq_right h1]
+          rcases Hemin' with h | h <;> omega
+        · rw [max_eq_left (le_of_lt h2), max_eq_right h1]
+          rcases Hemin' with h | h <;> omega
+      · rcases le_or_gt (ex - prec') emin' with h2 | h2
+        · rw [max_eq_right h2, max_eq_left (le_of_lt h1)]
+          rcases Hemin' with h | h <;> omega
+        · rw [max_eq_left (le_of_lt h2), max_eq_left (le_of_lt h1)]
+          rcases Hemin' with h | h <;> omega
+  · exact generic_format_FLT beta emin prec hprec Fx
+
+/-- **`round_round_sqrt` for FTZ format.**
+Requires `2*(emin' + prec') ≤ emin + prec ≤ 1` and `2*prec + 2 ≤ prec'`. -/
+theorem round_round_sqrt_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin_lo : 2 * (emin' + prec') ≤ emin + prec)
+    (Hemin_hi : emin + prec ≤ 1)
+    (Hprec : 2 * prec + 2 ≤ prec')
+    {x : ℝ} (Fx : FTZ_format beta emin prec x) :
+    round_round_eq beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+      choice1 choice2 (Real.sqrt x) := by
+  apply round_round_sqrt beta (FTZ_exp_valid emin prec hprec)
+    (FTZ_exp_valid emin' prec' hprec') choice1 choice2
+  · -- round_round_sqrt_hyp via FTZ
+    unfold round_round_sqrt_hyp FTZ_exp
+    refine ⟨?_, ?_, ?_⟩
+    · intro ex
+      rcases lt_or_ge (ex - prec) emin with h1 | h1
+      · rcases lt_or_ge (2 * ex - prec) emin with h2 | h2
+        · rw [if_pos h1, if_pos h2]; omega
+        · rw [if_pos h1, if_neg (not_lt.mpr h2)]; omega
+      · rcases lt_or_ge (2 * ex - prec) emin with h2 | h2
+        · rw [if_neg (not_lt.mpr h1), if_pos h2]; omega
+        · rw [if_neg (not_lt.mpr h1), if_neg (not_lt.mpr h2)]; omega
+    · intro ex
+      rcases lt_or_ge (ex - prec) emin with h1 | h1
+      · rcases lt_or_ge (2 * ex - 1 - prec) emin with h2 | h2
+        · rw [if_pos h1, if_pos h2]; omega
+        · rw [if_pos h1, if_neg (not_lt.mpr h2)]; omega
+      · rcases lt_or_ge (2 * ex - 1 - prec) emin with h2 | h2
+        · rw [if_neg (not_lt.mpr h1), if_pos h2]; omega
+        · rw [if_neg (not_lt.mpr h1), if_neg (not_lt.mpr h2)]; omega
+    · intro ex Hlx
+      rcases lt_or_ge (2 * ex - prec) emin with h1 | h1
+      · -- 2*ex - prec < emin: inner max is emin+prec-1, Hlx says emin+prec-1 < 2*ex
+        rw [if_pos h1] at Hlx
+        -- Conclude: FTZ_exp emin' prec' ex + ex ≤ 2 * FTZ_exp emin prec ex - 2
+        rcases lt_or_ge (ex - prec) emin with h2 | h2
+        · rcases lt_or_ge (ex - prec') emin' with h3 | h3
+          · rw [if_pos h3, if_pos h2]; omega
+          · rw [if_neg (not_lt.mpr h3), if_pos h2]; omega
+        · rcases lt_or_ge (ex - prec') emin' with h3 | h3
+          · rw [if_pos h3, if_neg (not_lt.mpr h2)]; omega
+          · rw [if_neg (not_lt.mpr h3), if_neg (not_lt.mpr h2)]; omega
+      · rw [if_neg (not_lt.mpr h1)] at Hlx
+        rcases lt_or_ge (ex - prec) emin with h2 | h2
+        · rcases lt_or_ge (ex - prec') emin' with h3 | h3
+          · rw [if_pos h3, if_pos h2]; omega
+          · rw [if_neg (not_lt.mpr h3), if_pos h2]; omega
+        · rcases lt_or_ge (ex - prec') emin' with h3 | h3
+          · rw [if_pos h3, if_neg (not_lt.mpr h2)]; omega
+          · rw [if_neg (not_lt.mpr h3), if_neg (not_lt.mpr h2)]; omega
+  · exact generic_format_FTZ beta emin prec hprec Fx
+
 end LeanFlocq
