@@ -981,6 +981,64 @@ theorem round_NA_correct {x : ℝ} {m e : ℤ} {l : location}
     (fun m l => cond_incr (round_N (decide (0 ≤ m)) l) m)
     (fun _ _ _ h => inbetween_int_NA h) Hin He
 
+/-! ### Format preservation under truncate -/
+
+/-- The truncated triple, viewed as an F2R, is in the generic format. -/
+theorem generic_format_truncate {m e : ℤ} (l : location) (Hm : 0 ≤ m) :
+    generic_format beta fexp
+      (F2R (beta := beta)
+        ⟨(truncate beta fexp (m, e, l)).1, (truncate beta fexp (m, e, l)).2.1⟩) := by
+  unfold truncate
+  by_cases hk : 0 < fexp (Zdigits beta m + e) - e
+  · -- k > 0: apply truncate_aux.
+    rw [if_pos hk]
+    set k := fexp (Zdigits beta m + e) - e with hk_def
+    show generic_format beta fexp
+          (F2R (beta := beta) ⟨m / (beta.val : ℤ) ^ k.toNat, e + k⟩)
+    apply generic_format_F2R beta fexp
+    intro Hd
+    have h_k_nn : 0 ≤ k := le_of_lt hk
+    -- Bound: k ≤ Zdigits m from Hd : m / β^k ≠ 0.
+    have h_k_le_d : k ≤ Zdigits beta m := by
+      have h_pow_le : (beta.val : ℤ) ^ k.toNat ≤ m := by
+        by_contra h_not
+        push_neg at h_not
+        exact Hd (Int.ediv_eq_zero_of_lt Hm h_not)
+      have h_m_lt_bpow : (m : ℝ) < bpow beta (Zdigits beta m) := by
+        have h_abs : |(m : ℝ)| = (m : ℝ) := abs_of_nonneg (by exact_mod_cast Hm)
+        have := bpow_mag_gt beta (m : ℝ)
+        rw [h_abs] at this; unfold Zdigits; exact this
+      have h_bpow_eq : (((beta.val : ℤ) ^ k.toNat : ℤ) : ℝ) = bpow beta k :=
+        IZR_Zpower beta h_k_nn
+      have h_pow_le_real : (((beta.val : ℤ) ^ k.toNat : ℤ) : ℝ) ≤ (m : ℝ) := by
+        exact_mod_cast h_pow_le
+      rw [h_bpow_eq] at h_pow_le_real
+      have h_k_lt_d : k < Zdigits beta m :=
+        lt_bpow beta (lt_of_le_of_lt h_pow_le_real h_m_lt_bpow)
+      omega
+    -- Compute cexp.
+    show cexp beta fexp (F2R (beta := beta) ⟨m / (beta.val : ℤ) ^ k.toNat, e + k⟩)
+        ≤ e + k
+    unfold cexp
+    rw [mag_F2R_Zdigits _ _ Hd]
+    rw [Zdigits_div_Zpower beta Hm ⟨h_k_nn, h_k_le_d⟩]
+    have h_arith : Zdigits beta m - k + (e + k) = Zdigits beta m + e := by ring
+    rw [h_arith]
+    -- k = fexp(Zdigits m + e) - e, so e + k = fexp(Zdigits m + e).
+    omega
+  · -- k ≤ 0: no truncation. Either m = 0 (use generic_format_0) or m > 0.
+    rw [if_neg hk]
+    show generic_format beta fexp (F2R (beta := beta) ⟨m, e⟩)
+    by_cases hm0 : m = 0
+    · rw [hm0, F2R_0]; exact generic_format_0 _ _
+    apply generic_format_F2R beta fexp
+    intro _
+    show cexp beta fexp (F2R (beta := beta) ⟨m, e⟩) ≤ e
+    unfold cexp
+    rw [mag_F2R_Zdigits _ _ hm0]
+    -- k ≤ 0 means fexp(Zdigits m + e) ≤ e.
+    push_neg at hk; linarith
+
 /-! ### Truncate-then-round per-mode aliases (Zdigits form) -/
 
 /-- Round-down via truncate. -/
