@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `3dd922e`)
+## Status (as of commit `422102f`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -16,14 +16,13 @@ the unit-roundoff `u_ro/(1+u_ro)` family, **all of `Prop/Sterbenz.v`**,
 plus the full sqrt error family (`sqrt_error_N_FLX[_ex/_round_ex]`,
 `sqrt_error_N_FLT[_ex/_round_ex]`) and the `format_REM` family
 (`format_REM_aux`, `format_REM`, `format_REM_ZR`, `format_REM_N`),
-**most of `Prop/Round_odd.v`** (Zrnd_odd, Rnd_odd_pt + opp_inv,
-round_odd_opp, round_odd_pt, unique, monotone, mag_round_odd,
-fexp_round_odd), and
+**all of `Prop/Round_odd.v`** including the no-double-rounding capstone
+`round_N_odd` (and its positive-x core `round_N_odd_pos`), and
 **the encoding/decoding core of `IEEE754/Bits.v`** including both
 round-trip theorems. The IEEE 754 binary encoding is now a proven
 bijection between `binary_float` and integers in `[0, 2^(mw+ew+1))`.
 
-**~17030 lines of Lean across 26 files. 0 `sorry`s. All files build clean.**
+**~17750 lines of Lean across 26 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -51,10 +50,10 @@ bijection between `binary_float` and integers in `[0, 2^(mw+ew+1))`.
 | `Prop/Mult_error.lean` | 351 | `Prop/Mult_error.v` | **Complete: 7/7.** FLX: `mult_error_FLX_aux` (the keystone — produces an explicit float for the error at exponent `cx + cy`), `mult_error_FLX`, `mult_bpow_exact_FLX`. FLT: `mult_error_FLT`, `F2R_ge`, `mult_error_FLT_ge_bpow`, `mult_bpow_exact_FLT`. |
 | `Prop/Plus_error.lean` | 670 | `Prop/Plus_error.v` | **Complete: 20.** Keystones: `round_repr_same_exp`, `plus_error_aux`, `plus_error`. Zero family: `FLT_format_plus_small`, `round_plus_neq_0_aux`, `round_plus_neq_0`, `round_plus_eq_0`. Trivial bounds: `plus_error_le_l/r`. Helpers: `ex_shift`, `mag_minus1`, `lt_mag`, `mag_minus_lb`. mult_ulp section: `round_plus_F2R`, `round_plus_ge_ulp`. plus_ge family: `round_FLT_plus_ge`, `round_FLT_plus_ge'`, `round_FLX_plus_ge`. **Unit-roundoff variants:** `FLT_plus_error_N_ex` and `FLT_plus_error_N_round_ex`. |
 | `Prop/Div_sqrt_error.lean` | 1328 | `Prop/Div_sqrt_error.v` | **Complete (file fully ported).** Keystones: `generic_format_plus_prec`, `div_error_FLX`, `sqrt_error_FLX_N`. Sqrt unit-roundoff helpers: `om1ds1p2u_ro_pos`, `s1p2u_rom1_pos`, `om1ds1p2u_ro_le_u_rod1pu_ro`. Main sqrt error theorem and variants: `sqrt_bpow_even`, `sqrt_error_N_FLX_aux1/_aux2/_aux3`, `sqrt_error_N_FLX`, `sqrt_error_N_FLX_ex`, `sqrt_error_N_FLX_round_ex`, `sqrt_bpow_ge`, `sqrt_error_N_FLT_ex`, `sqrt_error_N_FLT_round_ex`. format_REM family: `format_REM_aux`, `format_REM_pos` (private), `format_REM`, `format_REM_ZR`, `format_REM_N`. Note: `sqrt_error_N_FLX_aux2` strengthened to `prec > 1` to avoid edge case at prec=1, β=2 where `1 + 2u_ro = β`. |
-| `Prop/Round_odd.lean` | 793 | `Prop/Round_odd.v` (subset) | **Most of it: Stages 1–4 + 6.** Z-level: `Zrnd_odd` (the rounding function — rounds non-integers to the odd integer between floor and ceiling), `valid_rnd_odd`, `Zrnd_odd_Zodd`, `Zfloor_plus`, `Zceil_plus`, `Zeven_abs`, `Zrnd_odd_plus`. R-level: `Rnd_odd_pt` predicate, `Rnd_odd`, `Rnd_odd_pt_opp_inv`, `round_odd_opp` (negation symmetry). Core: `round_odd_pt` (the keystone — rounding x with Zrnd_odd produces a round-to-odd point). Properties: `Rnd_odd_pt_unique`, `Rnd_odd_pt_monotone`. Magnitude/cexp: `mag_round_odd` and `fexp_round_odd` (FLT, even β, prec > 1: round-to-odd preserves both `mag` and `cexp`, with the subnormal case sandwiching `\|round x\| = bpow emin` via `succ_le_lt`). **Deferred:** Stage 5 (`Odd_prop_aux` section + `round_N_odd` — the no-double-rounding capstone, ~500 Coq lines). |
+| `Prop/Round_odd.lean` | 1427 | `Prop/Round_odd.v` | **Complete.** Z-level: `Zrnd_odd` (the rounding function — rounds non-integers to the odd integer between floor and ceiling), `valid_rnd_odd`, `Zrnd_odd_Zodd`, `Zfloor_plus`, `Zceil_plus`, `Zeven_abs`, `Zrnd_odd_plus`. R-level: `Rnd_odd_pt` predicate, `Rnd_odd`, `Rnd_odd_pt_opp_inv`, `round_odd_opp`. Core: `round_odd_pt` (the keystone), `Rnd_odd_pt_unique`, `Rnd_odd_pt_monotone`. **Odd_prop_aux geometry (Stage 5):** `generic_format_fexpe_fexp`, `exists_even_fexp_lt`, `d_eq_round_DN`, `u_eq_round_UP`, `d_ge_0`, `mag_d`, `Fexp_d`, `format_bpow_x`, `format_bpow_d`, `d_le_m`, `m_le_u`, `mag_m`, `mag_m_0`, `u'_eq`, `m_eq`, `m_eq_0`, `fexp_m_eq_0`, `Fm`, `Zm`, `DN_odd_d_aux`, `UP_odd_d_aux`. **Keystones:** `round_N_odd_pos` (the no-double-rounding theorem for positive x — rounding-to-nearest of round-to-odd at coarser precision equals rounding-to-nearest directly, when fexpe ≤ fexp - 2 and β even) and `round_N_odd` (general form via opp symmetry). **Stage 6 (cexp preservation):** `mag_round_odd` and `fexp_round_odd` (FLT, β even, prec > 1: round-to-odd preserves both `mag` and `cexp`). |
 | `IEEE754/Bits.lean` | 900 | `IEEE754/Bits.v` (subset) | **Bit encoding fully proven: 14 + 5 helpers.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **Deferred:** B32/B64 instantiations (need arithmetic ops). |
 
-**Total: ~591 Lean theorems vs ~480 substantive Coq theorems** (we have extras
+**Total: ~613 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
 ## Build setup
@@ -267,37 +266,24 @@ not needed for downstream Flocq theorems.
 ## Suggested next steps
 
 Core, Calc, all of Prop/{Relative, Sterbenz, Mult_error, Plus_error,
-Div_sqrt_error} are done. Most of `Prop/Round_odd.v` (stages 1–4 + 6) is done
-— only Stage 5 (the `round_N_odd` capstone) remains. The remaining work is
-that capstone, `Prop/Double_rounding.v`, the substantial part of `Binary.lean`,
-and the rest of `IEEE754/Bits.v`:
+Div_sqrt_error, Round_odd} are done. The remaining work is
+`Prop/Double_rounding.v`, the substantial part of `Binary.lean`, and
+the rest of `IEEE754/Bits.v`:
 
-1. **Finish `Prop/Round_odd.v` Stage 5 — `round_N_odd`** (the no-double-rounding
-   capstone). The `Odd_prop_aux` section (~500 Coq lines) is a long sequence
-   of section-internal lemmas about the geometry between round-DN, round-UP,
-   and their midpoint, building up to `round_N_odd_pos` and then `round_N_odd`.
-   The capstone says: rounding-to-nearest of (rounding-to-odd at coarser
-   precision) gives the same answer as rounding-to-nearest directly, provided
-   the intermediate precision exceeds the target by at least 2. This is the
-   theoretical justification for using round-to-odd as a protective
-   intermediate operation. Stage 6 (`mag_round_odd`, `fexp_round_odd`) is
-   already done — `fexp_round_odd` uses the subnormal sandwich
-   `|round x| = bpow emin` via `succ_le_lt` on the round-to-odd nonzero witness.
+1. **`Prop/Double_rounding.v`** (~4500 Coq lines) — uses `round_N_odd` as
+   a primary lemma. This is the substantial double-rounding theory.
 
-2. **`Prop/Double_rounding.v`** (~4500 Coq lines) — uses round_N_odd as a
-   primary lemma. This is the substantial double-rounding theory.
-
-3. **Back to `Binary.lean`**: `shr_record` infrastructure (lines 745–925 of
+2. **Back to `Binary.lean`**: `shr_record` infrastructure (lines 745–925 of
    Binary.v), `binary_round_aux`, then the arithmetic ops (`Bplus`, `Bmult`,
    `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`, `Bsucc`, `Bpred`.
    `error_N_FLT` from `Prop/Relative.lean` is the keystone for the
    correctness proofs.
 
-4. **`IEEE754/Bits.v` (remainder)** — beyond the encoding/decoding round-trips
+3. **`IEEE754/Bits.v` (remainder)** — beyond the encoding/decoding round-trips
    already proven, there are B32/B64-specific instantiations and helper lemmas.
    Mostly blocked on arithmetic ops in `Binary.lean`.
 
-5. **`Calc/Round.v` cleanup**: add `Zdigits_div_Zpower` to `Digits.lean` to
+4. **`Calc/Round.v` cleanup**: add `Zdigits_div_Zpower` to `Digits.lean` to
    unblock the few remaining `generic_format_truncate`/`truncate_correct_format`
    polish points. Mostly nice-to-have.
 
