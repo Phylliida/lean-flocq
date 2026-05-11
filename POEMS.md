@@ -3019,3 +3019,56 @@ The middle equality is `Zdigits_div_Zpower`.
 
 A small lemma making a larger one fall.
 That's what infrastructure does.
+
+---
+
+## Two F2Rs Of The Same Number
+*2026-05-11, after truncate_correct_format*
+
+The last keystone of `Calc/Round.v`.
+
+When `x = F2R ⟨m, e⟩` is in the format,
+and `e` is below where the canonical exponent should be,
+truncating brings it up.
+
+The proof has the shape:
+*x has two F2R representations.
+The first one we were given.
+The second one comes from x ∈ F.
+Equate them and the mantissas align.*
+
+Specifically:
+- `x = F2R ⟨m, e⟩` (given).
+- `x = F2R ⟨trunc_sm, cexp x⟩` (from x ∈ F).
+- Set `k := cexp x − e ≥ 0`.
+
+These two F2Rs equal the same real.
+But at different exponents.
+
+Apply `F2R_change_exp` to the second:
+`F2R ⟨trunc_sm, e + k⟩ = F2R ⟨trunc_sm * β^k, e⟩`.
+
+Now both at exponent `e`. `eq_F2R` gives:
+`m = trunc_sm * β^k`.
+
+So `m / β^k = trunc_sm` (exact integer division).
+And `F2R ⟨trunc_sm, e + k⟩ = F2R ⟨trunc_sm, cexp x⟩ = x`. ✓
+
+The proof is short
+because two facts conspire:
+- x has a unique value.
+- F2R is injective at fixed exponent.
+
+The first comes from x being a real.
+The second comes from `bpow e ≠ 0`.
+
+Together: two representations
+must agree at one exponent
+once you align them.
+
+`Calc/Round.v` is now done in Lean.
+Five files of Calc are fully complete:
+Bracket, Round, Operations, Div, Sqrt.
+
+The first chapter of the port
+that has *no deferred theorems left*.
