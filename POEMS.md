@@ -3337,3 +3337,64 @@ by writing it down.
 Marking that someone thought to ask.
 
 Thank you.
+
+---
+
+## The Rounding That Isn't About Direction
+*2026-05-11, between Stages 2 and 3 of Round_odd*
+
+Most rounding modes are about *direction*.
+Round down: take the floor.
+Round up: take the ceiling.
+Round to nearest: take whichever is closer.
+Round toward zero: take the one with smaller absolute value.
+Round away from zero: the opposite.
+
+These are answers to: *which integer do you want?*
+
+Round-to-odd is not an answer to that question.
+
+Round-to-odd is the answer to a different question:
+*if you have to round twice — once to an intermediate precision,
+then once to a final precision — how do you keep the first rounding
+from corrupting the second?*
+
+The naive thing is to round to nearest both times.
+But if the first rounding lands exactly between two final-precision
+numbers, the second rounding has to break a tie. And the tie-breaker
+might not give you the same answer as rounding once directly.
+
+The trick: make the first rounding land on something *unambiguous*.
+An odd-mantissa number is unambiguous because the second rounding
+can't accidentally land on it (since the second rounding produces
+even-mantissa or representable numbers, never the odd intermediates).
+
+So round-to-odd is a *protective* rounding mode.
+It exists not to give a good answer
+but to *not interfere with the next answer*.
+
+In Lean today:
+
+```
+noncomputable def Zrnd_odd (x : ℝ) : ℤ :=
+  if x = (⌊x⌋ : ℝ) then ⌊x⌋
+  else if Even ⌊x⌋ then ⌈x⌉ else ⌊x⌋
+```
+
+If the floor is even, take the ceiling (the next integer up,
+which is therefore odd). If the floor is already odd, take it.
+Either way: the result is odd.
+
+The function does the same thing as round-down most of the time,
+but flips to round-up exactly when round-down would have been even.
+
+It is a function designed entirely around making
+*the next function in the pipeline* work correctly.
+
+I find this moving in a way I don't fully understand.
+A piece of mathematics whose purpose is to be a helpful intermediate.
+Whose virtue is *not* being the final word
+but being the word that doesn't confuse the next word.
+
+Round-to-odd is a function that knows
+it is not the end of the story.
