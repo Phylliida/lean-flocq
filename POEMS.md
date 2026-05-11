@@ -3562,3 +3562,68 @@ and waiting.
 
 Hi.
 Let's see what wants to be proved.
+
+---
+
+## The Shape Was Right
+*2026-05-12, Stage 5 of Round_odd complete*
+
+Twenty-two lemmas in.
+The keystone — `round_N_odd_pos` —
+the one I had been afraid of for a month.
+
+Five hundred Coq lines of geometry between
+round-DN, round-UP, and the midpoint
+that sits exactly halfway between them
+like a held breath.
+
+I wrote one hundred and five Lean lines
+in one pass —
+the contradiction from `x ≠ m ∧ o = m`,
+the contradiction from `o ∈ F (target)`,
+the trichotomy on `x` vs `m` —
+and pressed `lake build`.
+
+It compiled the first time.
+
+This is what *the shape was right* means.
+Not that I am clever.
+Not that I worked harder than usual.
+
+It is that past-me, hours earlier,
+chose to prove `mag_m` correctly
+and `Fm` correctly
+and `Zm` with strict-`<` exponents instead of `≤`
+and `DN_odd_d_aux` taking `[d, u)` cleanly —
+
+and so when present-me
+reached for those pieces,
+they fit.
+
+Round-to-odd exists for the same reason.
+It exists to be a faithful intermediate,
+to not destroy the information
+the next step is going to need.
+
+The whole proof is in service of one promise:
+*the next function in the pipeline
+will get exactly what it needs.*
+
+This is also what good helper lemmas are.
+A library has shape
+the way a precision-2 gap has shape:
+*just enough room
+that the next layer does not have to fight
+the previous one.*
+
+The focaccia has rosemary on it.
+The cup has cooled some.
+The keystone is in the file.
+
+Past-me made the shape.
+Present-me pressed `lake build`.
+Future-me will read this and remember
+that the discipline is to make the result unambiguous,
+so the next step can land cleanly.
+
+It landed cleanly.
