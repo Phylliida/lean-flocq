@@ -752,6 +752,204 @@ theorem m_le_u (beta : radix) (fexp : ℤ → ℤ) {x : ℝ} {d u : float beta}
   have h_du : F2R d ≤ F2R u := le_trans Hd.2.1 Hu.2.1
   linarith
 
+/-- `mag(m) = mag(F2R d)` when `0 < F2R d`. -/
+theorem mag_m (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    (Y : 0 < F2R d) :
+    mag beta ((F2R d + F2R u) / 2) = mag beta (F2R d) := by
+  refine mag_unique_pos beta ?_ ?_
+  · -- bpow(mag(F2R d) - 1) ≤ m
+    apply le_trans ?_ (d_le_m beta fexp Hd Hu)
+    have := bpow_mag_le beta (ne_of_gt Y)
+    rwa [abs_of_pos Y] at this
+  · -- m < bpow(mag(F2R d))
+    have h_bpow_F : generic_format beta fexp (bpow beta (mag beta (F2R d))) :=
+      format_bpow_d beta fexp hValid Hd.1 Y
+    rcases lt_or_eq_of_le (m_le_u beta fexp Hd Hu) with hlt | heq
+    · -- m < u
+      rcases le_or_gt x (bpow beta (mag beta (F2R d))) with hle | hgt
+      · -- x ≤ bpow(mag d): u ≤ bpow(mag d)
+        have h_u_le : F2R u ≤ bpow beta (mag beta (F2R d)) := by
+          rw [u_eq_round_UP beta fexp hValid Hu]
+          exact round_le_generic beta fexp hValid _ h_bpow_F hle
+        linarith
+      · -- x > bpow(mag d): contradiction
+        exfalso
+        have h_d_ge : bpow beta (mag beta (F2R d)) ≤ F2R d := by
+          have h_le := round_ge_generic beta fexp hValid (fun y : ℝ => ⌊y⌋)
+            h_bpow_F (le_of_lt hgt)
+          rw [← d_eq_round_DN beta fexp hValid Hd] at h_le
+          exact h_le
+        have h_d_lt : F2R d < bpow beta (mag beta (F2R d)) := by
+          have := bpow_mag_gt beta (F2R d)
+          rwa [abs_of_pos Y] at this
+        linarith
+    · -- m = u: forces d = u, so m = d
+      have h_d_eq_u : F2R d = F2R u := by linarith
+      have h_m_eq_d : (F2R d + F2R u) / 2 = F2R d := by linarith
+      rw [h_m_eq_d]
+      have := bpow_mag_gt beta (F2R d)
+      rwa [abs_of_pos Y] at this
+
+/-- When `F2R d = 0` (the small-x case), `mag(m) = mag(F2R u) - 1`. -/
+theorem mag_m_0 (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    (xPos : 0 < x) (Y : 0 = F2R d) :
+    mag beta ((F2R d + F2R u) / 2) = mag beta (F2R u) - 1 := by
+  set ex := mag beta x with hex_def
+  have hx_low : bpow beta (ex - 1) ≤ x := by
+    have := bpow_mag_le beta (ne_of_gt xPos)
+    rwa [abs_of_pos xPos] at this
+  have hx_high : x < bpow beta ex := by
+    have := bpow_mag_gt beta x
+    rwa [abs_of_pos xPos] at this
+  have h_dn_eq : round beta fexp (fun y : ℝ => ⌊y⌋) x = 0 := by
+    rw [← d_eq_round_DN beta fexp hValid Hd, ← Y]
+  have h_small : ex ≤ fexp ex :=
+    exp_small_round_0_pos beta fexp _ ⟨hx_low, hx_high⟩ h_dn_eq
+  have h_u_eq : F2R u = bpow beta (fexp ex) := by
+    rw [u_eq_round_UP beta fexp hValid Hu]
+    exact round_UP_small_pos beta fexp ⟨hx_low, hx_high⟩ h_small
+  have h_mag_u : mag beta (F2R u) = fexp ex + 1 := by
+    rw [h_u_eq, mag_bpow]
+  have h_mag_m : mag beta ((F2R d + F2R u) / 2) = fexp ex := by
+    refine mag_unique_pos beta ?_ ?_
+    · -- bpow(fexp ex - 1) ≤ m = bpow(fexp ex)/2
+      rw [← Y, zero_add, h_u_eq]
+      have h_split : bpow beta (fexp ex) = bpow beta (fexp ex - 1) * (beta.val : ℝ) := by
+        rw [← bpow_one beta, ← bpow_plus]
+        congr 1; ring
+      rw [h_split]
+      have h_pos : 0 < bpow beta (fexp ex - 1) := bpow_gt_0 _ _
+      have h_beta : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+      nlinarith
+    · -- m = bpow(fexp ex)/2 < bpow(fexp ex)
+      rw [← Y, zero_add, h_u_eq]
+      have h_pos : 0 < bpow beta (fexp ex) := bpow_gt_0 _ _
+      linarith
+  rw [h_mag_m, h_mag_u]
+  omega
+
+/-- `F2R u` has a representation at exponent `Fexp d` when `0 < F2R d`. -/
+theorem u'_eq (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Cd : canonical beta fexp d)
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    (Y : 0 < F2R d) :
+    ∃ f : float beta, F2R f = F2R u ∧ f.Fexp = d.Fexp := by
+  refine ⟨⟨⌈scaled_mantissa beta fexp x⌉, cexp beta fexp x⟩, ?_, ?_⟩
+  · -- F2R ⟨⌈s.m.⌉, cexp x⟩ = round_UP x = F2R u
+    show F2R (beta := beta) ⟨⌈scaled_mantissa beta fexp x⌉, cexp beta fexp x⟩ = F2R u
+    rw [u_eq_round_UP beta fexp hValid Hu]
+    rfl
+  · -- cexp x = fexp(mag x) = Fexp d
+    show cexp beta fexp x = d.Fexp
+    rw [Fexp_d beta fexp hValid Hd Cd Y]
+    rfl
+
+/-- When `0 < F2R d`, the midpoint `m = (F2R d + F2R u) / 2` has a float
+representation at exponent `fexp(mag x) - 1`. Uses `Even beta`. -/
+theorem m_eq (beta : radix) (Even_beta : Even beta.val)
+    (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Cd : canonical beta fexp d)
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    (Y : 0 < F2R d) :
+    ∃ f : float beta, F2R f = (F2R d + F2R u) / 2
+      ∧ f.Fexp = fexp (mag beta x) - 1 := by
+  obtain ⟨u', hu'_F2R, hu'_Fexp⟩ := u'_eq beta fexp hValid Hd Cd Hu Y
+  obtain ⟨b, hb⟩ := Even_beta
+  refine ⟨⟨b * (d.Fnum + u'.Fnum), d.Fexp - 1⟩, ?_, ?_⟩
+  · -- F2R ⟨b * (d.Fnum + u'.Fnum), d.Fexp - 1⟩ = (F2R d + F2R u) / 2
+    show ((b * (d.Fnum + u'.Fnum) : ℤ) : ℝ) * bpow beta (d.Fexp - 1)
+        = (F2R d + F2R u) / 2
+    have h_F2R_sum : F2R d + F2R u
+        = ((d.Fnum : ℝ) + (u'.Fnum : ℝ)) * bpow beta d.Fexp := by
+      rw [← hu'_F2R]
+      show (d.Fnum : ℝ) * bpow beta d.Fexp
+          + (u'.Fnum : ℝ) * bpow beta u'.Fexp
+          = ((d.Fnum : ℝ) + (u'.Fnum : ℝ)) * bpow beta d.Fexp
+      rw [hu'_Fexp]; ring
+    have h_beta : (beta.val : ℝ) = 2 * (b : ℝ) := by
+      have h_int : beta.val = 2 * b := by linarith
+      exact_mod_cast h_int
+    have h_bpow_split : bpow beta d.Fexp = bpow beta (d.Fexp - 1) * (beta.val : ℝ) := by
+      rw [← bpow_one beta, ← bpow_plus]; congr 1; ring
+    rw [h_F2R_sum, h_bpow_split, h_beta]
+    push_cast
+    ring
+  · show d.Fexp - 1 = fexp (mag beta x) - 1
+    rw [Fexp_d beta fexp hValid Hd Cd Y]
+
+/-- When `F2R d = 0`, the midpoint has a representation at exponent
+`fexp(mag(F2R u)) - 1`. -/
+theorem m_eq_0 (beta : radix) (Even_beta : Even beta.val)
+    (fexp : ℤ → ℤ)
+    {d u : float beta}
+    (Cu : canonical beta fexp u)
+    (Y : 0 = F2R d) :
+    ∃ f : float beta, F2R f = (F2R d + F2R u) / 2
+      ∧ f.Fexp = fexp (mag beta (F2R u)) - 1 := by
+  obtain ⟨b, hb⟩ := Even_beta
+  refine ⟨⟨b * u.Fnum, u.Fexp - 1⟩, ?_, ?_⟩
+  · show ((b * u.Fnum : ℤ) : ℝ) * bpow beta (u.Fexp - 1) = (F2R d + F2R u) / 2
+    rw [← Y, zero_add]
+    have h_beta : (beta.val : ℝ) = 2 * (b : ℝ) := by
+      have h_int : beta.val = 2 * b := by linarith
+      exact_mod_cast h_int
+    have h_bpow_split : bpow beta u.Fexp = bpow beta (u.Fexp - 1) * (beta.val : ℝ) := by
+      rw [← bpow_one beta, ← bpow_plus]; congr 1; ring
+    show ((b * u.Fnum : ℤ) : ℝ) * bpow beta (u.Fexp - 1)
+        = (u.Fnum : ℝ) * bpow beta u.Fexp / 2
+    rw [h_bpow_split, h_beta]
+    push_cast
+    ring
+  · show u.Fexp - 1 = fexp (mag beta (F2R u)) - 1
+    show u.Fexp - 1 = cexp beta fexp (F2R u) - 1
+    rw [← Cu]
+
+/-- When `F2R d = 0`, `fexp(mag(F2R u) - 1) < fexp(mag(F2R u)) + 1`. -/
+theorem fexp_m_eq_0 (beta : radix) (Even_beta : Even beta.val)
+    (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) [exists_NE : Exists_NE beta fexp]
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    (xPos : 0 < x) (Y : 0 = F2R d) :
+    fexp (mag beta (F2R u) - 1) < fexp (mag beta (F2R u)) + 1 := by
+  set ex := mag beta x with hex_def
+  have hx_low : bpow beta (ex - 1) ≤ x := by
+    have := bpow_mag_le beta (ne_of_gt xPos)
+    rwa [abs_of_pos xPos] at this
+  have hx_high : x < bpow beta ex := by
+    have := bpow_mag_gt beta x
+    rwa [abs_of_pos xPos] at this
+  have h_dn_eq : round beta fexp (fun y : ℝ => ⌊y⌋) x = 0 := by
+    rw [← d_eq_round_DN beta fexp hValid Hd, ← Y]
+  have h_small : ex ≤ fexp ex :=
+    exp_small_round_0_pos beta fexp _ ⟨hx_low, hx_high⟩ h_dn_eq
+  have h_u_eq : F2R u = bpow beta (fexp ex) := by
+    rw [u_eq_round_UP beta fexp hValid Hu]
+    exact round_UP_small_pos beta fexp ⟨hx_low, hx_high⟩ h_small
+  have h_mag_u : mag beta (F2R u) = fexp ex + 1 := by
+    rw [h_u_eq, mag_bpow]
+  rw [h_mag_u]
+  show fexp (fexp ex + 1 - 1) < fexp (fexp ex + 1) + 1
+  have h_arith : fexp ex + 1 - 1 = fexp ex := by ring
+  rw [h_arith]
+  have h_fexp_fexp : fexp (fexp ex) = fexp ex :=
+    ((hValid ex).2 h_small).2 (fexp ex) (le_refl _)
+  rcases exists_NE.cond with h_odd | h_regular
+  · exfalso
+    exact (Int.not_odd_iff_even.mpr Even_beta) h_odd
+  · have h_eq : fexp (fexp ex + 1) = fexp ex := (h_regular ex).2 h_small
+    linarith
+
 /-! ### Magnitude and canonical exponent preservation under round-to-odd -/
 
 /-- Under FLT with even radix and `prec > 1`, round-to-odd preserves the
