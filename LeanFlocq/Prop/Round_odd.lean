@@ -950,6 +950,117 @@ theorem fexp_m_eq_0 (beta : radix) (Even_beta : Even beta.val)
   · have h_eq : fexp (fexp ex + 1) = fexp ex := (h_regular ex).2 h_small
     linarith
 
+/-- The midpoint `m` is in the coarser format `fexpe`. -/
+theorem Fm (beta : radix) (Even_beta : Even beta.val)
+    (fexp fexpe : ℤ → ℤ) (hValid : Valid_exp fexp) [Exists_NE beta fexp]
+    (fexpe_fexp : ∀ e, fexpe e ≤ fexp e - 2)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Cd : canonical beta fexp d)
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    (Cu : canonical beta fexp u)
+    (xPos : 0 < x) :
+    generic_format beta fexpe ((F2R d + F2R u) / 2) := by
+  rcases lt_or_eq_of_le (d_ge_0 beta fexp hValid Hd xPos) with Y | Y
+  · -- 0 < F2R d
+    obtain ⟨g, hg1, hg2⟩ := m_eq beta Even_beta fexp hValid Hd Cd Hu Y
+    apply generic_format_F2R' beta fexpe g hg1
+    intro _
+    show fexpe (mag beta ((F2R d + F2R u) / 2)) ≤ g.Fexp
+    rw [mag_m beta fexp hValid Hd Hu Y, hg2]
+    have h_eq : fexp (mag beta x) = fexp (mag beta (F2R d)) := by
+      rw [← Fexp_d beta fexp hValid Hd Cd Y]
+      exact Cd
+    rw [h_eq]
+    have := fexpe_fexp (mag beta (F2R d))
+    linarith
+  · -- 0 = F2R d
+    obtain ⟨g, hg1, hg2⟩ := m_eq_0 beta Even_beta fexp Cu Y
+    apply generic_format_F2R' beta fexpe g hg1
+    intro _
+    show fexpe (mag beta ((F2R d + F2R u) / 2)) ≤ g.Fexp
+    rw [mag_m_0 beta fexp hValid Hd Hu xPos Y, hg2]
+    have h1 := fexpe_fexp (mag beta (F2R u) - 1)
+    have h2 := fexp_m_eq_0 beta Even_beta fexp hValid Hd Hu xPos Y
+    linarith
+
+/-- The midpoint `m` has an even-mantissa canonical witness in `fexpe`. -/
+theorem Zm (beta : radix) (Even_beta : Even beta.val)
+    (fexp fexpe : ℤ → ℤ) (hValid : Valid_exp fexp) [Exists_NE beta fexp]
+    (fexpe_fexp : ∀ e, fexpe e ≤ fexp e - 2)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Cd : canonical beta fexp d)
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    (Cu : canonical beta fexp u)
+    (xPos : 0 < x) :
+    ∃ g : float beta, F2R g = (F2R d + F2R u) / 2
+      ∧ canonical beta fexpe g ∧ Even g.Fnum := by
+  rcases lt_or_eq_of_le (d_ge_0 beta fexp hValid Hd xPos) with Y | Y
+  · -- 0 < F2R d
+    obtain ⟨g, hg1, hg2⟩ := m_eq beta Even_beta fexp hValid Hd Cd Hu Y
+    apply exists_even_fexp_lt beta Even_beta fexpe
+    refine ⟨g, hg1, ?_⟩
+    rw [mag_m beta fexp hValid Hd Hu Y, hg2]
+    have h_eq : fexp (mag beta x) = fexp (mag beta (F2R d)) := by
+      rw [← Fexp_d beta fexp hValid Hd Cd Y]
+      exact Cd
+    rw [h_eq]
+    have := fexpe_fexp (mag beta (F2R d))
+    linarith
+  · -- 0 = F2R d
+    obtain ⟨g, hg1, hg2⟩ := m_eq_0 beta Even_beta fexp Cu Y
+    apply exists_even_fexp_lt beta Even_beta fexpe
+    refine ⟨g, hg1, ?_⟩
+    rw [mag_m_0 beta fexp hValid Hd Hu xPos Y, hg2]
+    have h1 := fexpe_fexp (mag beta (F2R u) - 1)
+    have h2 := fexp_m_eq_0 beta Even_beta fexp hValid Hd Hu xPos Y
+    linarith
+
+/-- For any `z ∈ [F2R d, F2R u)`, round-DN of `z` is `F2R d`. -/
+theorem DN_odd_d_aux (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    {z : ℝ} (hz1 : F2R d ≤ z) (hz2 : z < F2R u) :
+    Rnd_DN_pt (generic_format beta fexp) z (F2R d) := by
+  have h_eq : F2R d = round beta fexp (fun y : ℝ => ⌊y⌋) z := by
+    set r := round beta fexp (fun y : ℝ => ⌊y⌋) z with hr_def
+    have hr_F : generic_format beta fexp r := generic_format_round beta fexp hValid _ z
+    rcases Rnd_DN_UP_pt_split _ Hd Hu hr_F with hr_le_d | hu_le_r
+    · -- r ≤ F2R d. Show F2R d ≤ r via DN_pt of z.
+      have h_d_le_r : F2R d ≤ r :=
+        (round_DN_pt beta fexp hValid z).2.2 (F2R d) Hd.1 hz1
+      exact le_antisymm h_d_le_r hr_le_d
+    · -- F2R u ≤ r, but r ≤ z < F2R u — contradiction.
+      exfalso
+      have h_r_le_z : r ≤ z := (round_DN_pt beta fexp hValid z).2.1
+      linarith
+  rw [h_eq]
+  exact round_DN_pt beta fexp hValid z
+
+/-- For any `z ∈ (F2R d, F2R u]`, round-UP of `z` is `F2R u`. -/
+theorem UP_odd_d_aux (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fexp)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    {z : ℝ} (hz1 : F2R d < z) (hz2 : z ≤ F2R u) :
+    Rnd_UP_pt (generic_format beta fexp) z (F2R u) := by
+  have h_eq : F2R u = round beta fexp (fun y : ℝ => ⌈y⌉) z := by
+    set r := round beta fexp (fun y : ℝ => ⌈y⌉) z with hr_def
+    have hr_F : generic_format beta fexp r := generic_format_round beta fexp hValid _ z
+    rcases Rnd_DN_UP_pt_split _ Hd Hu hr_F with hr_le_d | hu_le_r
+    · -- r ≤ F2R d, but r ≥ z > F2R d — contradiction.
+      exfalso
+      have h_z_le_r : z ≤ r := (round_UP_pt beta fexp hValid z).2.1
+      linarith
+    · -- F2R u ≤ r. Show r ≤ F2R u via UP_pt of z.
+      have h_r_le_u : r ≤ F2R u :=
+        (round_UP_pt beta fexp hValid z).2.2 (F2R u) Hu.1 hz2
+      exact le_antisymm hu_le_r h_r_le_u
+  rw [h_eq]
+  exact round_UP_pt beta fexp hValid z
+
 /-! ### Magnitude and canonical exponent preservation under round-to-odd -/
 
 /-- Under FLT with even radix and `prec > 1`, round-to-odd preserves the
