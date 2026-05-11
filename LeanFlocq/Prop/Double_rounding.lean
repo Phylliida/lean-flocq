@@ -1212,14 +1212,40 @@ theorem round_round_mid_cases (beta : radix) {fexp1 fexp2 : ℤ → ℤ}
         · unfold midp; rw [← hrd_def]; linarith
         · unfold midp; rw [← hrd_def]; linarith
 
+/-! ## Square root theorems
+
+When `x ∈ F1` and the format pair `(fexp1, fexp2)` is "sqrt-compatible"
+(see `round_round_sqrt_hyp`), double-rounding `Real.sqrt x` is innocuous.
+
+The proof structure: `round_round_sqrt_aux` shows that `Real.sqrt x` is more
+than `ulp2/2` away from the F1 midpoint, then `round_round_sqrt` dispatches
+via `round_round_mid_cases`. -/
+
+/-- The hypothesis on `(fexp1, fexp2)` for `round_round_sqrt`: three
+conjuncts ensuring the inner precision is "twice plus 2" the outer. -/
+def round_round_sqrt_hyp (fexp1 fexp2 : ℤ → ℤ) : Prop :=
+  (∀ ex : ℤ, 2 * fexp1 ex ≤ fexp1 (2 * ex))
+  ∧ (∀ ex : ℤ, 2 * fexp1 ex ≤ fexp1 (2 * ex - 1))
+  ∧ (∀ ex : ℤ, fexp1 (2 * ex) < 2 * ex → fexp2 ex + ex ≤ 2 * fexp1 ex - 2)
+
+/-- For `0 < x`, the magnitude of `x` is either `2 * mag(√x) - 1` or
+`2 * mag(√x)`. -/
+theorem mag_sqrt_disj (beta : radix) {x : ℝ} (Px : 0 < x) :
+    mag beta x = 2 * mag beta (Real.sqrt x) - 1
+    ∨ mag beta x = 2 * mag beta (Real.sqrt x) := by
+  rw [mag_sqrt beta Px]
+  omega
+
 /-! ### Notes for the next session
 
-Core mid-rounding theorems, multiplication arc, and the
-`round_round_mid_cases` bridge are complete. Remaining arcs:
-- sqrt theorems (~870 Coq lines, depends on `round_round_mid_cases`),
-- plus/minus theorems (the largest section, ~1760 Coq lines),
+Core mid-rounding theorems, multiplication arc, the
+`round_round_mid_cases` bridge, and the sqrt definitions/helper are
+complete. Remaining arcs:
+- `round_round_sqrt_aux` (the big ~200-line algebra proof),
+- `round_round_sqrt` keystone + FLX/FLT/FTZ corollaries,
+- plus/minus theorems (~1760 Coq lines),
 - division theorems (~1100 lines, with a long bridge lemma).
 
-End of mid_cases bridge. -/
+End of sqrt definitions. -/
 
 end LeanFlocq
