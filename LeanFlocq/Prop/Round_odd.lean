@@ -1061,6 +1061,124 @@ theorem UP_odd_d_aux (beta : radix) (fexp : ℤ → ℤ) (hValid : Valid_exp fex
   rw [h_eq]
   exact round_UP_pt beta fexp hValid z
 
+/-- The no-double-rounding theorem for positive `x`.
+
+Rounding to nearest at the target precision `fexp`, after rounding to odd at the
+finer precision `fexpe`, gives the same result as rounding to nearest directly,
+provided `fexpe e ≤ fexp e - 2` (precision gap ≥ 2) and `Even β`. -/
+theorem round_N_odd_pos (beta : radix) (Even_beta : Even beta.val)
+    (fexp fexpe : ℤ → ℤ) (hValid : Valid_exp fexp) [Exists_NE beta fexp]
+    (hValide : Valid_exp fexpe) [Exists_NE beta fexpe]
+    (fexpe_fexp : ∀ e, fexpe e ≤ fexp e - 2)
+    (choice : ℤ → Bool)
+    {x : ℝ} {d u : float beta}
+    (Hd : Rnd_DN_pt (generic_format beta fexp) x (F2R d))
+    (Cd : canonical beta fexp d)
+    (Hu : Rnd_UP_pt (generic_format beta fexp) x (F2R u))
+    (Cu : canonical beta fexp u)
+    (xPos : 0 < x) :
+    round beta fexp (Znearest choice) (round beta fexpe Zrnd_odd x)
+      = round beta fexp (Znearest choice) x := by
+  set o := round beta fexpe Zrnd_odd x with ho_def
+  rcases generic_format_EM beta fexp hValid x with Hx | Hx
+  · -- Case A: x ∈ F. Then o = round_odd x at fexpe = x (x is in fexpe too).
+    have h_x_fexpe : generic_format beta fexpe x :=
+      generic_format_fexpe_fexp beta fexp fexpe fexpe_fexp Hx
+    have h_o_eq_x : o = x := round_generic beta fexpe Zrnd_odd h_x_fexpe
+    rw [h_o_eq_x]
+  · -- Case B: x ∉ F.
+    have K1 : F2R d ≤ o := by
+      have h_d_fexpe : generic_format beta fexpe (F2R d) :=
+        generic_format_fexpe_fexp beta fexp fexpe fexpe_fexp Hd.1
+      exact round_ge_generic beta fexpe hValide Zrnd_odd h_d_fexpe Hd.2.1
+    have K2 : o ≤ F2R u := by
+      have h_u_fexpe : generic_format beta fexpe (F2R u) :=
+        generic_format_fexpe_fexp beta fexp fexpe fexpe_fexp Hu.1
+      exact round_le_generic beta fexpe hValide Zrnd_odd h_u_fexpe Hu.2.1
+    -- Helper P: if x ≠ m and o = m, contradiction (via canonical odd vs even).
+    have P : x ≠ (F2R d + F2R u) / 2 → o = (F2R d + F2R u) / 2 → False := by
+      intro Y1 Y2
+      have H_pt : Rnd_odd_pt beta fexpe x o := round_odd_pt beta fexpe hValide x
+      obtain ⟨_, H_cases⟩ := H_pt
+      rcases H_cases with H_eq | ⟨_, k, Hk1, Hk2, Hk3⟩
+      · apply Y1; rw [← Y2, H_eq]
+      · obtain ⟨k', Hk'1, Hk'2, Hk'3⟩ :=
+          Zm beta Even_beta fexp fexpe hValid fexpe_fexp Hd Cd Hu Cu xPos
+        have h_F2R_eq : F2R k = F2R k' := by rw [← Hk1, Y2, ← Hk'1]
+        have h_canon_eq : k = k' :=
+          canonical_unique beta fexpe k k' Hk2 Hk'2 h_F2R_eq
+        rw [h_canon_eq] at Hk3
+        exact Hk3 Hk'3
+    -- Helper H: if o ∈ F (target), contradiction.
+    have H_contra : generic_format beta fexp o → False := by
+      intro Y
+      have H_pt : Rnd_odd_pt beta fexpe x o := round_odd_pt beta fexpe hValide x
+      obtain ⟨_, H_cases⟩ := H_pt
+      rcases H_cases with H_eq | ⟨_, k, Hk1, Hk2, Hk3⟩
+      · apply Hx; rw [← H_eq]; exact Y
+      · -- Build canonical even witness for o at fexpe via exists_even_fexp_lt.
+        have h_o_witness : ∃ f : float beta, F2R f = o ∧ fexpe (mag beta o) < f.Fexp := by
+          refine ⟨⟨Ztrunc (scaled_mantissa beta fexp o), cexp beta fexp o⟩, ?_, ?_⟩
+          · exact Y.symm
+          · show fexpe (mag beta o) < cexp beta fexp o
+            show fexpe (mag beta o) < fexp (mag beta o)
+            linarith [fexpe_fexp (mag beta o)]
+        obtain ⟨k', Hk'1, Hk'2, Hk'3⟩ :=
+          exists_even_fexp_lt beta Even_beta fexpe h_o_witness
+        have h_F2R_eq : F2R k = F2R k' := by rw [← Hk1, ← Hk'1]
+        have h_canon_eq : k = k' :=
+          canonical_unique beta fexpe k k' Hk2 Hk'2 h_F2R_eq
+        rw [h_canon_eq] at Hk3
+        exact Hk3 Hk'3
+    -- Main: F2R d < o < F2R u (boundary cases contradict H_contra)
+    rcases lt_or_eq_of_le K1 with K1' | K1'
+    swap
+    · exfalso; apply H_contra; rw [← K1']; exact Hd.1
+    rcases lt_or_eq_of_le K2 with K2' | K2'
+    swap
+    · exfalso; apply H_contra; rw [K2']; exact Hu.1
+    -- F2R d < o < F2R u. Split on x vs m.
+    have h_Fm : generic_format beta fexpe ((F2R d + F2R u) / 2) :=
+      Fm beta Even_beta fexp fexpe hValid fexpe_fexp Hd Cd Hu Cu xPos
+    rcases lt_trichotomy x ((F2R d + F2R u) / 2) with hxm | hxm | hxm
+    · -- Subcase 1: x < m. Both rounds give F2R d.
+      have h_o_le_m : o ≤ (F2R d + F2R u) / 2 :=
+        round_le_generic beta fexpe hValide Zrnd_odd h_Fm (le_of_lt hxm)
+      have h_o_lt_m : o < (F2R d + F2R u) / 2 := by
+        rcases lt_or_eq_of_le h_o_le_m with h | h
+        · exact h
+        · exfalso; exact P (ne_of_lt hxm) h
+      -- round_N o = F2R d
+      have h_round_o : round beta fexp (Znearest choice) o = F2R d :=
+        round_N_eq_DN_pt beta fexp hValid choice
+          (DN_odd_d_aux beta fexp hValid Hd Hu (le_of_lt K1') K2')
+          (UP_odd_d_aux beta fexp hValid Hd Hu K1' (le_of_lt K2'))
+          h_o_lt_m
+      -- round_N x = F2R d
+      have h_round_x : round beta fexp (Znearest choice) x = F2R d :=
+        round_N_eq_DN_pt beta fexp hValid choice Hd Hu hxm
+      rw [h_round_o, h_round_x]
+    · -- Subcase 2: x = m. o = round_odd m at fexpe = m (since m ∈ fexpe).
+      have h_o_eq_m : o = (F2R d + F2R u) / 2 := by
+        rw [ho_def, hxm]
+        exact round_generic beta fexpe Zrnd_odd h_Fm
+      rw [h_o_eq_m, ← hxm]
+    · -- Subcase 3: m < x. Both rounds give F2R u.
+      have h_m_le_o : (F2R d + F2R u) / 2 ≤ o :=
+        round_ge_generic beta fexpe hValide Zrnd_odd h_Fm (le_of_lt hxm)
+      have h_m_lt_o : (F2R d + F2R u) / 2 < o := by
+        rcases lt_or_eq_of_le h_m_le_o with h | h
+        · exact h
+        · exfalso; exact P (ne_of_gt hxm) h.symm
+      have h_round_o : round beta fexp (Znearest choice) o = F2R u :=
+        round_N_eq_UP_pt beta fexp hValid choice
+          (DN_odd_d_aux beta fexp hValid Hd Hu (le_of_lt K1') K2')
+          (UP_odd_d_aux beta fexp hValid Hd Hu K1' (le_of_lt K2'))
+          h_m_lt_o
+      have h_round_x : round beta fexp (Znearest choice) x = F2R u :=
+        round_N_eq_UP_pt beta fexp hValid choice Hd Hu hxm
+      rw [h_round_o, h_round_x]
+
 /-! ### Magnitude and canonical exponent preservation under round-to-odd -/
 
 /-- Under FLT with even radix and `prec > 1`, round-to-odd preserves the
