@@ -13,6 +13,7 @@ import LeanFlocq.Core.FIX
 import LeanFlocq.Core.FLX
 import LeanFlocq.Core.FLT
 import LeanFlocq.Core.Ulp
+import LeanFlocq.Prop.Relative
 
 namespace LeanFlocq
 
@@ -623,5 +624,47 @@ theorem round_FLX_plus_ge (beta : radix) (prec : ℤ) (Hp : 0 < prec)
   have h_mag : e + prec < mag beta x :=
     lt_bpow beta (lt_of_le_of_lt He (bpow_mag_gt beta x))
   omega
+
+/-! ### Round-to-nearest plus in FLT with the tighter `u_ro/(1+u_ro)` bound -/
+
+/-- For round-to-nearest in FLT, the relative plus error is at most
+`u_ro / (1 + u_ro)`. -/
+theorem FLT_plus_error_N_ex (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool)
+    {x y : ℝ}
+    (Fx : generic_format beta (FLT_exp emin prec) x)
+    (Fy : generic_format beta (FLT_exp emin prec) y) :
+    ∃ eps : ℝ, |eps| ≤ u_ro beta prec / (1 + u_ro beta prec) ∧
+      round beta (FLT_exp emin prec) (Znearest choice) (x + y)
+        = (x + y) * (1 + eps) := by
+  have Pb : 0 ≤ u_ro beta prec / (1 + u_ro beta prec) :=
+    u_rod1pu_ro_pos beta prec
+  by_cases h_big : bpow beta (emin + prec - 1) ≤ |x + y|
+  · obtain ⟨d, Bd, Hd⟩ :=
+      relative_error_N_FLX'_ex beta prec Hp choice (x + y)
+    refine ⟨d, Bd, ?_⟩
+    rw [round_FLT_FLX beta emin prec _ h_big]
+    exact Hd
+  · push_neg at h_big
+    refine ⟨0, ?_, ?_⟩
+    · rw [abs_zero]; exact Pb
+    · rw [add_zero, mul_one]
+      apply round_generic beta (FLT_exp emin prec) _
+      apply FLT_format_plus_small beta emin prec Hp Fx Fy
+      have h_le : bpow beta (emin + prec - 1) ≤ bpow beta (prec + emin) :=
+        bpow_le beta (by omega)
+      exact le_of_lt (lt_of_lt_of_le h_big h_le)
+
+/-- The same bound, expressed relative to the rounded value. -/
+theorem FLT_plus_error_N_round_ex (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool)
+    {x y : ℝ}
+    (Fx : generic_format beta (FLT_exp emin prec) x)
+    (Fy : generic_format beta (FLT_exp emin prec) y) :
+    ∃ eps : ℝ, |eps| ≤ u_ro beta prec ∧
+      x + y = round beta (FLT_exp emin prec) (Znearest choice) (x + y)
+                * (1 + eps) :=
+  relative_error_N_round_ex_derive beta prec Hp
+    (FLT_plus_error_N_ex beta emin prec Hp choice Fx Fy)
 
 end LeanFlocq
