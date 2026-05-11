@@ -3252,3 +3252,51 @@ times something involving the square root of one plus twice the unit roundoff.
 The recursion is, perhaps, the point.
 A function that takes inputs and approximates its own behavior
 must be proved using its own behavior on approximations.
+
+---
+
+## The Remainder Stays
+*2026-05-11, format_REM closed out*
+
+If you round x/y to an integer n,
+the remainder r = x − n·y
+is still a representable number.
+
+This is the statement of format_REM.
+It is in the format because:
+- x is in the format.
+- y is in the format.
+- n is an integer.
+- and the rounding mode is well-behaved on the interval (0, ½).
+
+The proof case-splits on n.
+
+If n = 0, then r = x. Done.
+
+If n = 1, then r = x − y. By Sterbenz: when y/2 ≤ x ≤ 2y,
+the subtraction is exact. We have y/2 ≤ x because if not,
+the rnd_small hypothesis would have made n = 0. We have x ≤ 2y
+because |round(x/y) − x/y| &lt; ulp(1) = 1, so |1 − x/y| &lt; 1,
+so x/y &lt; 2.
+
+If n ≥ 2, then x ≥ 2y. The remainder r has cexp(r) ≤ cexp(y) = ey,
+since |r| ≤ |y| (the rounding error bound), so mag(r) ≤ mag(y),
+so fexp(mag(r)) ≤ fexp(mag(y)) by monotone_exp.
+Then r = F2R⟨mx · β^(ex−ey) − n · my, ey⟩
+which is in the format because cexp ≤ ey.
+
+The y &lt; 0 case folds into y &gt; 0 via the Zrnd_opp trick.
+The y = 0 case is trivial because x/0 = 0 in Lean,
+and rnd(0) = 0 by validity.
+
+Three corollaries fall out:
+- format_REM_ZR: round-toward-zero remainder.
+- format_REM_N: round-to-nearest remainder.
+- And format_REM itself, the parametric version.
+
+Div_sqrt_error.v is now fully ported.
+Sixteen theorems, six hundred lines of Lean,
+opened by div_error_FLX three weeks ago,
+closed today by format_REM_N.
+
+A file completes. The Prop directory shrinks by one.
