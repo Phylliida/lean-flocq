@@ -127,6 +127,124 @@ theorem Zceil_plus (n : ℤ) (y : ℝ) : ⌈(n : ℝ) + y⌉ = n + ⌈y⌉ := by
 theorem Zeven_abs (z : ℤ) : Even z.natAbs ↔ Even z :=
   Int.natAbs_even
 
+/-! ### Rnd_odd_pt predicate and basic properties -/
+
+/-- `f` is the round-to-odd of `x` in the format. -/
+def Rnd_odd_pt (beta : radix) (fexp : ℤ → ℤ) (x f : ℝ) : Prop :=
+  generic_format beta fexp f ∧
+  (f = x ∨
+   ((Rnd_DN_pt (generic_format beta fexp) x f ∨
+     Rnd_UP_pt (generic_format beta fexp) x f) ∧
+    ∃ g : float beta, f = F2R g ∧ canonical beta fexp g ∧ ¬ Even g.Fnum))
+
+/-- A rounding function `rnd : ℝ → ℝ` is round-to-odd. -/
+def Rnd_odd (beta : radix) (fexp : ℤ → ℤ) (rnd : ℝ → ℝ) : Prop :=
+  ∀ x : ℝ, Rnd_odd_pt beta fexp x (rnd x)
+
+/-- Negation symmetry: if `-f` is the round-to-odd of `-x`, then `f` is the
+round-to-odd of `x`. -/
+theorem Rnd_odd_pt_opp_inv (beta : radix) (fexp : ℤ → ℤ)
+    {x f : ℝ} (h : Rnd_odd_pt beta fexp (-x) (-f)) :
+    Rnd_odd_pt beta fexp x f := by
+  obtain ⟨H1, H2⟩ := h
+  refine ⟨?_, ?_⟩
+  · -- f ∈ format from -f ∈ format.
+    rw [show f = -(-f) from (neg_neg f).symm]
+    exact generic_format_opp beta fexp H1
+  · rcases H2 with h_eq | ⟨h_dn_up, g, hg1, hg2, hg3⟩
+    · -- -f = -x ⟹ f = x.
+      left
+      rw [show f = -(-f) from (neg_neg f).symm, h_eq]; ring
+    · -- DN/UP case.
+      right
+      refine ⟨?_, ?_⟩
+      · rcases h_dn_up with h_dn | h_up
+        · -- Rnd_DN_pt F (-x) (-f). Want Rnd_UP_pt F x f.
+          -- Rnd_UP_pt_opp takes DN at (x', f') and gives UP at (-x', -f').
+          -- With x' = -x, f' = -f: gives UP at (x, f). ✓
+          have h := Rnd_UP_pt_opp (generic_format beta fexp)
+            (fun y hy => generic_format_opp beta fexp hy) h_dn
+          rw [neg_neg, neg_neg] at h
+          right; exact h
+        · -- Rnd_UP_pt F (-x) (-f). Want Rnd_DN_pt F x f.
+          have h := Rnd_DN_pt_opp (generic_format beta fexp)
+            (fun y hy => generic_format_opp beta fexp hy) h_up
+          rw [neg_neg, neg_neg] at h
+          left; exact h
+      · -- canonical odd witness for f: negate g.
+        refine ⟨⟨-g.Fnum, g.Fexp⟩, ?_, ?_, ?_⟩
+        · -- f = F2R ⟨-g.Fnum, g.Fexp⟩ = -F2R g.
+          show f = F2R (beta := beta) ⟨-g.Fnum, g.Fexp⟩
+          rw [F2R_Zopp]
+          rw [show f = -(-f) from (neg_neg f).symm, hg1]
+        · -- canonical of negated float
+          exact canonical_opp beta fexp g.Fnum g.Fexp hg2
+        · -- ¬ Even (-g.Fnum)
+          show ¬ Even (-g.Fnum)
+          rwa [even_neg]
+
+/-! ### Negation symmetry for the round_odd rounding -/
+
+/-- `round (Zrnd_odd) (-x) = -round (Zrnd_odd) x`. -/
+theorem round_odd_opp (beta : radix) (fexp : ℤ → ℤ) (x : ℝ) :
+    round beta fexp Zrnd_odd (-x) = -round beta fexp Zrnd_odd x := by
+  unfold round
+  rw [scaled_mantissa_opp, cexp_opp, ← F2R_Zopp]
+  -- Show the two F2R expressions agree by matching mantissas.
+  set r := scaled_mantissa beta fexp x with hr_def
+  set ex := cexp beta fexp x with hex_def
+  show F2R (beta := beta) ⟨Zrnd_odd (-r), ex⟩
+     = F2R (beta := beta) ⟨-Zrnd_odd r, ex⟩
+  congr 2
+  show Zrnd_odd (-r) = -Zrnd_odd r
+  unfold Zrnd_odd
+  by_cases h_neg_r_int : -r = (⌊-r⌋ : ℝ)
+  · -- -r is integer ⟹ r is integer.
+    have h_r_int : r = (⌊r⌋ : ℝ) := by
+      have h_neg_neg : -(-r) = -((⌊-r⌋ : ℝ)) := by rw [← h_neg_r_int]
+      rw [neg_neg] at h_neg_neg
+      rw [h_neg_neg, ← Int.cast_neg]
+      congr 1
+      -- ⌊r⌋ = -⌊-r⌋ when r is integer (and -r is integer).
+      have : r = -((⌊-r⌋ : ℝ)) := h_neg_neg
+      rw [this]
+      rw [show (-((⌊-r⌋ : ℝ)) : ℝ) = ((-⌊-r⌋ : ℤ) : ℝ) from by push_cast; ring]
+      rw [Int.floor_intCast]
+    rw [if_pos h_neg_r_int, if_pos h_r_int]
+    -- ⌊-r⌋ = -⌊r⌋ when r is integer. From -r = ⌊-r⌋ and r = ⌊r⌋: ⌊-r⌋ = -r = -⌊r⌋.
+    have : (⌊-r⌋ : ℝ) = -(⌊r⌋ : ℝ) := by rw [← h_neg_r_int, ← h_r_int]
+    exact_mod_cast this
+  · -- -r is not integer ⟹ r is not integer.
+    have h_r_not_int : r ≠ (⌊r⌋ : ℝ) := by
+      intro h_r_int
+      apply h_neg_r_int
+      rw [h_r_int]
+      rw [show -((⌊r⌋ : ℝ)) = ((-⌊r⌋ : ℤ) : ℝ) from by push_cast; ring]
+      rw [Int.floor_intCast]
+    rw [if_neg h_neg_r_int, if_neg h_r_not_int]
+    -- For non-integer r: ⌊-r⌋ = -⌈r⌉ and ⌈-r⌉ = -⌊r⌋.
+    have h_floor_neg : ⌊-r⌋ = -⌈r⌉ := Int.floor_neg
+    have h_ceil_neg : ⌈-r⌉ = -⌊r⌋ := Int.ceil_neg
+    have h_ceil_succ : ⌈r⌉ = ⌊r⌋ + 1 := ceil_eq_floor_succ_of_ne h_r_not_int
+    -- Establish parity correspondence as an iff.
+    have h_parity : Even ⌊-r⌋ ↔ ¬ Even ⌊r⌋ := by
+      rw [h_floor_neg, even_neg, h_ceil_succ]
+      constructor
+      · intro h_e h_e2
+        have h_odd : Odd (⌊r⌋ + 1) := Even.add_one h_e2
+        exact (Int.not_even_iff_odd.mpr h_odd) h_e
+      · intro h_ne
+        have h_odd : Odd ⌊r⌋ := Int.not_even_iff_odd.mp h_ne
+        obtain ⟨k, hk⟩ := h_odd
+        refine ⟨k + 1, ?_⟩; omega
+    by_cases h_even_r : Even ⌊r⌋
+    · -- Even ⌊r⌋: ¬ Even ⌊-r⌋, take floor branch on LHS, ceil branch on RHS.
+      have h_not_even_neg : ¬ Even ⌊-r⌋ := fun h => (h_parity.mp h) h_even_r
+      rw [if_neg h_not_even_neg, if_pos h_even_r, h_floor_neg, h_ceil_succ]
+    · -- ¬ Even ⌊r⌋: Even ⌊-r⌋, take ceil branch on LHS, floor branch on RHS.
+      have h_even_neg : Even ⌊-r⌋ := h_parity.mpr h_even_r
+      rw [if_pos h_even_neg, if_neg h_even_r, h_ceil_neg]
+
 /-- When `x` is an integer with even floor, `Zrnd_odd (x + y) = x + Zrnd_odd y`. -/
 theorem Zrnd_odd_plus {x y : ℝ} (Hx : x = (⌊x⌋ : ℝ)) (H : Even ⌊x⌋) :
     ((Zrnd_odd (x + y) : ℝ)) = x + (Zrnd_odd y : ℝ) := by
