@@ -519,4 +519,143 @@ noncomputable def binary_float_of_bits_aux (mw ew : ℤ) (x : ℤ) : full_float 
     if 0 < m then full_float.F754_finite sx m (ex + emin - 1)
     else full_float.F754_nan false 1  -- dummy
 
+/-! ### Correctness of decoding -/
+
+/-- `bpow radix2` agrees with integer `2 ^ _.toNat` cast to ℝ. -/
+private theorem bpow_radix2_eq (k : ℤ) (Hk : 0 ≤ k) :
+    bpow radix2 k = ((2 : ℤ) ^ k.toNat : ℝ) := by
+  rw [← IZR_Zpower radix2 Hk]
+  push_cast
+  rfl
+
+/-- `Zdigits radix2 1 = 1`. -/
+private theorem Zdigits_radix2_one : Zdigits radix2 1 = 1 := by
+  apply Zdigits_unique
+  · rw [show (1 - 1 : ℤ) = 0 from by ring, bpow_zero]
+    simp
+  · rw [show (1 : ℤ) = 1 from rfl]
+    rw [bpow_radix2_eq 1 (by norm_num)]
+    push_cast; norm_num
+
+/-- The decoding function always produces a valid `full_float`. -/
+theorem binary_float_of_bits_aux_correct (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < ew)
+    (Hmax : mw + 1 < (2 : ℤ) ^ (ew - 1).toNat) (x : ℤ) :
+    valid_binary (mw + 1) ((2 : ℤ) ^ (ew - 1).toNat)
+      (binary_float_of_bits_aux mw ew x) := by
+  set prec := mw + 1 with hprec_def
+  set emax := (2 : ℤ) ^ (ew - 1).toNat with hemax_def
+  set emin := 3 - emax - prec with hemin_def
+  have hprec_pos : 0 < prec := by linarith
+  have hmw_nn : 0 ≤ mw := le_of_lt Hmw
+  have hew_nn : 0 ≤ ew := le_of_lt Hew
+  have hmw_pos : 0 < (2 : ℤ) ^ mw.toNat := pow_pos (by norm_num) _
+  have hew_pos : 0 < (2 : ℤ) ^ ew.toNat := pow_pos (by norm_num) _
+  have hemax_pos : 0 < emax := by rw [hemax_def]; exact pow_pos (by norm_num) _
+  have h_emin_le : emin ≤ emax - prec := by rw [hemin_def]; linarith
+  have h_pow_ew : (2 : ℤ) ^ ew.toNat = 2 * emax := by
+    rw [hemax_def]
+    have h_toNat : ew.toNat = (ew - 1).toNat + 1 := by omega
+    rw [h_toNat, pow_succ]; ring
+  have h_nan_one : nan_pl prec 1 := by
+    refine ⟨le_refl _, ?_⟩
+    rw [Zdigits_radix2_one]; linarith
+  -- Unfold the function and split_bits, then set the projection variables.
+  show valid_binary prec emax (binary_float_of_bits_aux mw ew x)
+  unfold binary_float_of_bits_aux split_bits
+  simp only
+  set mx := x % (2 : ℤ) ^ mw.toNat with hmx_def
+  set ex := x / (2 : ℤ) ^ mw.toNat % (2 : ℤ) ^ ew.toNat with hex_def
+  have hmx_nn : 0 ≤ mx := Int.emod_nonneg _ (ne_of_gt hmw_pos)
+  have hmx_lt : mx < (2 : ℤ) ^ mw.toNat := Int.emod_lt_of_pos _ hmw_pos
+  have hex_nn : 0 ≤ ex := Int.emod_nonneg _ (ne_of_gt hew_pos)
+  have hex_lt : ex < (2 : ℤ) ^ ew.toNat := Int.emod_lt_of_pos _ hew_pos
+  by_cases h_ex0 : ex = 0
+  · rw [if_pos h_ex0]
+    by_cases h_mx0 : mx = 0
+    · rw [if_pos h_mx0]; trivial  -- F754_zero
+    · rw [if_neg h_mx0]
+      by_cases h_mx_pos : 0 < mx
+      · rw [if_pos h_mx_pos]
+        -- F754_finite sx mx emin
+        show bounded prec emax mx emin
+        refine ⟨h_mx_pos, ?_, h_emin_le⟩
+        -- canonical_mantissa: FLT_exp emin prec (Zdigits mx + emin) = emin.
+        show FLT_exp emin prec (Zdigits radix2 mx + emin) = emin
+        unfold FLT_exp
+        have h_d : Zdigits radix2 mx ≤ mw := by
+          apply Zdigits_le_Zpower radix2 hmw_nn
+          rw [abs_of_nonneg hmx_nn]; exact hmx_lt
+        -- max(Zdigits mx + emin - prec, emin) = emin since Zdigits mx ≤ mw = prec - 1.
+        rw [max_eq_right]
+        linarith
+      · -- mx ≤ 0 but mx ≠ 0 ⟹ contradicts hmx_nn.
+        push_neg at h_mx_pos
+        exfalso
+        have : mx = 0 := le_antisymm h_mx_pos hmx_nn
+        exact h_mx0 this
+  · rw [if_neg h_ex0]
+    by_cases h_ex_max : ex = (2 : ℤ) ^ ew.toNat - 1
+    · rw [if_pos h_ex_max]
+      by_cases h_mx0 : mx = 0
+      · rw [if_pos h_mx0]; trivial  -- F754_infinity
+      · rw [if_neg h_mx0]
+        by_cases h_mx_pos : 0 < mx
+        · rw [if_pos h_mx_pos]
+          -- F754_nan sx mx, need nan_pl prec mx.
+          show nan_pl prec mx
+          refine ⟨h_mx_pos, ?_⟩
+          have h_d : Zdigits radix2 mx ≤ mw := by
+            apply Zdigits_le_Zpower radix2 hmw_nn
+            rw [abs_of_nonneg hmx_nn]; exact hmx_lt
+          linarith
+        · push_neg at h_mx_pos
+          exfalso
+          have : mx = 0 := le_antisymm h_mx_pos hmx_nn
+          exact h_mx0 this
+    · rw [if_neg h_ex_max]
+      -- Normal: m = mx + 2^mw.
+      set m := mx + (2 : ℤ) ^ mw.toNat with hm_def
+      have hm_ge : (2 : ℤ) ^ mw.toNat ≤ m := by linarith
+      have hm_lt : m < 2 * (2 : ℤ) ^ mw.toNat := by linarith
+      have hm_pos : 0 < m := by linarith
+      have hm_ge_1 : 1 ≤ m := by linarith
+      rw [if_pos hm_pos]
+      -- F754_finite sx m (ex + emin - 1).
+      show bounded prec emax m (ex + emin - 1)
+      have h_Zdigits_m : Zdigits radix2 m = prec := by
+        apply Zdigits_unique
+        · rw [show (prec - 1 : ℤ) = mw from by rw [hprec_def]; ring]
+          rw [bpow_radix2_eq mw hmw_nn]
+          rw [abs_of_pos (by exact_mod_cast hm_pos : (0 : ℝ) < (m : ℝ))]
+          exact_mod_cast hm_ge
+        · rw [bpow_radix2_eq prec (le_of_lt hprec_pos)]
+          rw [abs_of_pos (by exact_mod_cast hm_pos : (0 : ℝ) < (m : ℝ))]
+          have h_pow_prec : (2 : ℤ) ^ prec.toNat = 2 * (2 : ℤ) ^ mw.toNat := by
+            rw [hprec_def]
+            have : (mw + 1).toNat = mw.toNat + 1 := by omega
+            rw [this, pow_succ]; ring
+          have h_m_lt_int : m < (2 : ℤ) ^ prec.toNat := by
+            rw [h_pow_prec]; exact hm_lt
+          exact_mod_cast h_m_lt_int
+      have h_ex_pos : 1 ≤ ex := by
+        rcases lt_or_eq_of_le hex_nn with h | h
+        · exact h
+        · exact absurd h.symm h_ex0
+      have h_ex_le : ex ≤ (2 : ℤ) ^ ew.toNat - 2 := by
+        have : ex ≠ (2 : ℤ) ^ ew.toNat - 1 := h_ex_max
+        omega
+      refine ⟨hm_ge_1, ?_, ?_⟩
+      · -- canonical_mantissa: FLT_exp emin prec (Zdigits m + (ex + emin - 1)) = ex + emin - 1.
+        show FLT_exp emin prec (Zdigits radix2 m + (ex + emin - 1)) = ex + emin - 1
+        unfold FLT_exp
+        rw [h_Zdigits_m]
+        -- max((prec + ex + emin - 1) - prec, emin) = max(ex + emin - 1, emin) = ex + emin - 1.
+        rw [show (prec + (ex + emin - 1) - prec : ℤ) = ex + emin - 1 from by ring]
+        rw [max_eq_left]
+        linarith
+      · -- ex + emin - 1 ≤ emax - prec.
+        rw [hemin_def]
+        rw [h_pow_ew] at h_ex_le
+        linarith
+
 end LeanFlocq
