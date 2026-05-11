@@ -909,4 +909,141 @@ theorem sqrt_error_N_FLX_round_ex (beta : radix) (prec : ℤ) (Hp1 : 1 < prec)
     field_simp
     rw [Hd]; ring
 
+/-! ### sqrt error in FLT -/
+
+/-- `√(β^e) ≥ β^(e ediv 2)`. -/
+theorem sqrt_bpow_ge (beta : radix) (e : ℤ) :
+    bpow beta (e / 2) ≤ Real.sqrt (bpow beta e) := by
+  have h_pos : 0 < bpow beta (e / 2) := bpow_gt_0 _ _
+  have h_two_div_le : 2 * (e / 2) ≤ e := by
+    have h := Int.mul_ediv_add_emod e 2
+    have hmod_nn : 0 ≤ e % 2 := Int.emod_nonneg _ (by decide)
+    omega
+  have h_sq : bpow beta (e / 2) ^ 2 ≤ bpow beta e := by
+    rw [show (bpow beta (e / 2)) ^ 2 = bpow beta (2 * (e / 2)) from by
+          rw [show (2 * (e / 2) : ℤ) = e / 2 + e / 2 from by ring, bpow_plus, sq]]
+    exact bpow_le beta h_two_div_le
+  calc bpow beta (e / 2) = Real.sqrt (bpow beta (e / 2) ^ 2) :=
+        (Real.sqrt_sq (le_of_lt h_pos)).symm
+    _ ≤ Real.sqrt (bpow beta e) := Real.sqrt_le_sqrt h_sq
+
+/-- FLT version of `sqrt_error_N_FLX_ex`. Requires `emin ≤ 2(1 - prec)` so that
+subnormal sqrt still falls under the FLX rounding regime. -/
+theorem sqrt_error_N_FLT_ex (beta : radix) (emin prec : ℤ) (Hp1 : 1 < prec)
+    (Hemin : emin ≤ 2 * (1 - prec)) (choice : ℤ → Bool)
+    {x : ℝ} (Fx : generic_format beta (FLT_exp emin prec) x) :
+    ∃ eps : ℝ, |eps| ≤ 1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec) ∧
+      round beta (FLT_exp emin prec) (Znearest choice) (Real.sqrt x)
+        = Real.sqrt x * (1 + eps) := by
+  have Hp : 0 < prec := by linarith
+  have Pb : 0 ≤ 1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec) :=
+    om1ds1p2u_ro_pos beta prec
+  rcases le_or_lt x 0 with Nx | Px
+  · refine ⟨0, ?_, ?_⟩
+    · rw [abs_zero]; exact Pb
+    · rw [Real.sqrt_eq_zero'.mpr Nx, round_0, zero_mul]
+  -- x > 0 case.
+  have Fx' : generic_format beta (FLX_exp prec) x :=
+    generic_format_FLX_FLT beta emin prec Fx
+  obtain ⟨d, Bd, Hd⟩ := sqrt_error_N_FLX_ex beta prec Hp1 choice Fx'
+  refine ⟨d, Bd, ?_⟩
+  -- Need: round FLT (sqrt x) = round FLX (sqrt x) = sqrt x * (1 + d).
+  -- Use round_FLT_FLX: above bpow(emin + prec - 1), FLT and FLX coincide.
+  rw [← Hd]
+  apply round_FLT_FLX beta emin prec
+  -- Goal: bpow(emin + prec - 1) ≤ |sqrt x|.
+  -- Chain: bpow(emin + prec - 1) ≤ bpow(emin / 2) ≤ √(bpow emin) ≤ √x = |√x|.
+  have h_sqrt_x_pos : 0 < Real.sqrt x := Real.sqrt_pos.mpr Px
+  rw [abs_of_pos h_sqrt_x_pos]
+  have h_step1 : bpow beta (emin + prec - 1) ≤ bpow beta (emin / 2) :=
+    bpow_le beta (by
+      have h_emin_le : emin ≤ 2 * (1 - prec) := Hemin
+      -- emin + prec - 1 ≤ emin/2 ⟺ 2(emin + prec - 1) ≤ emin (if multiply by 2)
+      -- Equivalently: emin ≤ 2(1 - prec) ⟺ emin + 2(prec - 1) ≤ 0.
+      -- 2(emin + prec - 1) ≤ emin ⟺ emin + 2(prec - 1) ≤ 0 ⟺ emin ≤ 2 - 2·prec = 2(1-prec). ✓
+      -- But emin/2 is integer ediv. For emin ≤ 0: emin/2 ≥ emin (e.g. -3/2 = -2 < -3? no, -3/2 = -2 (floor); so -2 > -3 ✓).
+      -- Actually emin/2 is floor division. So 2·(emin/2) ≤ emin ≤ 2(emin/2) + 1.
+      have h := Int.mul_ediv_add_emod emin 2
+      have hmod_nn : 0 ≤ emin % 2 := Int.emod_nonneg _ (by decide)
+      have hmod_lt : emin % 2 < 2 := Int.emod_lt_of_pos _ (by decide)
+      omega)
+  have h_step2 : bpow beta (emin / 2) ≤ Real.sqrt (bpow beta emin) :=
+    sqrt_bpow_ge beta emin
+  have h_step3 : Real.sqrt (bpow beta emin) ≤ Real.sqrt x := by
+    apply Real.sqrt_le_sqrt
+    apply generic_format_ge_bpow beta (FLT_exp emin prec) emin _ Px Fx
+    intro e
+    unfold FLT_exp
+    exact le_max_right _ _
+  linarith
+
+/-- FLT version of `sqrt_error_N_FLX_round_ex`. -/
+theorem sqrt_error_N_FLT_round_ex (beta : radix) (emin prec : ℤ) (Hp1 : 1 < prec)
+    (Hemin : emin ≤ 2 * (1 - prec)) (choice : ℤ → Bool)
+    {x : ℝ} (Fx : generic_format beta (FLT_exp emin prec) x) :
+    ∃ eps : ℝ, |eps| ≤ Real.sqrt (1 + 2 * u_ro beta prec) - 1 ∧
+      Real.sqrt x = round beta (FLT_exp emin prec) (Znearest choice) (Real.sqrt x)
+                      * (1 + eps) := by
+  -- Use the same derivation as for FLX, but starting from the FLT bound.
+  obtain ⟨d, Bd, Hd⟩ :=
+    sqrt_error_N_FLT_ex beta emin prec Hp1 Hemin choice Fx
+  have Hp : 0 < prec := by linarith
+  have Pu_ro_nn : 0 ≤ u_ro beta prec := u_ro_pos beta prec
+  have h_arg_pos : 0 < 1 + 2 * u_ro beta prec := by linarith
+  have h_sqrt_pos : 0 < Real.sqrt (1 + 2 * u_ro beta prec) :=
+    Real.sqrt_pos.mpr h_arg_pos
+  have h_sqrt_ge_1 : 1 ≤ Real.sqrt (1 + 2 * u_ro beta prec) := by
+    calc (1 : ℝ) = Real.sqrt 1 := Real.sqrt_one.symm
+      _ ≤ Real.sqrt (1 + 2 * u_ro beta prec) :=
+          Real.sqrt_le_sqrt (by linarith)
+  have h_d_le : |d| ≤ 1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec) := Bd
+  have h_one_minus_inv_pos : 1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec) < 1 := by
+    have : 0 < 1 / Real.sqrt (1 + 2 * u_ro beta prec) :=
+      div_pos one_pos h_sqrt_pos
+    linarith
+  have h_d_abs : |d| < 1 := lt_of_le_of_lt h_d_le h_one_minus_inv_pos
+  have h_abs_d := abs_le.mp h_d_le
+  have h_one_plus_d_pos : 0 < 1 + d := by
+    have := neg_lt_of_abs_lt h_d_abs; linarith
+  by_cases Zfx : round beta (FLT_exp emin prec) (Znearest choice) (Real.sqrt x) = 0
+  · refine ⟨0, ?_, ?_⟩
+    · rw [abs_zero]; exact s1p2u_rom1_pos beta prec
+    · rw [Zfx, zero_mul]
+      rw [Zfx] at Hd
+      rcases mul_eq_zero.mp Hd.symm with h_sqrt0 | h_d1
+      · exact h_sqrt0
+      · linarith
+  by_cases Zx : Real.sqrt x = 0
+  · exfalso; apply Zfx; rw [Hd, Zx, zero_mul]
+  refine ⟨(Real.sqrt x - round beta (FLT_exp emin prec) (Znearest choice) (Real.sqrt x))
+            / round beta (FLT_exp emin prec) (Znearest choice) (Real.sqrt x), ?_, ?_⟩
+  · set rx := round beta (FLT_exp emin prec) (Znearest choice) (Real.sqrt x) with hrx_def
+    have h_xsubrx : Real.sqrt x - rx = -(Real.sqrt x * d) := by rw [Hd]; ring
+    have h_abs_diff : |Real.sqrt x - rx| = |Real.sqrt x| * |d| := by
+      rw [h_xsubrx, abs_neg, abs_mul]
+    have h_abs_rx : |rx| = |Real.sqrt x| * (1 + d) := by
+      rw [Hd, abs_mul, abs_of_pos h_one_plus_d_pos]
+    rw [abs_div, h_abs_diff, h_abs_rx]
+    have h_x_pos : 0 < |Real.sqrt x| := abs_pos.mpr Zx
+    have h_denom_pos : 0 < |Real.sqrt x| * (1 + d) :=
+      mul_pos h_x_pos h_one_plus_d_pos
+    rw [div_le_iff₀ h_denom_pos]
+    set s := Real.sqrt (1 + 2 * u_ro beta prec)
+    have h_d_bound : |d| ≤ (s - 1) / s := by
+      have h_eq : 1 - 1/s = (s - 1)/s := by field_simp
+      rw [← h_eq]; exact h_d_le
+    have h_d_s_bound : |d| * s ≤ s - 1 := by
+      rw [le_div_iff₀ h_sqrt_pos] at h_d_bound; exact h_d_bound
+    have h_key : |d| ≤ (s - 1) * (1 + d) := by
+      rcases le_or_lt 0 d with hd_nn | hd_neg
+      · rw [abs_of_nonneg hd_nn]
+        nlinarith [h_d_s_bound, hd_nn, abs_of_nonneg hd_nn, h_sqrt_ge_1,
+                   sq_nonneg d, sq_nonneg (s - 1)]
+      · rw [abs_of_neg hd_neg]
+        nlinarith [h_d_s_bound, hd_neg, abs_of_neg hd_neg, h_sqrt_ge_1]
+    have := mul_le_mul_of_nonneg_left h_key (le_of_lt h_x_pos)
+    nlinarith [this, h_x_pos, h_one_plus_d_pos, h_sqrt_ge_1]
+  · field_simp
+    rw [Hd]; ring
+
 end LeanFlocq
