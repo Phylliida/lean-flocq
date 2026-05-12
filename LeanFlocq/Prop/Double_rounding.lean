@@ -3588,6 +3588,190 @@ theorem round_round_minus_radix_ge_3_aux (beta : radix) (Hbeta : 3 ≤ beta.val)
       · exact round_round_minus_radix_ge_3_aux3 beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2
           choice1 choice2 Hexp Py H Fx Fy
 
+/-- **The plus radix_ge_3 keystone.** Same sign-dispatch shape as
+`round_round_plus`, using the radix_ge_3 aux lemmas. -/
+theorem round_round_plus_radix_ge_3 (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_radix_ge_3_hyp fexp1 fexp2)
+    {x y : ℝ}
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x + y) := by
+  rcases lt_or_ge x 0 with Sx | Sx <;> rcases lt_or_ge y 0 with Sy | Sy
+  · have Px : 0 ≤ -x := by linarith
+    have Py : 0 ≤ -y := by linarith
+    have Fnx : generic_format beta fexp1 (-x) := generic_format_opp beta fexp1 Fx
+    have Fny : generic_format beta fexp1 (-y) := generic_format_opp beta fexp1 Fy
+    unfold round_round_eq
+    rw [show x + y = -(-x + -y) from by ring]
+    rw [round_N_opp beta fexp2 choice2]
+    rw [round_N_opp beta fexp1 choice1]
+    rw [round_N_opp beta fexp1 choice1 (-x + -y)]
+    congr 1
+    exact round_round_plus_radix_ge_3_aux beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2 _ _
+      Hexp Px Py Fnx Fny
+  · have Px : 0 ≤ -x := by linarith
+    have Fnx : generic_format beta fexp1 (-x) := generic_format_opp beta fexp1 Fx
+    rw [show x + y = y - (-x) from by ring]
+    exact round_round_minus_radix_ge_3_aux beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2
+      choice1 choice2 Hexp Sy Px Fy Fnx
+  · have Py : 0 ≤ -y := by linarith
+    have Fny : generic_format beta fexp1 (-y) := generic_format_opp beta fexp1 Fy
+    rw [show x + y = x - (-y) from by ring]
+    exact round_round_minus_radix_ge_3_aux beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2
+      choice1 choice2 Hexp Sx Py Fx Fny
+  · exact round_round_plus_radix_ge_3_aux beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2
+      choice1 choice2 Hexp Sx Sy Fx Fy
+
+/-- **The minus radix_ge_3 keystone.** Derives from plus via `x - y = x + (-y)`. -/
+theorem round_round_minus_radix_ge_3 (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_radix_ge_3_hyp fexp1 fexp2)
+    {x y : ℝ}
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x - y) := by
+  rw [show x - y = x + (-y) from by ring]
+  exact round_round_plus_radix_ge_3 beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2
+    choice1 choice2 Hexp Fx (generic_format_opp beta fexp1 Fy)
+
+/-! ### radix_ge_3 format-specific instantiations -/
+
+/-- Hypothesis specialization for FLX, radix_ge_3 variant. -/
+theorem FLX_round_round_plus_radix_ge_3_hyp (prec prec' : ℤ)
+    (hprec : 0 < prec) (Hprec : 2 * prec ≤ prec') :
+    round_round_plus_radix_ge_3_hyp (FLX_exp prec) (FLX_exp prec') := by
+  unfold round_round_plus_radix_ge_3_hyp FLX_exp
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> intros ex ey h <;> omega
+
+theorem round_round_plus_radix_ge_3_FLX (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (prec prec' : ℤ) (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Fx : FLX_format beta prec x) (Fy : FLX_format beta prec y) :
+    round_round_eq beta (FLX_exp prec) (FLX_exp prec') choice1 choice2 (x + y) :=
+  round_round_plus_radix_ge_3 beta Hbeta (FLX_exp prec) (FLX_exp prec')
+    (FLX_exp_valid prec hprec) (FLX_exp_valid prec' hprec') choice1 choice2
+    (FLX_round_round_plus_radix_ge_3_hyp prec prec' hprec Hprec)
+    (generic_format_FLX beta prec hprec Fx)
+    (generic_format_FLX beta prec hprec Fy)
+
+theorem round_round_minus_radix_ge_3_FLX (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (prec prec' : ℤ) (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Fx : FLX_format beta prec x) (Fy : FLX_format beta prec y) :
+    round_round_eq beta (FLX_exp prec) (FLX_exp prec') choice1 choice2 (x - y) :=
+  round_round_minus_radix_ge_3 beta Hbeta (FLX_exp prec) (FLX_exp prec')
+    (FLX_exp_valid prec hprec) (FLX_exp_valid prec' hprec') choice1 choice2
+    (FLX_round_round_plus_radix_ge_3_hyp prec prec' hprec Hprec)
+    (generic_format_FLX beta prec hprec Fx)
+    (generic_format_FLX beta prec hprec Fy)
+
+/-- Hypothesis specialization for FLT, radix_ge_3 variant. -/
+theorem FLT_round_round_plus_radix_ge_3_hyp (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec)
+    (Hemin : emin' ≤ emin) (Hprec : 2 * prec ≤ prec') :
+    round_round_plus_radix_ge_3_hyp (FLT_exp emin prec) (FLT_exp emin' prec') := by
+  unfold round_round_plus_radix_ge_3_hyp FLT_exp
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> intros ex ey h
+  · rcases le_or_gt (ex + 1 - prec) emin with h1 | h1 <;>
+      rcases le_or_gt (ex - prec') emin' with h2 | h2 <;>
+      rcases le_or_gt (ey - prec) emin with h3 | h3 <;>
+      simp_all [max_eq_right, max_eq_left, le_of_lt] <;> omega
+  · rcases le_or_gt (ex - 1 - prec) emin with h1 | h1 <;>
+      rcases le_or_gt (ex - prec') emin' with h2 | h2 <;>
+      rcases le_or_gt (ey - prec) emin with h3 | h3 <;>
+      simp_all [max_eq_right, max_eq_left, le_of_lt] <;> omega
+  · rcases le_or_gt (ex - prec) emin with h1 | h1 <;>
+      rcases le_or_gt (ex - prec') emin' with h2 | h2 <;>
+      rcases le_or_gt (ey - prec) emin with h3 | h3 <;>
+      simp_all [max_eq_right, max_eq_left, le_of_lt] <;> omega
+  · rcases le_or_gt (ex - prec') emin' with h2 | h2 <;>
+      rcases le_or_gt (ey - prec) emin with h3 | h3 <;>
+      simp_all [max_eq_right, max_eq_left, le_of_lt] <;> omega
+
+theorem round_round_plus_radix_ge_3_FLT (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin' ≤ emin) (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Fx : FLT_format beta emin prec x) (Fy : FLT_format beta emin prec y) :
+    round_round_eq beta (FLT_exp emin prec) (FLT_exp emin' prec')
+      choice1 choice2 (x + y) :=
+  round_round_plus_radix_ge_3 beta Hbeta (FLT_exp emin prec) (FLT_exp emin' prec')
+    (FLT_exp_valid emin prec hprec) (FLT_exp_valid emin' prec' hprec')
+    choice1 choice2
+    (FLT_round_round_plus_radix_ge_3_hyp emin prec emin' prec' hprec Hemin Hprec)
+    (generic_format_FLT beta emin prec hprec Fx)
+    (generic_format_FLT beta emin prec hprec Fy)
+
+theorem round_round_minus_radix_ge_3_FLT (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin' ≤ emin) (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Fx : FLT_format beta emin prec x) (Fy : FLT_format beta emin prec y) :
+    round_round_eq beta (FLT_exp emin prec) (FLT_exp emin' prec')
+      choice1 choice2 (x - y) :=
+  round_round_minus_radix_ge_3 beta Hbeta (FLT_exp emin prec) (FLT_exp emin' prec')
+    (FLT_exp_valid emin prec hprec) (FLT_exp_valid emin' prec' hprec')
+    choice1 choice2
+    (FLT_round_round_plus_radix_ge_3_hyp emin prec emin' prec' hprec Hemin Hprec)
+    (generic_format_FLT beta emin prec hprec Fx)
+    (generic_format_FLT beta emin prec hprec Fy)
+
+/-- Hypothesis specialization for FTZ, radix_ge_3 variant. -/
+theorem FTZ_round_round_plus_radix_ge_3_hyp (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (Hemin : emin' + prec' ≤ emin + 1)
+    (Hprec : 2 * prec ≤ prec') :
+    round_round_plus_radix_ge_3_hyp (FTZ_exp emin prec) (FTZ_exp emin' prec') := by
+  unfold round_round_plus_radix_ge_3_hyp FTZ_exp
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> intros ex ey h
+  all_goals (
+    rcases lt_or_ge (ex + 1 - prec) emin with h1 | h1 <;>
+    rcases lt_or_ge (ex - 1 - prec) emin with h2 | h2 <;>
+    rcases lt_or_ge (ex - prec) emin with h3 | h3 <;>
+    rcases lt_or_ge (ex - prec') emin' with h4 | h4 <;>
+    rcases lt_or_ge (ey - prec) emin with h5 | h5 <;>
+    first
+      | (rw [if_pos h4] at h ⊢ <;> omega)
+      | (rw [if_neg (not_lt.mpr h4)] at h ⊢ <;> omega)
+      | omega)
+
+theorem round_round_plus_radix_ge_3_FTZ (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin' + prec' ≤ emin + 1) (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Fx : FTZ_format beta emin prec x) (Fy : FTZ_format beta emin prec y) :
+    round_round_eq beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+      choice1 choice2 (x + y) :=
+  round_round_plus_radix_ge_3 beta Hbeta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+    (FTZ_exp_valid emin prec hprec) (FTZ_exp_valid emin' prec' hprec')
+    choice1 choice2
+    (FTZ_round_round_plus_radix_ge_3_hyp emin prec emin' prec' hprec hprec' Hemin Hprec)
+    (generic_format_FTZ beta emin prec hprec Fx)
+    (generic_format_FTZ beta emin prec hprec Fy)
+
+theorem round_round_minus_radix_ge_3_FTZ (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin' + prec' ≤ emin + 1) (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Fx : FTZ_format beta emin prec x) (Fy : FTZ_format beta emin prec y) :
+    round_round_eq beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+      choice1 choice2 (x - y) :=
+  round_round_minus_radix_ge_3 beta Hbeta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+    (FTZ_exp_valid emin prec hprec) (FTZ_exp_valid emin' prec' hprec')
+    choice1 choice2
+    (FTZ_round_round_plus_radix_ge_3_hyp emin prec emin' prec' hprec hprec' Hemin Hprec)
+    (generic_format_FTZ beta emin prec hprec Fx)
+    (generic_format_FTZ beta emin prec hprec Fy)
+
 /-! ### Division arc -/
 
 /-- When `x` is so small that `mag x ≤ fexp1(mag x) - 2` (well below `fexp1`'s
