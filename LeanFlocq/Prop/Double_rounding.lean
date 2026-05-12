@@ -3437,4 +3437,202 @@ theorem round_round_div_aux1 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
   -- hcontradict : x/y - x' < 1/2 (β^c1 - β^c2)
   linarith
 
+/-- Above-midpoint prelude: when `fexp1(mag(x/y)) ≤ mag(x/y)` (large regime),
+the quotient cannot be in the half-open interval `(midp, midp + (1/2)·ulp_2]`.
+Plugged into the `Cgt` callback by the dispatcher. -/
+theorem round_round_div_aux2 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (_Vfexp2 : Valid_exp fexp2)
+    (_choice1 _choice2 : ℤ → Bool)
+    (Hexp : round_round_div_hyp fexp1 fexp2)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y)
+    (Hf1 : fexp1 (mag beta (x / y)) ≤ mag beta (x / y)) :
+    ¬ (midp beta fexp1 (x / y) < x / y
+       ∧ x / y ≤ midp beta fexp1 (x / y) + (1/2) * ulp beta fexp2 (x / y)) := by
+  intro Hlr
+  obtain ⟨Hlo, Hhi⟩ := Hlr
+  set magd := mag beta (x / y) with hmagd_def
+  set c1 := fexp1 magd with hc1_def
+  set c2 := fexp2 magd with hc2_def
+  set ex := mag beta x with hex_def
+  set ey := mag beta y with hey_def
+  set cx := fexp1 ex with hcx_def
+  set cy := fexp1 ey with hcy_def
+  set mx : ℤ := Ztrunc (scaled_mantissa beta fexp1 x) with hmx_def
+  set my : ℤ := Ztrunc (scaled_mantissa beta fexp1 y) with hmy_def
+  set mq : ℤ := ⌊(x / y) * bpow beta (-c1)⌋ with hmq_def
+  set x' : ℝ := (mq : ℝ) * bpow beta c1 with hx'_def
+  have hx_ne : x ≠ 0 := ne_of_gt Px
+  have hy_ne : y ≠ 0 := ne_of_gt Py
+  have hxy_pos : 0 < x / y := div_pos Px Py
+  have hxy_ne : x / y ≠ 0 := ne_of_gt hxy_pos
+  have hFx : x = (mx : ℝ) * bpow beta cx := Fx
+  have hFy : y = (my : ℝ) * bpow beta cy := Fy
+  have Hcx_lt : cx < ex := mag_generic_gt beta fexp1 Vfexp1 hx_ne Fx
+  have Hcy_lt : cy < ey := mag_generic_gt beta fexp1 Vfexp1 hy_ne Fy
+  have hx'_round : round beta fexp1 (fun y : ℝ => ⌊y⌋) (x / y) = x' := rfl
+  have hmidp_eq : midp beta fexp1 (x / y) = x' + (1/2) * bpow beta c1 := by
+    unfold midp
+    rw [hx'_round, ulp_neq_0 beta fexp1 hxy_ne]
+    rfl
+  have hulp_eq : ulp beta fexp2 (x / y) = bpow beta c2 := by
+    rw [ulp_neq_0 beta fexp2 hxy_ne]; rfl
+  rw [hmidp_eq] at Hlo Hhi
+  rw [hulp_eq] at Hhi
+  have Hy_lt_bpow_ey : y < bpow beta ey := by
+    have h := bpow_mag_gt beta y; rw [abs_of_pos Py] at h; exact h
+  -- From Hlo: x/y > x' + 1/2 β^c1, so 2x > (2 mq + 1) β^c1 · y = (2 mq + 1) my β^(c1+cy)
+  have Hkey_mxmy : (2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta (c1 + cy)
+                  < 2 * (mx : ℝ) * bpow beta cx := by
+    have h_xy : (mq : ℝ) * bpow beta c1 + (1/2) * bpow beta c1 < x / y := Hlo
+    have h_xy2 : ((2 * (mq : ℝ) + 1) * bpow beta c1) / 2 < x / y := by linarith
+    have h_y : ((2 * (mq : ℝ) + 1) * bpow beta c1) / 2 * y < x :=
+      (lt_div_iff₀ Py).mp h_xy2
+    have h_2x_lt : (2 * (mq : ℝ) + 1) * bpow beta c1 * y < 2 * x := by linarith
+    have h_lhs : (2 * (mq : ℝ) + 1) * bpow beta c1 * y
+              = (2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta (c1 + cy) := by
+      rw [hFy, bpow_plus]; ring
+    have h_rhs : 2 * x = 2 * (mx : ℝ) * bpow beta cx := by rw [hFx]; ring
+    linarith
+  have hcontradict : x' + (1/2) * bpow beta c1 + (1/2) * bpow beta c2 < x / y := by
+    have hkey : 2 * x' * y + bpow beta c1 * y + bpow beta c2 * y < 2 * x := by
+      rcases le_or_lt 0 (cx - c1 - cy) with He | He
+      · -- Case A
+        set k : ℤ := cx - c1 - cy with hk_def
+        have hk_nn : 0 ≤ k := He
+        have hbp_int : (((beta.val : ℤ) ^ k.toNat : ℤ) : ℝ) = bpow beta k :=
+          IZR_Zpower beta hk_nn
+        have hint_lt : (2 * mq + 1) * my < 2 * mx * (beta.val : ℤ) ^ k.toNat := by
+          have h_cx_eq : bpow beta cx = bpow beta (c1 + cy) * bpow beta k := by
+            rw [← bpow_plus]; congr 1; show cx = c1 + cy + k; rw [hk_def]; ring
+          rw [h_cx_eq] at Hkey_mxmy
+          have h2 : (2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta (c1 + cy)
+                  < 2 * (mx : ℝ) * bpow beta k * bpow beta (c1 + cy) := by
+            have : 2 * (mx : ℝ) * (bpow beta (c1 + cy) * bpow beta k)
+                  = 2 * (mx : ℝ) * bpow beta k * bpow beta (c1 + cy) := by ring
+            rw [this] at Hkey_mxmy; exact Hkey_mxmy
+          have hpos : 0 < bpow beta (c1 + cy) := bpow_gt_0 _ _
+          have h3 : (2 * (mq : ℝ) + 1) * (my : ℝ) < 2 * (mx : ℝ) * bpow beta k :=
+            (mul_lt_mul_iff_of_pos_right hpos).mp h2
+          rw [← hbp_int] at h3
+          exact_mod_cast h3
+        have hint_le : (2 * mq + 1) * my + 1 ≤ 2 * mx * (beta.val : ℤ) ^ k.toNat := by omega
+        have hreal_le : (2 * (mq : ℝ) + 1) * (my : ℝ) + 1
+                      ≤ 2 * (mx : ℝ) * bpow beta k := by
+          rw [← hbp_int]
+          exact_mod_cast hint_le
+        have h_step1 : bpow beta c1 * y + bpow beta (c1 + cy) + 2 * x' * y ≤ 2 * x := by
+          rw [hFx]
+          have hpos : 0 < bpow beta (c1 + cy) := bpow_gt_0 _ _
+          have h_cx_eq : bpow beta cx = bpow beta (c1 + cy) * bpow beta k := by
+            rw [← bpow_plus]; congr 1; show cx = c1 + cy + k; rw [hk_def]; ring
+          have h_rhs : 2 * ((mx : ℝ) * bpow beta cx)
+                    = (2 * (mx : ℝ) * bpow beta k) * bpow beta (c1 + cy) := by
+            rw [h_cx_eq]; ring
+          rw [h_rhs]
+          have h_lhs : bpow beta c1 * y + bpow beta (c1 + cy) + 2 * x' * y
+                    = ((2 * (mq : ℝ) + 1) * (my : ℝ) + 1) * bpow beta (c1 + cy) := by
+            rw [hFy, hx'_def, bpow_plus]; ring
+          rw [h_lhs]
+          exact mul_le_mul_of_nonneg_right hreal_le (le_of_lt hpos)
+        have h_step2 : bpow beta c2 * y < bpow beta (c1 + cy) := by
+          have h_chain : bpow beta c2 * y < bpow beta c2 * bpow beta ey :=
+            mul_lt_mul_of_pos_left Hy_lt_bpow_ey (bpow_gt_0 _ _)
+          have h_chain2 : bpow beta c2 * bpow beta ey ≤ bpow beta (c1 + cy) := by
+            rw [← bpow_plus]
+            apply bpow_le
+            rcases mag_div_disj beta Px Py with Hxy | Hxy
+            · have hmd : magd = ex - ey := Hxy
+              have h_premise : fexp1 (ex - ey) ≤ ex - ey := by
+                rw [← hmd]; exact Hf1
+              have h := Hexp.2.2.2.1 ex ey Hcx_lt Hcy_lt h_premise
+              show fexp2 magd + ey ≤ c1 + cy
+              rw [hmd]
+              have hc1_val : c1 = fexp1 (ex - ey) := by rw [hc1_def, hmd]
+              linarith
+            · have hmd : magd = ex - ey + 1 := Hxy
+              have h_ex1_lt : fexp1 (ex + 1) < ex + 1 := by
+                have := (Vfexp1 ex).1 Hcx_lt; omega
+              have h_arg_eq : (ex + 1) - ey = ex - ey + 1 := by ring
+              have h_premise : fexp1 ((ex + 1) - ey) ≤ (ex + 1) - ey := by
+                rw [h_arg_eq, ← hmd]; exact Hf1
+              have h := Hexp.2.2.2.1 (ex + 1) ey h_ex1_lt Hcy_lt h_premise
+              rw [h_arg_eq] at h
+              show fexp2 magd + ey ≤ c1 + cy
+              rw [hmd]
+              have hc1_val : c1 = fexp1 (ex - ey + 1) := by rw [hc1_def, hmd]
+              linarith
+          linarith
+        linarith
+      · -- Case B
+        set j : ℤ := c1 + cy - cx with hj_def
+        have hj_pos : 0 < j := by rw [hj_def]; linarith
+        have hj_nn : 0 ≤ j := le_of_lt hj_pos
+        have hbp_int : (((beta.val : ℤ) ^ j.toNat : ℤ) : ℝ) = bpow beta j :=
+          IZR_Zpower beta hj_nn
+        have hint_lt : (2 * mq + 1) * my * (beta.val : ℤ) ^ j.toNat < 2 * mx := by
+          have h_split : bpow beta (c1 + cy) = bpow beta cx * bpow beta j := by
+            rw [← bpow_plus]; congr 1; show c1 + cy = cx + j; rw [hj_def]; ring
+          rw [h_split] at Hkey_mxmy
+          have hpos : 0 < bpow beta cx := bpow_gt_0 _ _
+          have h2 : (2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta j * bpow beta cx
+                  < 2 * (mx : ℝ) * bpow beta cx := by
+            have : (2 * (mq : ℝ) + 1) * (my : ℝ) * (bpow beta cx * bpow beta j)
+                  = (2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta j * bpow beta cx := by ring
+            rw [this] at Hkey_mxmy; exact Hkey_mxmy
+          have h3 : (2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta j < 2 * (mx : ℝ) :=
+            (mul_lt_mul_iff_of_pos_right hpos).mp h2
+          rw [← hbp_int] at h3
+          exact_mod_cast h3
+        have hint_le : (2 * mq + 1) * my * (beta.val : ℤ) ^ j.toNat + 1 ≤ 2 * mx := by omega
+        have hreal_le : (2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta j + 1
+                      ≤ 2 * (mx : ℝ) := by
+          rw [← hbp_int]
+          exact_mod_cast hint_le
+        have h_step1 : 2 * x' * y + bpow beta c1 * y + bpow beta cx ≤ 2 * x := by
+          rw [hFx]
+          have hpos : 0 < bpow beta cx := bpow_gt_0 _ _
+          have h_lhs : 2 * x' * y + bpow beta c1 * y + bpow beta cx
+                    = ((2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta j + 1) * bpow beta cx := by
+            have h_split : bpow beta j * bpow beta cx = bpow beta c1 * bpow beta cy := by
+              rw [← bpow_plus, ← bpow_plus]
+              congr 1; show j + cx = c1 + cy; rw [hj_def]; ring
+            have h_eq : ((2 * (mq : ℝ) + 1) * (my : ℝ) * bpow beta j + 1) * bpow beta cx
+                     = (2 * (mq : ℝ) + 1) * (my : ℝ) * (bpow beta j * bpow beta cx) + bpow beta cx := by
+              ring
+            rw [h_eq, h_split, hFy, hx'_def]; ring
+          rw [h_lhs]
+          have h_rhs : 2 * ((mx : ℝ) * bpow beta cx) = 2 * (mx : ℝ) * bpow beta cx := by ring
+          rw [h_rhs]
+          exact mul_le_mul_of_nonneg_right hreal_le (le_of_lt hpos)
+        have h_step2 : bpow beta c2 * y < bpow beta cx := by
+          have h_chain : bpow beta c2 * y < bpow beta c2 * bpow beta ey :=
+            mul_lt_mul_of_pos_left Hy_lt_bpow_ey (bpow_gt_0 _ _)
+          have h_chain2 : bpow beta c2 * bpow beta ey ≤ bpow beta cx := by
+            rw [← bpow_plus]
+            apply bpow_le
+            rcases mag_div_disj beta Px Py with Hxy | Hxy
+            · have hmd : magd = ex - ey := Hxy
+              have h_premise : fexp1 (ex - ey) ≤ (ex - ey) + 1 := by
+                rw [← hmd]; linarith [Hf1]
+              have h := Hexp.2.1 ex ey Hcx_lt Hcy_lt h_premise
+              show fexp2 magd + ey ≤ cx
+              rw [hmd]; linarith
+            · have hmd : magd = ex - ey + 1 := Hxy
+              have h_premise : fexp1 (ex - ey + 1) ≤ (ex - ey + 1) + 1 := by
+                rw [← hmd]; linarith [Hf1]
+              have h := Hexp.2.2.1 ex ey Hcx_lt Hcy_lt h_premise
+              show fexp2 magd + ey ≤ cx
+              rw [hmd]; linarith
+          linarith
+        linarith
+    have h2y_pos : (0 : ℝ) < 2 * y := by linarith
+    have hkey' : (2 * y) * (x' + (1/2) * bpow beta c1 + (1/2) * bpow beta c2) < (2 * y) * (x / y) := by
+      have hl : (2 * y) * (x' + (1/2) * bpow beta c1 + (1/2) * bpow beta c2)
+             = 2 * x' * y + bpow beta c1 * y + bpow beta c2 * y := by ring
+      have hr : (2 * y) * (x / y) = 2 * x := by field_simp
+      rw [hl, hr]; exact hkey
+    exact (mul_lt_mul_iff_of_pos_left h2y_pos).mp hkey'
+  linarith
+
 end LeanFlocq
