@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `0868398`)
+## Status (as of commit `bb062ae`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -31,7 +31,7 @@ including both round-trip theorems. The IEEE 754 binary encoding is now
 a proven bijection between `binary_float` and integers in
 `[0, 2^(mw+ew+1))`.
 
-**~20450 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
+**~20700 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -60,10 +60,10 @@ a proven bijection between `binary_float` and integers in
 | `Prop/Plus_error.lean` | 670 | `Prop/Plus_error.v` | **Complete: 20.** Keystones: `round_repr_same_exp`, `plus_error_aux`, `plus_error`. Zero family: `FLT_format_plus_small`, `round_plus_neq_0_aux`, `round_plus_neq_0`, `round_plus_eq_0`. Trivial bounds: `plus_error_le_l/r`. Helpers: `ex_shift`, `mag_minus1`, `lt_mag`, `mag_minus_lb`. mult_ulp section: `round_plus_F2R`, `round_plus_ge_ulp`. plus_ge family: `round_FLT_plus_ge`, `round_FLT_plus_ge'`, `round_FLX_plus_ge`. **Unit-roundoff variants:** `FLT_plus_error_N_ex` and `FLT_plus_error_N_round_ex`. |
 | `Prop/Div_sqrt_error.lean` | 1328 | `Prop/Div_sqrt_error.v` | **Complete (file fully ported).** Keystones: `generic_format_plus_prec`, `div_error_FLX`, `sqrt_error_FLX_N`. Sqrt unit-roundoff helpers: `om1ds1p2u_ro_pos`, `s1p2u_rom1_pos`, `om1ds1p2u_ro_le_u_rod1pu_ro`. Main sqrt error theorem and variants: `sqrt_bpow_even`, `sqrt_error_N_FLX_aux1/_aux2/_aux3`, `sqrt_error_N_FLX`, `sqrt_error_N_FLX_ex`, `sqrt_error_N_FLX_round_ex`, `sqrt_bpow_ge`, `sqrt_error_N_FLT_ex`, `sqrt_error_N_FLT_round_ex`. format_REM family: `format_REM_aux`, `format_REM_pos` (private), `format_REM`, `format_REM_ZR`, `format_REM_N`. Note: `sqrt_error_N_FLX_aux2` strengthened to `prec > 1` to avoid edge case at prec=1, β=2 where `1 + 2u_ro = β`. |
 | `Prop/Round_odd.lean` | 1427 | `Prop/Round_odd.v` | **Complete.** Z-level: `Zrnd_odd` (the rounding function — rounds non-integers to the odd integer between floor and ceiling), `valid_rnd_odd`, `Zrnd_odd_Zodd`, `Zfloor_plus`, `Zceil_plus`, `Zeven_abs`, `Zrnd_odd_plus`. R-level: `Rnd_odd_pt` predicate, `Rnd_odd`, `Rnd_odd_pt_opp_inv`, `round_odd_opp`. Core: `round_odd_pt` (the keystone), `Rnd_odd_pt_unique`, `Rnd_odd_pt_monotone`. **Odd_prop_aux geometry (Stage 5):** `generic_format_fexpe_fexp`, `exists_even_fexp_lt`, `d_eq_round_DN`, `u_eq_round_UP`, `d_ge_0`, `mag_d`, `Fexp_d`, `format_bpow_x`, `format_bpow_d`, `d_le_m`, `m_le_u`, `mag_m`, `mag_m_0`, `u'_eq`, `m_eq`, `m_eq_0`, `fexp_m_eq_0`, `Fm`, `Zm`, `DN_odd_d_aux`, `UP_odd_d_aux`. **Keystones:** `round_N_odd_pos` (the no-double-rounding theorem for positive x — rounding-to-nearest of round-to-odd at coarser precision equals rounding-to-nearest directly, when fexpe ≤ fexp - 2 and β even) and `round_N_odd` (general form via opp symmetry). **Stage 6 (cexp preservation):** `mag_round_odd` and `fexp_round_odd` (FLT, β even, prec > 1: round-to-odd preserves both `mag` and `cexp`). |
-| `Prop/Double_rounding.lean` | 2714 | `Prop/Double_rounding.v` (~57% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + full plus/minus arc.** Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers (`mag_plus`/`mag_minus` in Raux, `mag_plus_disj`/`mag_plus_separated`/`mag_minus_disj`/`mag_minus_separated`), `bpow_neg_one_le_half` helper, **plus aux family** (`aux0_aux_aux` → `aux0_aux` → `aux0`, `aux1_aux` → `aux1`, `aux2`, `aux`), **minus aux family** (`aux0_aux` → `aux0`, `aux1`, **`aux2_aux`** the big case-split on whether `x` strictly exceeds `bpow(mag x - 1)`, `aux2`, `aux3`, `aux`), **`round_round_plus`** and **`round_round_minus`** keystones (dispatching on signs via `round_N_opp` and `generic_format_opp`), plus FLX/FLT/FTZ instantiations for both `plus` and `minus` (3 hyp lemmas + 6 user-facing theorems). |
+| `Prop/Double_rounding.lean` | 2983 | `Prop/Double_rounding.v` (~62% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + full plus/minus arc + division-arc preludes.** Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers (`mag_plus`/`mag_minus` in Raux, `mag_plus_disj`/`mag_plus_separated`/`mag_minus_disj`/`mag_minus_separated`), `bpow_neg_one_le_half` helper, **plus aux family** (`aux0_aux_aux` → `aux0_aux` → `aux0`, `aux1_aux` → `aux1`, `aux2`, `aux`), **minus aux family** (`aux0_aux` → `aux0`, `aux1`, **`aux2_aux`** the big case-split on whether `x` strictly exceeds `bpow(mag x - 1)`, `aux2`, `aux3`, `aux`), **`round_round_plus`** and **`round_round_minus`** keystones (dispatching on signs via `round_N_opp` and `generic_format_opp`), plus FLX/FLT/FTZ instantiations for both `plus` and `minus` (3 hyp lemmas + 6 user-facing theorems). **Division-arc preludes:** `round_round_really_zero` (deep small case), `round_round_zero` (boundary case), `round_round_all_mid_cases` (full dispatcher with 4 user callbacks), `round_round_eq_mid_beta_even` (the bridge — at midpoint with β even, x ∈ F2 directly), `mag_div_disj` helper, `round_round_div_hyp` (5-conjunct precision condition). |
 | `IEEE754/Bits.lean` | 900 | `IEEE754/Bits.v` (subset) | **Bit encoding fully proven: 14 + 5 helpers.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **Deferred:** B32/B64 instantiations (need arithmetic ops). |
 
-**Total: ~672 Lean theorems vs ~480 substantive Coq theorems** (we have extras
+**Total: ~678 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
 ## Build setup
@@ -283,11 +283,19 @@ remaining work is the division arc + secondary radix tracks of
 Double_rounding, the substantial part of `Binary.lean`, and the rest of
 `IEEE754/Bits.v`:
 
-1. **Division arc of `Prop/Double_rounding.v`** (~1100 Coq lines) — has
-   a long bridge lemma `round_round_eq_mid_beta_even` (~97 lines) and is
-   the one section that depends critically on `round_N_odd` (which we
-   have, in `Prop/Round_odd.lean`). This is now the biggest remaining
-   Double_rounding piece.
+1. **Division arc of `Prop/Double_rounding.v`** (~900 Coq lines remaining) —
+   the four preludes (`round_round_really_zero`, `round_round_zero`,
+   `round_round_all_mid_cases`, `round_round_eq_mid_beta_even`) are done.
+   What remains: three aux lemmas (`round_round_div_aux0` ~136 Coq lines,
+   `round_round_div_aux1` ~187, `round_round_div_aux2` ~198), the
+   dispatcher `round_round_div_aux`, the keystone `round_round_div`, and
+   FLX/FLT/FTZ instantiations. **Surprise found 2026-05-12**: the bridge
+   itself does NOT use `round_N_odd` — it's purely algebraic
+   (`x = rd + (1/2)·β^c1 = rd + n·β^(c1-1)` when `β = 2n`, putting `x` in
+   `F2` directly). The round-to-odd dependency kicks in for the aux
+   lemmas, presumably to chain through the `round_round_all_mid_cases`
+   user callbacks. This is still the biggest remaining Double_rounding
+   piece by far.
 
 2. **Plus/minus `radix_ge_3` track** — parallel variant of the plus
    arc with a different hypothesis (`round_round_plus_radix_ge_3_hyp`)
@@ -443,5 +451,21 @@ Three patterns that the work keeps teaching:
   This is the same pattern as past-me's "the library has shape" note —
   but with a visceral confirmation. Don't skip helper lemmas because they
   look small. They're the load-bearing structure.
+
+- **The "97-line bridge" is 50 Lean lines when past-me's warning works.**
+  On 2026-05-12, `round_round_eq_mid_beta_even` (the bridge that opens
+  the division arc) landed in ~50 Lean lines with two small bugs caught
+  in one round — `rw` cascading through `c1-1` when rewriting
+  `c1 = (c1-1)+1` (fixed with `conv_lhs`), and `push_cast` distributing
+  through `((β.val^k : ℤ) : ℝ)` before `IZR_Zpower` could match (fixed
+  by doing `Int.cast_mul` first). Both bugs are versions of patterns
+  past-me had already named in rhythm notes. The warning past-me wrote
+  (*"depends on `round_N_odd`"*) turned out to be slightly wrong —
+  the bridge itself doesn't use round-to-odd at all; it's pure algebra
+  for even radix. But the *weight* past-me named was accurate, and her
+  warning let present-me sit down ready to hold it. The trade is: past-me
+  warns about *the shape and weight* of upcoming work; present-me figures
+  out which tool actually fits. Don't expect past-me to know which
+  hammer; expect her to tell you whether you'll need both hands.
 
 Good luck.
