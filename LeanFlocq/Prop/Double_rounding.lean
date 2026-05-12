@@ -3184,6 +3184,202 @@ theorem round_round_minus_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
     (generic_format_FTZ beta emin prec hprec Fx)
     (generic_format_FTZ beta emin prec hprec Fy)
 
+/-! ## plus/minus arc, radix ≥ 3 variant
+
+A parallel variant of the plus/minus arc with a weaker hypothesis: the
+first and third conjuncts of `round_round_plus_hyp` are tightened to
+`fexp1(ex+1) ≤ ey` and `fexp1 ex ≤ ey` (vs `fexp1(ex+1) - 1 ≤ ey` and
+`fexp1 ex - 1 ≤ ey`). The price is `3 ≤ beta`, used in the algebraic core
+to get `bpow(-1) ≤ 1/3`. -/
+
+/-- A radix ≥ 3 makes `bpow(-1) ≤ 1/3`. -/
+private theorem bpow_neg_one_le_third_of_beta_ge_3 (beta : radix)
+    (Hbeta : 3 ≤ beta.val) :
+    bpow beta (-1) ≤ (1 : ℝ) / 3 := by
+  have h3 : (3 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast Hbeta
+  have h_b_pos : 0 < (beta.val : ℝ) := by linarith
+  have h_inv : bpow beta (-1) = 1 / (beta.val : ℝ) := by
+    show (beta.val : ℝ) ^ (-1 : ℤ) = 1 / (beta.val : ℝ)
+    rw [zpow_neg, zpow_one]; field_simp
+  rw [h_inv]
+  exact one_div_le_one_div_of_le (by norm_num) h3
+
+/-- Weaker variant of `round_round_plus_hyp`: tighter preconditions on the
+first and third conjuncts. -/
+def round_round_plus_radix_ge_3_hyp (fexp1 fexp2 : ℤ → ℤ) : Prop :=
+  (∀ ex ey : ℤ, fexp1 (ex + 1) ≤ ey → fexp2 ex ≤ fexp1 ey)
+  ∧ (∀ ex ey : ℤ, fexp1 (ex - 1) + 1 ≤ ey → fexp2 ex ≤ fexp1 ey)
+  ∧ (∀ ex ey : ℤ, fexp1 ex ≤ ey → fexp2 ex ≤ fexp1 ey)
+  ∧ (∀ ex ey : ℤ, ex - 1 ≤ ey → fexp2 ex ≤ fexp1 ey)
+
+/-- `round_round_plus_radix_ge_3_aux0`: when `fexp1 (mag x) ≤ mag y`, the
+addition `x + y` is in `fexp2`-format (exact in the larger precision).
+Mirrors `round_round_plus_aux0` with the weaker hypothesis. -/
+theorem round_round_plus_radix_ge_3_aux0 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1)
+    (Hexp : round_round_plus_radix_ge_3_hyp fexp1 fexp2)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y) (Hyx : y ≤ x)
+    (Hln : fexp1 (mag beta x) ≤ mag beta y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    generic_format beta fexp2 (x + y) := by
+  obtain ⟨_, Hexp2, Hexp3, Hexp4⟩ := Hexp
+  rcases le_or_gt (mag beta y) (fexp1 (mag beta x)) with Hle | Hgt
+  · -- mag y ≤ fexp1 (mag x): combined with Hln gives mag y = fexp1 (mag x)
+    have Lxy : mag beta (x + y) = mag beta x :=
+      mag_plus_separated beta fexp1 Px (le_of_lt Py) Fx Hle
+    refine round_round_plus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+    · rw [Lxy]; exact Hexp4 _ _ (by omega)
+    · rw [Lxy]; exact Hexp3 _ _ Hln
+  · -- fexp1 (mag x) < mag y: mag (x+y) ∈ {mag x, mag x + 1}
+    have hmy_le_mx : mag beta y ≤ mag beta x := by
+      apply mag_le_abs beta (ne_of_gt Py)
+      rw [abs_of_pos Py, abs_of_pos Px]; exact Hyx
+    refine round_round_plus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+    · rcases mag_plus_disj beta Py Hyx with Lxy | Lxy
+      · rw [Lxy]; exact Hexp4 _ _ (by omega)
+      · rw [Lxy]
+        have h_req : fexp1 ((mag beta x + 1) - 1) + 1 ≤ mag beta x := by
+          have heq : (mag beta x + 1) - 1 = mag beta x := by ring
+          rw [heq]; omega
+        exact Hexp2 _ _ h_req
+    · rcases mag_plus_disj beta Py Hyx with Lxy | Lxy
+      · rw [Lxy]; exact Hexp3 _ _ (by omega)
+      · rw [Lxy]
+        have h_req : fexp1 ((mag beta x + 1) - 1) + 1 ≤ mag beta y := by
+          have heq : (mag beta x + 1) - 1 = mag beta x := by ring
+          rw [heq]; omega
+        exact Hexp2 _ _ h_req
+
+/-- `round_round_plus_radix_ge_3_aux1`: when `mag y ≤ fexp1 (mag x) - 1`,
+double rounding is innocuous via `round_round_lt_mid` applied at `x + y`.
+The key bound is `bpow(-1) ≤ 1/3` (needs `3 ≤ beta`). -/
+theorem round_round_plus_radix_ge_3_aux1 (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_radix_ge_3_hyp fexp1 fexp2)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y)
+    (Hly : mag beta y ≤ fexp1 (mag beta x) - 1)
+    (Fx : generic_format beta fexp1 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x + y) := by
+  have Lxy : mag beta (x + y) = mag beta x := by
+    apply mag_plus_separated beta fexp1 Px (le_of_lt Py) Fx
+    omega
+  obtain ⟨_, _, _, Hexp4⟩ := Hexp
+  have Hf2 : fexp2 (mag beta x) ≤ fexp1 (mag beta x) := Hexp4 _ _ (by omega)
+  have Bpow1_third : bpow beta (-1) ≤ (1 : ℝ) / 3 :=
+    bpow_neg_one_le_third_of_beta_ge_3 beta Hbeta
+  have Bpow1_half : bpow beta (-1) ≤ (1 : ℝ) / 2 := bpow_neg_one_le_half beta
+  have hxy_pos : 0 < x + y := by linarith
+  have hxy_ne : x + y ≠ 0 := ne_of_gt hxy_pos
+  have hfexp1_lt : fexp1 (mag beta x) < mag beta x :=
+    mag_generic_gt beta fexp1 Vfexp1 (ne_of_gt Px) Fx
+  -- aux1_aux with k = 1
+  obtain ⟨_, h_diff_lt⟩ := round_round_plus_aux1_aux beta (k := 1)
+    (by norm_num : (0 : ℤ) < 1) fexp1 Px Py Hly Lxy Fx
+  apply round_round_lt_mid beta Vfexp1 Vfexp2 choice1 choice2 hxy_pos
+  · rw [Lxy]; exact Hf2
+  · rw [Lxy]; omega
+  · -- x + y < midp β fexp1 (x + y)
+    unfold midp
+    have h_ulp_eq : ulp beta fexp1 (x + y) = bpow beta (fexp1 (mag beta x)) := by
+      rw [ulp_neq_0 _ _ hxy_ne]
+      show bpow beta (fexp1 (mag beta (x + y))) = _
+      rw [Lxy]
+    rw [h_ulp_eq]
+    -- (x + y) - round_DN(x+y) < bpow(fexp1(mag x) - 1) ≤ (1/2) * bpow(fexp1(mag x))
+    have h_pow_bound : bpow beta (fexp1 (mag beta x) - 1)
+        ≤ (1 : ℝ) / 2 * bpow beta (fexp1 (mag beta x)) := by
+      have h_split : bpow beta (fexp1 (mag beta x) - 1)
+          = bpow beta (-1) * bpow beta (fexp1 (mag beta x)) := by
+        rw [← bpow_plus]; congr 1; ring
+      rw [h_split]
+      have h_pos : 0 < bpow beta (fexp1 (mag beta x)) := bpow_gt_0 _ _
+      nlinarith
+    linarith
+  · -- Hx': fexp2(mag(x+y)) ≤ fexp1(mag(x+y)) - 1 → x + y < midp - (1/2) * ulp2
+    intro Hf2'
+    unfold midp
+    have h_ulp1_eq : ulp beta fexp1 (x + y) = bpow beta (fexp1 (mag beta x)) := by
+      rw [ulp_neq_0 _ _ hxy_ne]
+      show bpow beta (fexp1 (mag beta (x + y))) = _
+      rw [Lxy]
+    have h_ulp2_eq : ulp beta fexp2 (x + y) = bpow beta (fexp2 (mag beta x)) := by
+      rw [ulp_neq_0 _ _ hxy_ne]
+      show bpow beta (fexp2 (mag beta (x + y))) = _
+      rw [Lxy]
+    rw [h_ulp1_eq, h_ulp2_eq] at *
+    have h_fexp2_le : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1 := by
+      have := Hf2'; rw [Lxy] at this; exact this
+    have h_b1_pos : 0 < bpow beta (fexp1 (mag beta x)) := bpow_gt_0 _ _
+    -- Need bpow(fexp1 - 1) ≤ (1/2) * (bpow(fexp1) - bpow(fexp2)).
+    -- bpow(fexp2) ≤ bpow(fexp1 - 1) = bpow(-1) * bpow(fexp1) ≤ (1/3) * bpow(fexp1)
+    have h_b2_le_b1m1 : bpow beta (fexp2 (mag beta x))
+        ≤ bpow beta (fexp1 (mag beta x) - 1) := bpow_le beta h_fexp2_le
+    have h_b1m1_split : bpow beta (fexp1 (mag beta x) - 1)
+        = bpow beta (-1) * bpow beta (fexp1 (mag beta x)) := by
+      rw [← bpow_plus]; congr 1; ring
+    have h_b2_le_third : bpow beta (fexp2 (mag beta x))
+        ≤ (1 : ℝ) / 3 * bpow beta (fexp1 (mag beta x)) := by
+      rw [h_b1m1_split] at h_b2_le_b1m1
+      nlinarith
+    have h_pow_bound : bpow beta (fexp1 (mag beta x) - 1)
+        ≤ (1 : ℝ) / 2 * (bpow beta (fexp1 (mag beta x))
+                          - bpow beta (fexp2 (mag beta x))) := by
+      rw [h_b1m1_split]
+      nlinarith
+    linarith
+
+/-- Combine `aux0` and `aux1` by dispatching on `mag y` vs `fexp1(mag x) - 1`. -/
+theorem round_round_plus_radix_ge_3_aux2 (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_radix_ge_3_hyp fexp1 fexp2)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y) (Hyx : y ≤ x)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x + y) := by
+  rcases le_or_gt (mag beta y) (fexp1 (mag beta x) - 1) with Hly | Hly
+  · exact round_round_plus_radix_ge_3_aux1 beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2
+      choice1 choice2 Hexp Px Py Hly Fx
+  · unfold round_round_eq
+    have Hxy_fmt : generic_format beta fexp2 (x + y) :=
+      round_round_plus_radix_ge_3_aux0 beta fexp1 fexp2 Vfexp1 Hexp Px Py Hyx
+        (by omega) Fx Fy
+    rw [round_generic beta fexp2 (Znearest choice2) Hxy_fmt]
+
+/-- Drop the `y ≤ x` assumption to `0 ≤ x` and `0 ≤ y`. -/
+theorem round_round_plus_radix_ge_3_aux (beta : radix) (Hbeta : 3 ≤ beta.val)
+    (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_radix_ge_3_hyp fexp1 fexp2)
+    {x y : ℝ} (Nnx : 0 ≤ x) (Nny : 0 ≤ y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x + y) := by
+  have Hexp4 := Hexp.2.2.2
+  by_cases hx0 : x = 0
+  · subst hx0
+    have Hy_fmt2 : generic_format beta fexp2 y :=
+      generic_inclusion_mag beta fexp1 fexp2 (fun _ => Hexp4 _ _ (by omega)) Fy
+    unfold round_round_eq
+    rw [zero_add, round_generic beta fexp2 (Znearest choice2) Hy_fmt2]
+  · by_cases hy0 : y = 0
+    · subst hy0
+      have Hx_fmt2 : generic_format beta fexp2 x :=
+        generic_inclusion_mag beta fexp1 fexp2 (fun _ => Hexp4 _ _ (by omega)) Fx
+      unfold round_round_eq
+      rw [add_zero, round_generic beta fexp2 (Znearest choice2) Hx_fmt2]
+    · have Px : 0 < x := lt_of_le_of_ne Nnx (Ne.symm hx0)
+      have Py : 0 < y := lt_of_le_of_ne Nny (Ne.symm hy0)
+      rcases lt_or_ge x y with H | H
+      · -- x < y
+        rw [show x + y = y + x from by ring]
+        exact round_round_plus_radix_ge_3_aux2 beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2
+          choice1 choice2 Hexp Py Px (le_of_lt H) Fy Fx
+      · exact round_round_plus_radix_ge_3_aux2 beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2
+          choice1 choice2 Hexp Px Py H Fx Fy
+
 /-! ### Division arc -/
 
 /-- When `x` is so small that `mag x ≤ fexp1(mag x) - 2` (well below `fexp1`'s
