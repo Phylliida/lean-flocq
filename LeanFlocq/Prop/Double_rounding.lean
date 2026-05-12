@@ -1813,6 +1813,65 @@ theorem round_round_plus_aux0_aux_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
       show fexp2 (mag beta (x + y)) ≤ fexp1 (mag beta x)
       exact Hlnx
 
+/-- Workhorse for `round_round_plus_aux1`: when `y` is small enough that
+`mag y ≤ fexp (mag x) - k` and `mag (x + y) = mag x`, the floor-rounded
+`x + y` equals `x` exactly, so the difference is `y`, which lies in
+`(0, bpow (fexp (mag x) - k))`. -/
+theorem round_round_plus_aux1_aux (beta : radix) {k : ℤ} (Hk : 0 < k)
+    (fexp : ℤ → ℤ) {x y : ℝ}
+    (Px : 0 < x) (Py : 0 < y)
+    (Hln : mag beta y ≤ fexp (mag beta x) - k)
+    (Hlxy : mag beta (x + y) = mag beta x)
+    (Fx : generic_format beta fexp x) :
+    0 < (x + y) - round beta fexp (fun y : ℝ => ⌊y⌋) (x + y)
+    ∧ (x + y) - round beta fexp (fun y : ℝ => ⌊y⌋) (x + y)
+        < bpow beta (fexp (mag beta x) - k) := by
+  set mx : ℤ := Ztrunc (scaled_mantissa beta fexp x) with hmx_def
+  set ce : ℤ := fexp (mag beta x) with hce_def
+  have hFx : x = (mx : ℝ) * bpow beta ce := Fx
+  have hcxy : cexp beta fexp (x + y) = ce := by
+    unfold cexp; rw [Hlxy]
+  -- x * bpow(-ce) = mx
+  have hx_unscale : x * bpow beta (-ce) = (mx : ℝ) := by
+    conv_lhs => rw [hFx]
+    rw [mul_assoc, ← bpow_plus, show ce + (-ce) = 0 from by ring,
+        bpow_zero, mul_one]
+  -- sm(x+y) = mx + y * bpow(-ce)
+  have h_sm : scaled_mantissa beta fexp (x + y)
+      = (mx : ℝ) + y * bpow beta (-ce) := by
+    unfold scaled_mantissa; rw [hcxy, add_mul, hx_unscale]
+  -- y * bpow(-ce) > 0
+  have hbpow_pos : 0 < bpow beta (-ce) := bpow_gt_0 _ _
+  have hy_scaled_pos : 0 < y * bpow beta (-ce) := mul_pos Py hbpow_pos
+  -- y < bpow(ce - k)
+  have hy_lt_pow : y < bpow beta (ce - k) := by
+    have hy_high : |y| < bpow beta (mag beta y) := bpow_mag_gt _ _
+    rw [abs_of_pos Py] at hy_high
+    exact lt_of_lt_of_le hy_high (bpow_le beta Hln)
+  -- y * bpow(-ce) < bpow(-k)
+  have hy_scaled_lt_pow : y * bpow beta (-ce) < bpow beta (-k) := by
+    have h_target : bpow beta (-k) = bpow beta (ce - k) * bpow beta (-ce) := by
+      rw [← bpow_plus]; congr 1; ring
+    rw [h_target]; exact mul_lt_mul_of_pos_right hy_lt_pow hbpow_pos
+  -- bpow(-k) < 1
+  have hbpow_neg_k_lt_1 : bpow beta (-k) < 1 := by
+    have h := bpow_lt beta (show -k < 0 from by omega)
+    rwa [bpow_zero] at h
+  have hy_scaled_lt_1 : y * bpow beta (-ce) < 1 :=
+    lt_trans hy_scaled_lt_pow hbpow_neg_k_lt_1
+  -- ⌊mx + y * bpow(-ce)⌋ = mx
+  have h_floor : ⌊(mx : ℝ) + y * bpow beta (-ce)⌋ = mx := by
+    apply Int.floor_eq_iff.mpr
+    refine ⟨by linarith, by push_cast; linarith⟩
+  -- round_DN(x+y) = x
+  have h_round_eq_x : round beta fexp (fun y : ℝ => ⌊y⌋) (x + y) = x := by
+    unfold round
+    show ((⌊scaled_mantissa beta fexp (x + y)⌋ : ℤ) : ℝ)
+          * bpow beta (cexp beta fexp (x + y)) = x
+    rw [hcxy, h_sm, h_floor]; exact hFx.symm
+  rw [h_round_eq_x]
+  exact ⟨by linarith, by linarith⟩
+
 /-- Symmetric wrapper: drop the `fexp1 (mag x) ≤ fexp1 (mag y)` ordering
 assumption by case-split and `add_comm`. -/
 theorem round_round_plus_aux0_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ) (x y : ℝ)
@@ -1907,6 +1966,107 @@ theorem mag_minus_separated (beta : radix) (fexp : ℤ → ℤ)
   · rw [abs_of_pos h_xy_pos]
     have h_x_high : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
     rw [abs_of_pos Px] at h_x_high
+    linarith
+
+/-- `bpow β (-1) ≤ 1/2`. Sibling of `bpow_neg_two_le_quarter`. -/
+private theorem bpow_neg_one_le_half (beta : radix) :
+    bpow beta (-1) ≤ (1 : ℝ) / 2 := by
+  have h2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have h_b_pos : 0 < (beta.val : ℝ) := by linarith
+  have h_inv : bpow beta (-1) = 1 / (beta.val : ℝ) := by
+    show (beta.val : ℝ) ^ (-1 : ℤ) = 1 / (beta.val : ℝ)
+    rw [zpow_neg, zpow_one]; field_simp
+  rw [h_inv]
+  exact one_div_le_one_div_of_le (by norm_num) h2
+
+/-- `round_round_plus_aux1`: when `mag y ≤ fexp1 (mag x) - 2`, double
+rounding is innocuous via `round_round_lt_mid` applied at `x + y`. The
+key bounds are `bpow(-2) ≤ 1/4` (for the same-place leg) and the
+strict subset leg `bpow(-1) ≤ 1/2`. -/
+theorem round_round_plus_aux1 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y)
+    (Hly : mag beta y ≤ fexp1 (mag beta x) - 2)
+    (Fx : generic_format beta fexp1 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x + y) := by
+  -- Setup: mag(x+y) = mag x
+  have Lxy : mag beta (x + y) = mag beta x := by
+    apply mag_plus_separated beta fexp1 Px (le_of_lt Py) Fx
+    omega
+  obtain ⟨_, _, _, Hexp4⟩ := Hexp
+  have Hf2 : fexp2 (mag beta x) ≤ fexp1 (mag beta x) := Hexp4 _ _ (by omega)
+  have Bpow2 : bpow beta (-2) ≤ (1 : ℝ) / 4 := bpow_neg_two_le_quarter beta
+  have Bpow1 : bpow beta (-1) ≤ (1 : ℝ) / 2 := bpow_neg_one_le_half beta
+  have hxy_pos : 0 < x + y := by linarith
+  have hxy_ne : x + y ≠ 0 := ne_of_gt hxy_pos
+  have hfexp1_lt : fexp1 (mag beta x) < mag beta x :=
+    mag_generic_gt beta fexp1 Vfexp1 (ne_of_gt Px) Fx
+  -- aux1_aux with k = 2
+  obtain ⟨_, h_diff_lt⟩ := round_round_plus_aux1_aux beta (k := 2)
+    (by norm_num : (0 : ℤ) < 2) fexp1 Px Py Hly Lxy Fx
+  -- Apply round_round_lt_mid
+  apply round_round_lt_mid beta Vfexp1 Vfexp2 choice1 choice2 hxy_pos
+  · -- Hf2f1: fexp2(mag(x+y)) ≤ fexp1(mag(x+y))
+    rw [Lxy]; exact Hf2
+  · -- Hf1: fexp1(mag(x+y)) ≤ mag(x+y)
+    rw [Lxy]; omega
+  · -- Hx: x + y < midp β fexp1 (x + y)
+    unfold midp
+    have h_ulp_eq : ulp beta fexp1 (x + y) = bpow beta (fexp1 (mag beta x)) := by
+      rw [ulp_neq_0 _ _ hxy_ne]
+      show bpow beta (fexp1 (mag beta (x + y))) = _
+      rw [Lxy]
+    rw [h_ulp_eq]
+    -- Goal: x + y < round_DN(x+y) + (1/2) * bpow(fexp1(mag x))
+    -- We have: (x + y) - round_DN(x+y) < bpow(fexp1(mag x) - 2)
+    -- And: bpow(fexp1(mag x) - 2) ≤ (1/2) * bpow(fexp1(mag x))
+    have h_pow_bound : bpow beta (fexp1 (mag beta x) - 2)
+        ≤ (1 : ℝ) / 2 * bpow beta (fexp1 (mag beta x)) := by
+      have h_split : bpow beta (fexp1 (mag beta x) - 2)
+          = bpow beta (-2) * bpow beta (fexp1 (mag beta x)) := by
+        rw [← bpow_plus]; congr 1; ring
+      rw [h_split]
+      have h_pos : 0 < bpow beta (fexp1 (mag beta x)) := bpow_gt_0 _ _
+      nlinarith
+    linarith
+  · -- Hx': fexp2(mag(x+y)) ≤ fexp1(mag(x+y)) - 1 → x + y < midp - (1/2) * ulp2
+    intro Hf2'
+    unfold midp
+    have h_ulp1_eq : ulp beta fexp1 (x + y) = bpow beta (fexp1 (mag beta x)) := by
+      rw [ulp_neq_0 _ _ hxy_ne]
+      show bpow beta (fexp1 (mag beta (x + y))) = _
+      rw [Lxy]
+    have h_ulp2_eq : ulp beta fexp2 (x + y) = bpow beta (fexp2 (mag beta x)) := by
+      rw [ulp_neq_0 _ _ hxy_ne]
+      show bpow beta (fexp2 (mag beta (x + y))) = _
+      rw [Lxy]
+    rw [h_ulp1_eq, h_ulp2_eq] at *
+    -- Goal: x + y < round_DN + (1/2) * bpow(fexp1(mag x)) - (1/2) * bpow(fexp2(mag x))
+    -- We need: (x + y) - round_DN < (1/2) * (bpow(fexp1(mag x)) - bpow(fexp2(mag x)))
+    -- We have: (x + y) - round_DN < bpow(fexp1(mag x) - 2)
+    -- Suffices: bpow(fexp1(mag x) - 2) ≤ (1/2) * (bpow(fexp1(mag x)) - bpow(fexp2(mag x)))
+    have h_fexp2_le : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1 := by
+      have := Hf2'; rw [Lxy] at this; exact this
+    have h_b1_pos : 0 < bpow beta (fexp1 (mag beta x)) := bpow_gt_0 _ _
+    have h_b2_le_b1m1 : bpow beta (fexp2 (mag beta x))
+        ≤ bpow beta (fexp1 (mag beta x) - 1) := bpow_le beta h_fexp2_le
+    have h_b1m1_split : bpow beta (fexp1 (mag beta x) - 1)
+        = bpow beta (-1) * bpow beta (fexp1 (mag beta x)) := by
+      rw [← bpow_plus]; congr 1; ring
+    have h_b2_le_half : bpow beta (fexp2 (mag beta x))
+        ≤ (1 : ℝ) / 2 * bpow beta (fexp1 (mag beta x)) := by
+      rw [h_b1m1_split] at h_b2_le_b1m1
+      nlinarith
+    have h_pow_bound : bpow beta (fexp1 (mag beta x) - 2)
+        ≤ (1 : ℝ) / 2 * (bpow beta (fexp1 (mag beta x))
+                          - bpow beta (fexp2 (mag beta x))) := by
+      have h_split : bpow beta (fexp1 (mag beta x) - 2)
+          = bpow beta (-2) * bpow beta (fexp1 (mag beta x)) := by
+        rw [← bpow_plus]; congr 1; ring
+      rw [h_split]
+      nlinarith
     linarith
 
 /-- `round_round_plus_aux0`: when `fexp1 (mag x) - 1 ≤ mag y`, the addition
