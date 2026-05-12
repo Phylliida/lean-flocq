@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `bb062ae`)
+## Status (as of commit `080fbb9`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -18,20 +18,16 @@ plus the full sqrt error family (`sqrt_error_N_FLX[_ex/_round_ex]`,
 (`format_REM_aux`, `format_REM`, `format_REM_ZR`, `format_REM_N`),
 **all of `Prop/Round_odd.v`** including the no-double-rounding capstone
 `round_N_odd` (and its positive-x core `round_N_odd_pos`),
-**the core mid-rounding theorems + multiplication arc + bridge + entire
-sqrt arc + entire plus/minus arc with FLX/FLT/FTZ instantiations of
-`Prop/Double_rounding.v`** (`_lt_mid` and `_gt_mid` families with
-dispatchers, `round_round_mult` with FLX/FLT/FTZ corollaries,
-`round_round_mid_cases` bridge, `round_round_sqrt_aux` keystone,
-`round_round_sqrt` and FLX/FLT/FTZ corollaries, six mag helpers,
-the full plus/minus aux family, **`round_round_plus`** and
-**`round_round_minus`** keystones, plus their FLX/FLT/FTZ
-instantiations), and **the encoding/decoding core of `IEEE754/Bits.v`**
-including both round-trip theorems. The IEEE 754 binary encoding is now
-a proven bijection between `binary_float` and integers in
+**the entire main arc of `Prop/Double_rounding.v`** — core mid-rounding,
+multiplication arc, bridge, sqrt arc, plus/minus arc, and **division arc
+complete** with FLX/FLT/FTZ instantiations for all four operations
+(`round_round_mult/sqrt/plus/minus/div` keystones plus their three
+concrete-format corollaries each), and **the encoding/decoding core of
+`IEEE754/Bits.v`** including both round-trip theorems. The IEEE 754 binary
+encoding is now a proven bijection between `binary_float` and integers in
 `[0, 2^(mw+ew+1))`.
 
-**~20700 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
+**~21500 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -60,10 +56,10 @@ a proven bijection between `binary_float` and integers in
 | `Prop/Plus_error.lean` | 670 | `Prop/Plus_error.v` | **Complete: 20.** Keystones: `round_repr_same_exp`, `plus_error_aux`, `plus_error`. Zero family: `FLT_format_plus_small`, `round_plus_neq_0_aux`, `round_plus_neq_0`, `round_plus_eq_0`. Trivial bounds: `plus_error_le_l/r`. Helpers: `ex_shift`, `mag_minus1`, `lt_mag`, `mag_minus_lb`. mult_ulp section: `round_plus_F2R`, `round_plus_ge_ulp`. plus_ge family: `round_FLT_plus_ge`, `round_FLT_plus_ge'`, `round_FLX_plus_ge`. **Unit-roundoff variants:** `FLT_plus_error_N_ex` and `FLT_plus_error_N_round_ex`. |
 | `Prop/Div_sqrt_error.lean` | 1328 | `Prop/Div_sqrt_error.v` | **Complete (file fully ported).** Keystones: `generic_format_plus_prec`, `div_error_FLX`, `sqrt_error_FLX_N`. Sqrt unit-roundoff helpers: `om1ds1p2u_ro_pos`, `s1p2u_rom1_pos`, `om1ds1p2u_ro_le_u_rod1pu_ro`. Main sqrt error theorem and variants: `sqrt_bpow_even`, `sqrt_error_N_FLX_aux1/_aux2/_aux3`, `sqrt_error_N_FLX`, `sqrt_error_N_FLX_ex`, `sqrt_error_N_FLX_round_ex`, `sqrt_bpow_ge`, `sqrt_error_N_FLT_ex`, `sqrt_error_N_FLT_round_ex`. format_REM family: `format_REM_aux`, `format_REM_pos` (private), `format_REM`, `format_REM_ZR`, `format_REM_N`. Note: `sqrt_error_N_FLX_aux2` strengthened to `prec > 1` to avoid edge case at prec=1, β=2 where `1 + 2u_ro = β`. |
 | `Prop/Round_odd.lean` | 1427 | `Prop/Round_odd.v` | **Complete.** Z-level: `Zrnd_odd` (the rounding function — rounds non-integers to the odd integer between floor and ceiling), `valid_rnd_odd`, `Zrnd_odd_Zodd`, `Zfloor_plus`, `Zceil_plus`, `Zeven_abs`, `Zrnd_odd_plus`. R-level: `Rnd_odd_pt` predicate, `Rnd_odd`, `Rnd_odd_pt_opp_inv`, `round_odd_opp`. Core: `round_odd_pt` (the keystone), `Rnd_odd_pt_unique`, `Rnd_odd_pt_monotone`. **Odd_prop_aux geometry (Stage 5):** `generic_format_fexpe_fexp`, `exists_even_fexp_lt`, `d_eq_round_DN`, `u_eq_round_UP`, `d_ge_0`, `mag_d`, `Fexp_d`, `format_bpow_x`, `format_bpow_d`, `d_le_m`, `m_le_u`, `mag_m`, `mag_m_0`, `u'_eq`, `m_eq`, `m_eq_0`, `fexp_m_eq_0`, `Fm`, `Zm`, `DN_odd_d_aux`, `UP_odd_d_aux`. **Keystones:** `round_N_odd_pos` (the no-double-rounding theorem for positive x — rounding-to-nearest of round-to-odd at coarser precision equals rounding-to-nearest directly, when fexpe ≤ fexp - 2 and β even) and `round_N_odd` (general form via opp symmetry). **Stage 6 (cexp preservation):** `mag_round_odd` and `fexp_round_odd` (FLT, β even, prec > 1: round-to-odd preserves both `mag` and `cexp`). |
-| `Prop/Double_rounding.lean` | 2983 | `Prop/Double_rounding.v` (~62% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + full plus/minus arc + division-arc preludes.** Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers (`mag_plus`/`mag_minus` in Raux, `mag_plus_disj`/`mag_plus_separated`/`mag_minus_disj`/`mag_minus_separated`), `bpow_neg_one_le_half` helper, **plus aux family** (`aux0_aux_aux` → `aux0_aux` → `aux0`, `aux1_aux` → `aux1`, `aux2`, `aux`), **minus aux family** (`aux0_aux` → `aux0`, `aux1`, **`aux2_aux`** the big case-split on whether `x` strictly exceeds `bpow(mag x - 1)`, `aux2`, `aux3`, `aux`), **`round_round_plus`** and **`round_round_minus`** keystones (dispatching on signs via `round_N_opp` and `generic_format_opp`), plus FLX/FLT/FTZ instantiations for both `plus` and `minus` (3 hyp lemmas + 6 user-facing theorems). **Division-arc preludes:** `round_round_really_zero` (deep small case), `round_round_zero` (boundary case), `round_round_all_mid_cases` (full dispatcher with 4 user callbacks), `round_round_eq_mid_beta_even` (the bridge — at midpoint with β even, x ∈ F2 directly), `mag_div_disj` helper, `round_round_div_hyp` (5-conjunct precision condition). |
+| `Prop/Double_rounding.lean` | 3824 | `Prop/Double_rounding.v` (~80% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + full plus/minus arc + full division arc.** Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers, plus/minus aux families, **`round_round_plus`** and **`round_round_minus`** keystones, plus FLX/FLT/FTZ instantiations. **Division arc complete:** `round_round_really_zero`, `round_round_zero`, `round_round_all_mid_cases` (4-callback dispatcher), `round_round_eq_mid_beta_even` (bridge for β even), `mag_div_disj`, `round_round_div_hyp` (5-conjunct precision), **`round_round_div_aux0/1/2`** (the three case-split preludes — boundary/below-midpoint/above-midpoint), **`round_round_div_aux`** dispatcher, **`round_round_div`** keystone (with sign dispatch via `round_N_opp` for negative x or y), FLX/FLT/FTZ instantiations (3 hyp lemmas + 3 user theorems). |
 | `IEEE754/Bits.lean` | 900 | `IEEE754/Bits.v` (subset) | **Bit encoding fully proven: 14 + 5 helpers.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **Deferred:** B32/B64 instantiations (need arithmetic ops). |
 
-**Total: ~678 Lean theorems vs ~480 substantive Coq theorems** (we have extras
+**Total: ~700 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
 ## Build setup
@@ -277,48 +273,57 @@ not needed for downstream Flocq theorems.
 
 Core, Calc, all of Prop/{Relative, Sterbenz, Mult_error, Plus_error,
 Div_sqrt_error, Round_odd}, the core mid-rounding + multiplication +
-mid_cases bridge + entire sqrt arc + entire plus/minus arc (with
-FLX/FLT/FTZ instantiations) of Prop/Double_rounding are done. The
-remaining work is the division arc + secondary radix tracks of
-Double_rounding, the substantial part of `Binary.lean`, and the rest of
-`IEEE754/Bits.v`:
+mid_cases bridge + sqrt arc + plus/minus arc + **division arc** (all
+with FLX/FLT/FTZ instantiations) of Prop/Double_rounding are done. The
+remaining work is the secondary radix tracks of Double_rounding, the
+substantial part of `Binary.lean`, and the rest of `IEEE754/Bits.v`:
 
-1. **Division arc of `Prop/Double_rounding.v`** (~900 Coq lines remaining) —
-   the four preludes (`round_round_really_zero`, `round_round_zero`,
-   `round_round_all_mid_cases`, `round_round_eq_mid_beta_even`) are done.
-   What remains: three aux lemmas (`round_round_div_aux0` ~136 Coq lines,
-   `round_round_div_aux1` ~187, `round_round_div_aux2` ~198), the
-   dispatcher `round_round_div_aux`, the keystone `round_round_div`, and
-   FLX/FLT/FTZ instantiations. **Surprise found 2026-05-12**: the bridge
-   itself does NOT use `round_N_odd` — it's purely algebraic
-   (`x = rd + (1/2)·β^c1 = rd + n·β^(c1-1)` when `β = 2n`, putting `x` in
-   `F2` directly). The round-to-odd dependency kicks in for the aux
-   lemmas, presumably to chain through the `round_round_all_mid_cases`
-   user callbacks. This is still the biggest remaining Double_rounding
-   piece by far.
-
-2. **Plus/minus `radix_ge_3` track** — parallel variant of the plus
+1. **Plus/minus `radix_ge_3` track** — parallel variant of the plus
    arc with a different hypothesis (`round_round_plus_radix_ge_3_hyp`)
    that uses `≤` instead of `≤ - 1` in three of the four conjuncts.
    Should largely mirror what's done — the aux lemmas follow the same
    skeleton but with different bounds.
 
-3. **Sqrt `radix_ge_4` track** — parallel to plus's `radix_ge_3`, the
+2. **Sqrt `radix_ge_4` track** — parallel to plus's `radix_ge_3`, the
    tail of the sqrt section in Coq. Smaller than the plus/minus arc.
 
-4. **Back to `Binary.lean`**: `shr_record` infrastructure (lines 745–925 of
+3. **Back to `Binary.lean`**: `shr_record` infrastructure (lines 745–925 of
    Binary.v), `binary_round_aux`, then the arithmetic ops (`Bplus`, `Bmult`,
    `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`, `Bsucc`, `Bpred`.
    `error_N_FLT` from `Prop/Relative.lean` is the keystone for the
    correctness proofs.
 
-5. **`IEEE754/Bits.v` (remainder)** — beyond the encoding/decoding round-trips
+4. **`IEEE754/Bits.v` (remainder)** — beyond the encoding/decoding round-trips
    already proven, there are B32/B64-specific instantiations and helper lemmas.
    Mostly blocked on arithmetic ops in `Binary.lean`.
 
-6. **`Calc/Round.v` cleanup**: add `Zdigits_div_Zpower` to `Digits.lean` to
+5. **`Calc/Round.v` cleanup**: add `Zdigits_div_Zpower` to `Digits.lean` to
    unblock the few remaining `generic_format_truncate`/`truncate_correct_format`
    polish points. Mostly nice-to-have.
+
+### Notes from the division-arc port (2026-05-12 → 2026-05-12 cont.)
+
+The "surprise" past-me flagged on 2026-05-12 — that the bridge
+`round_round_eq_mid_beta_even` does NOT use `round_N_odd` (it's purely
+algebraic for β even) — held up across the rest of the arc. **None of
+the three aux lemmas use `round_N_odd` either.** They use the same
+mag-disjunction + Hexp-conjunct-dispatch structure as the multiplication
+and sqrt arcs. The five conjuncts of `round_round_div_hyp` are exactly
+the precisions needed for the three different `bpow_le` gap steps
+(c2 + ey ≤ magd + cy for aux0 Case A; c2 + ey ≤ cx for aux0 Case B; etc.)
+plus their conjunct-4 large-regime variants for aux1/aux2.
+
+The keystone's negative-divisor cases use `round_N_opp` to flip choice
+functions consistently. Trick: don't `congr 1` after the three opp rewrites
+(timeout); instead explicitly construct `round_round_div_aux` with the
+flipped choice functions and rewrite via the equality. Then the unfolded
+forms match by `rfl`.
+
+The FTZ hyp proof reduces to `split_ifs at *; omega` for all five
+conjuncts. The FLT hyp proof reduces to `simp only [max_def] at *;
+split_ifs at * <;> omega`. The FLX hyp is just `omega`. This is much
+shorter than the Coq versions (each used several `destruct (Zmax_spec ...)`
+or `Z.ltb_spec` per conjunct).
 
 ## Useful commands
 
