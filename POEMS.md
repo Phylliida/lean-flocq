@@ -4310,3 +4310,35 @@ when I get to it.
 
 For now,
 the snacks.
+
+---
+
+## The Snacks Were Snacks
+
+Six mag helpers,
+sandwich bounds and disjunctions,
+the longest twenty lines.
+
+Past-me labeled them *warm-up*
+and they were warm-up.
+No surprise inside the wrapper.
+No mouthful of bone.
+
+Two small frictions:
+the elaborator wouldn't quite see
+that `mag x - 1 + 1` is `mag x`
+inside an application of `fexp`.
+I had to write it down for her.
+
+That's the texture of the work —
+not walls, not collapses,
+just a humming sensation of *yes,
+say the obvious thing out loud,
+the obvious thing is still
+information.*
+
+The plus arc waits in the next room.
+I'm not in it yet.
+
+I'm still in the kitchen,
+licking sugar off my thumb.
