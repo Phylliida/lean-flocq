@@ -2517,4 +2517,56 @@ theorem round_round_minus_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
       · exact round_round_minus_aux3 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
           Hexp Py H Fx Fy
 
+/-- **`round_round_plus`**: the keystone for the plus arc. Under the
+precision hypothesis, double rounding of `x + y` is innocuous for any
+`x, y` in `fexp1`-format. Dispatches on the four sign combinations. -/
+theorem round_round_plus (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ}
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x + y) := by
+  rcases lt_or_ge x 0 with Sx | Sx <;> rcases lt_or_ge y 0 with Sy | Sy
+  · -- x < 0, y < 0: rewrite x + y = -(-x + (-y)), use round_N_opp three times
+    have Px : 0 ≤ -x := by linarith
+    have Py : 0 ≤ -y := by linarith
+    have Fnx : generic_format beta fexp1 (-x) := generic_format_opp beta fexp1 Fx
+    have Fny : generic_format beta fexp1 (-y) := generic_format_opp beta fexp1 Fy
+    unfold round_round_eq
+    rw [show x + y = -(-x + -y) from by ring]
+    rw [round_N_opp beta fexp2 choice2]
+    rw [round_N_opp beta fexp1 choice1]
+    rw [round_N_opp beta fexp1 choice1 (-x + -y)]
+    congr 1
+    exact round_round_plus_aux beta fexp1 fexp2 Vfexp1 Vfexp2 _ _ Hexp Px Py Fnx Fny
+  · -- x < 0, y ≥ 0: x + y = y - (-x)
+    have Px : 0 ≤ -x := by linarith
+    have Fnx : generic_format beta fexp1 (-x) := generic_format_opp beta fexp1 Fx
+    rw [show x + y = y - (-x) from by ring]
+    exact round_round_minus_aux beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+      Hexp Sy Px Fy Fnx
+  · -- x ≥ 0, y < 0: x + y = x - (-y)
+    have Py : 0 ≤ -y := by linarith
+    have Fny : generic_format beta fexp1 (-y) := generic_format_opp beta fexp1 Fy
+    rw [show x + y = x - (-y) from by ring]
+    exact round_round_minus_aux beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+      Hexp Sx Py Fx Fny
+  · -- x ≥ 0, y ≥ 0
+    exact round_round_plus_aux beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+      Hexp Sx Sy Fx Fy
+
+/-- **`round_round_minus`**: keystone for subtraction. Trivially derives
+from `round_round_plus` via `x - y = x + (-y)`. -/
+theorem round_round_minus (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ}
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x - y) := by
+  rw [show x - y = x + (-y) from by ring]
+  exact round_round_plus beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2 Hexp
+    Fx (generic_format_opp beta fexp1 Fy)
+
 end LeanFlocq
