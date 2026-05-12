@@ -2891,6 +2891,68 @@ theorem round_round_all_mid_cases (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
           exact round_round_gt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
             Hf2 Hfle Hgt''
 
+/-- The bridge for `round_round_all_mid_cases`'s "x exactly at midpoint" case
+under an even radix. When `β = 2n`, the midpoint `rd + (1/2)·β^(c1)` rewrites
+as `rd + n·β^(c1-1)`, putting `x` into a float at exponent `c2` with integer
+mantissa. So `x ∈ F2` directly and the inner rounding is identity. -/
+theorem round_round_eq_mid_beta_even (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (_Vfexp1 : Valid_exp fexp1) (_Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Ebeta : ∃ n : ℤ, (beta.val : ℤ) = 2 * n)
+    {x : ℝ}
+    (Px : 0 < x)
+    (Hf2 : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1)
+    (_Hf1 : fexp1 (mag beta x) ≤ mag beta x)
+    (Hmid : x = midp beta fexp1 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  unfold round_round_eq
+  obtain ⟨n, En⟩ := Ebeta
+  have En_real : (beta.val : ℝ) = 2 * (n : ℝ) := by exact_mod_cast En
+  have Hx_ne : x ≠ 0 := ne_of_gt Px
+  set c1 := fexp1 (mag beta x) with hc1_def
+  set c2 := fexp2 (mag beta x) with hc2_def
+  have Hd1 : 0 ≤ c1 - 1 - c2 := by linarith
+  have Hd2 : 0 ≤ c1 - c2 := by linarith
+  set mr : ℤ := ⌊x * bpow beta (-c1)⌋ with hmr_def
+  -- rd = round_DN_fexp1 x = mr * bpow β c1 from round Zfloor definition
+  have Hrd_eq : round beta fexp1 (fun y : ℝ => ⌊y⌋) x = (mr : ℝ) * bpow beta c1 := rfl
+  -- The midpoint condition: x = mr * β^c1 + (1/2) * β^c1
+  have Hxmid : x = (mr : ℝ) * bpow beta c1 + (1/2) * bpow beta c1 := by
+    rw [Hmid]; unfold midp
+    rw [Hrd_eq, ulp_neq_0 beta fexp1 Hx_ne]
+    rfl
+  -- Half-bpow identity using β = 2n: (1/2) β^c1 = n * β^(c1-1)
+  have Hhalf : (1/2 : ℝ) * bpow beta c1 = (n : ℝ) * bpow beta (c1 - 1) := by
+    have h1 : bpow beta (1 : ℤ) = (beta.val : ℝ) := by unfold bpow; simp
+    have hpow : bpow beta c1 = bpow beta (c1 - 1) * (beta.val : ℝ) := by
+      conv_lhs => rw [show c1 = (c1 - 1) + 1 from by ring]
+      rw [bpow_plus, h1]
+    rw [hpow, En_real]; ring
+  -- IZR_Zpower bridges for both exponents
+  have hbp1 : (((beta.val : ℤ) ^ (c1 - c2).toNat : ℤ) : ℝ) = bpow beta (c1 - c2) :=
+    IZR_Zpower beta Hd2
+  have hbp2 : (((beta.val : ℤ) ^ (c1 - 1 - c2).toNat : ℤ) : ℝ) = bpow beta (c1 - 1 - c2) :=
+    IZR_Zpower beta Hd1
+  -- The integer mantissa of x at exponent c2
+  set mx : ℤ := mr * (beta.val : ℤ) ^ (c1 - c2).toNat
+              + n * (beta.val : ℤ) ^ (c1 - 1 - c2).toNat with hmx_def
+  -- F2R ⟨mx, c2⟩ = x
+  have HF2R : F2R (beta := beta) ⟨mx, c2⟩ = x := by
+    show (mx : ℝ) * bpow beta c2 = x
+    rw [hmx_def, Int.cast_add, Int.cast_mul, Int.cast_mul, hbp1, hbp2]
+    rw [add_mul, mul_assoc ((mr : ℝ)), mul_assoc ((n : ℝ))]
+    rw [← bpow_plus, ← bpow_plus]
+    rw [show (c1 - c2 + c2 : ℤ) = c1 from by ring,
+        show (c1 - 1 - c2 + c2 : ℤ) = c1 - 1 from by ring]
+    rw [← Hhalf]
+    exact Hxmid.symm
+  -- x ∈ F2
+  have Hf2x : generic_format beta fexp2 x := by
+    refine generic_format_F2R' beta fexp2 ⟨mx, c2⟩ HF2R (fun _ => ?_)
+    show cexp beta fexp2 x ≤ c2
+    rfl
+  rw [round_generic beta fexp2 (Znearest choice2) Hf2x]
+
 /-- `mag (x / y) ∈ {mag x - mag y, mag x - mag y + 1}` when `x, y > 0`. -/
 theorem mag_div_disj (beta : radix) {x y : ℝ} (Px : 0 < x) (Py : 0 < y) :
     mag beta (x / y) = mag beta x - mag beta y ∨
