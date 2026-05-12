@@ -821,6 +821,23 @@ def binary_overflow (prec emax : ℤ) (m : mode) (s : Bool) : full_float :=
   if overflow_to_inf m s then full_float.F754_infinity s
   else full_float.F754_finite s (2 ^ prec.toNat - 1) (emax - prec)
 
+/-- For each rounding mode, `round_mode m` paired with `choice_mode m`
+satisfies the `inbetween_int_valid` shape required by
+`round_trunc_sign_any_correct'`: given a bracketing of `|x|` between integers
+`mx` and `mx+1` with location `l`, the integer-rounded value is the
+sign-flipped `choice_mode` result. -/
+theorem inbetween_int_valid_round_mode (m : mode) (x : ℝ) (mx : ℤ)
+    (l : location) (hin : inbetween_int mx |x| l) :
+    round_mode m x =
+      cond_Zopp (decide (x < 0))
+        (choice_mode m (decide (x < 0)) mx l) := by
+  cases m with
+  | mode_NE => exact inbetween_int_NE_sign hin
+  | mode_ZR => exact inbetween_int_ZR_sign hin
+  | mode_DN => exact inbetween_int_DN_sign hin
+  | mode_UP => exact inbetween_int_UP_sign hin
+  | mode_NA => exact inbetween_int_NA_sign hin
+
 end binary_float
 
 /-! ### Truncation: shr_record

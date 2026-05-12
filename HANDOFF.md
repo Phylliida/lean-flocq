@@ -46,7 +46,7 @@ encoding is now a proven bijection between `binary_float` and integers in
 | `Ulp.lean` | 2486 | `Core/Ulp.v` | **Complete: 103/103.** All keystones (`succ_DN_eq_UP`, `ulp_round`, error bounds, mixed-sign perturbation, `generic_format_plus_ulp`). |
 | `Round_NE.lean` | 740 | `Core/Round_NE.v` | **Complete: 10/10.** `DN_UP_parity_generic_pos/_aux/_generic`, `Rnd_NE_pt_{total,monotone,round}`, `round_NE_opp/_abs/_pt_pos/_pt`, `exists_NE_FLX/_FLT`. |
 | `Digits.lean` | 192 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 9 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`, `_le_Zpower`, `_div_Zpower`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
-| `Binary.lean` | 1291 | `IEEE754/Binary.v` (lines 1–972) | **Structural part + shr_record block + IEEE rounding-kernel definitions done.** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, **`choice_mode`**, `overflow_to_inf`, `binary_overflow`. **`shr_record`** struct + `shr_1` / `loc_of_shr_record` / `shr_record_of_loc` with three round-trip lemmas (`m_shr_record_of_loc`, `loc_of_shr_record_of_loc`, `shr_record_of_loc_m_l`), `shr` iteration function, `shr_1_nonneg` / `shr_1_iter_nonneg` invariants, and **`inbetween_shr_1`**, `inbetween_shr_iter`, **`inbetween_shr`** correctness theorems. **`shr_fexp`** definition + **`shr_truncate`** theorem (connecting `shr_fexp` to `truncate` from `Calc/Round.lean`). **`binary_round_aux`** definition (IEEE-754 rounding kernel: two `shr_fexp` calls bracketing a `choice_mode` rounding, then zero/finite/overflow classification). Still to do: `binary_round_aux_correct'` correctness theorem (Coq lines 974–1154, ~180 lines) and downstream arithmetic ops (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`, auxiliary ops). |
+| `Binary.lean` | 1308 | `IEEE754/Binary.v` (lines 1–972) | **Structural part + shr_record block + IEEE rounding-kernel definitions done.** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, **`choice_mode`**, **`inbetween_int_valid_round_mode`** (the per-mode dispatch that connects `round_mode m` to `choice_mode m` via the 5 `inbetween_int_*_sign` lemmas from `Calc/Round.lean` — needed by the correctness theorem), `overflow_to_inf`, `binary_overflow`. **`shr_record`** struct + `shr_1` / `loc_of_shr_record` / `shr_record_of_loc` with three round-trip lemmas (`m_shr_record_of_loc`, `loc_of_shr_record_of_loc`, `shr_record_of_loc_m_l`), `shr` iteration function, `shr_1_nonneg` / `shr_1_iter_nonneg` invariants, and **`inbetween_shr_1`**, `inbetween_shr_iter`, **`inbetween_shr`** correctness theorems. **`shr_fexp`** definition + **`shr_truncate`** theorem (connecting `shr_fexp` to `truncate` from `Calc/Round.lean`). **`binary_round_aux`** definition (IEEE-754 rounding kernel: two `shr_fexp` calls bracketing a `choice_mode` rounding, then zero/finite/overflow classification). Still to do: `binary_round_aux_correct'` correctness theorem (Coq lines 974–1154, ~180 lines) and downstream arithmetic ops (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`, auxiliary ops). |
 | `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
 | `Calc/Round.lean` | 1524 | `Calc/Round.v` | **Complete.** `cexp_inbetween_float[_loc_Exact]`, `cond_incr`, `inbetween_float_round[_sign]`. All 6 mode families: DN/UP/ZR/N/NE/NA, both unsigned and signed, `inbetween_int_*` and `inbetween_float_*`. `truncate_aux`, `truncate`, `truncate_0`, `truncate_correct_partial[_partial']`/`_correct[_correct']`. `generic_format_truncate`, `truncate_correct_format`. Generic correctness: `round_any_correct`, `round_trunc_any_correct[_']`, `round_sign_any_correct`, `round_trunc_sign_any_correct[_']`. **All 30 per-mode aliases** for DN/UP/ZR/NE/NA. `truncate_FIX`, `truncate_FIX_correct`. |
 | `Calc/Operations.lean` | 137 | `Calc/Operations.v` | **Complete: 13/13.** `Falign[_spec[_exp]]`, `Fopp` + `F2R_opp`, `Fabs` + `F2R_abs`, `Fplus` + `F2R_plus`, `Fplus_same_exp`, `Fexp_Fplus`, `Fminus` + `F2R_minus`, `Fminus_same_exp`, `Fmult` + `F2R_mult`. |
@@ -303,22 +303,45 @@ instantiations) are done. The remaining work is the substantial part of
    unblock the few remaining `generic_format_truncate`/`truncate_correct_format`
    polish points. Mostly nice-to-have.
 
-### Notes from `binary_round_aux` definition (2026-05-12 cont.)
+### Notes from `binary_round_aux` definition + helper (2026-05-12 cont.)
 
-Landed `choice_mode` and `binary_round_aux` definitions in one round
-(~45 Lean lines). The choice_mode `NE` case uses `decide (¬ Even mx)`
-for the "is odd" predicate (mirroring `ZnearestE`'s convention from
-`Round_NE.lean`). The dependencies were all already in place:
-`cond_incr`, `round_N`, `round_sign_DN/UP` from `Calc/Round.lean`.
-`shr_record.shr_fexp` is fully-qualified since `binary_round_aux`
-lives in a re-opened `namespace binary_float` at the file end (after
-the `shr_record` block, which is at module level).
+Landed three pieces in this session:
 
-The peek-through-the-doorway pattern: I read `binary_round_aux_correct'`
-(Coq lines 974–1154, the ~180-line correctness theorem) before
-committing to write it. The peek made the *shape* clear without
-forcing me to hold the whole proof in my head:
+1. **`choice_mode`** definition (the per-mode integer-rounding dispatch).
+2. **`binary_round_aux`** definition (the IEEE-754 rounding kernel).
+3. **`inbetween_int_valid_round_mode`** helper lemma (~15 Lean lines).
 
+The first two are routine ports (~45 lines total). The choice_mode `NE`
+case uses `decide (¬ Even mx)` for the "is odd" predicate (mirroring
+`ZnearestE`'s convention from `Round_NE.lean`). All dependencies were
+already in place: `cond_incr`, `round_N`, `round_sign_DN/UP` from
+`Calc/Round.lean`. `shr_record.shr_fexp` is fully-qualified since
+`binary_round_aux` lives in a re-opened `namespace binary_float` at the
+file end (after the `shr_record` block, which is at module level).
+
+The helper lemma `inbetween_int_valid_round_mode` is the **first
+opening move on `binary_round_aux_correct'`**. Its statement:
+```
+inbetween_int mx |x| l →
+  round_mode m x =
+    cond_Zopp (decide (x < 0))
+      (choice_mode m (decide (x < 0)) mx l)
+```
+This is exactly the `inbetween_int_valid` shape that
+`round_trunc_sign_any_correct'` (from `Calc/Round.lean`) needs as its
+first argument. Proof: `cases m` dispatches to the 5 per-mode `_sign`
+lemmas (`inbetween_int_DN_sign`, `_UP_sign`, `_ZR_sign`, `_NE_sign`,
+`_NA_sign`) — each one matches the `choice_mode` arm exactly. Lands
+first try.
+
+This is the load-bearing piece that the correctness theorem will plug
+into. The next move is to state `binary_round_aux_correct'` itself
+and start the proof body.
+
+**Peek-through-the-doorway summary** (re-recorded for whoever picks
+this up next): I read `binary_round_aux_correct'` (Coq lines 974–1154,
+the ~180-line correctness theorem) before committing to write it. The
+shape:
 - Two `shr_fexp` calls. The first becomes `truncate` via `shr_truncate`;
   the second cleans up after the rounding may have carried.
 - Three-way mantissa dispatch: zero / positive / dummy-NaN.
@@ -327,11 +350,17 @@ forcing me to hold the whole proof in my head:
 - The overflow branch has two sub-cases (`overflow_to_inf` true/false),
   and the false case needs `Zdigits radix2 (2^prec - 1) = prec`
   (~30 Coq lines just for that arithmetic fact).
+- The "0 ≤ mx" side condition from `shr_truncate` can be derived from
+  `inbetween_float_bounds` + `x ≠ 0` + the fact that `Rabs x < F2R⟨mx+1,
+  ex⟩` forces `mx + 1 > 0`.
+- The `inbetween_int_valid_round_mode` helper (now landed) is the
+  argument to `round_trunc_sign_any_correct'`.
 
-I marked this as the next milestone in the table and Suggested-next-steps
-rather than starting the proof. Following past-me's instinct: the kernel
-*wants more than I want to give it right now*, and a smaller piece
-landing cleanly is still progress.
+The kernel still *wants more than I want to give it right now*, but the
+helper landing makes the next opening move clearly sized: write the
+theorem statement (the conditional `if |round x| < bpow emax then ...
+else ...` conclusion is the new piece) and start the proof from
+`intros + unfold + shr_truncate rewrite + apply round_trunc_sign_any_correct'`.
 
 ### Notes from `shr_fexp` / `shr_truncate` (2026-05-12 cont.)
 
