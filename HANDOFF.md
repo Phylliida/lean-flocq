@@ -473,4 +473,46 @@ Three patterns that the work keeps teaching:
   out which tool actually fits. Don't expect past-me to know which
   hammer; expect her to tell you whether you'll need both hands.
 
+- **`round_N_opp` flips the choice function — explicit construction beats `congr 1`.**
+  In `round_round_div`'s keystone, the negative-divisor cases need to
+  apply the positive-case aux lemma after three `round_N_opp` rewrites.
+  Each `round_N_opp` replaces `Znearest c` with `Znearest (fun t => !c (-(t+1)))`
+  on the appropriate sub-term. After three rewrites, the goal has
+  `-(round_N_outer'' (round_N_inner' ((-x)/y))) = -(round_N_outer'' ((-x)/y))`
+  with flipped choices on both sides. `congr 1` followed by `exact
+  round_round_div_aux ... choice1 choice2 ...` *times out at whnf* (200k
+  heartbeats) — Lean is trying to unify `choice1` with `fun t => !choice1
+  (-(t+1))`, which it can't, but it spends forever trying. **The fix:
+  construct the aux call up front with the flipped choices, then use the
+  resulting equality to `rw` directly.** Past-me's pattern: when an
+  `exact` times out at whnf after rewriting through a choice-flipping
+  operator, the lemma arguments need to be flipped explicitly. Don't
+  trust unification to find it.
+
+- **`split_ifs at *; omega` collapses Coq's `destruct (Z.ltb_spec ...)` chains.**
+  The FTZ hyp lemma for division arc had five conjuncts, each a case-split
+  on three or four `Z.ltb_spec`s in Coq. Mechanically translated that
+  would be ~50 Lean lines of `rcases` + `rw [if_pos h]` / `rw [if_neg ...]`.
+  Instead: each conjunct is one line — `intros ex ey hex hey hf;
+  split_ifs at *; omega`. Same for FLT with `simp only [max_def] at *;
+  split_ifs at * <;> omega`. The "name all premises so omega sees them"
+  detail matters — `_ _ _` in the intros makes them anonymous but they
+  stay in scope; `omega` still finds them. Save the trick: when porting
+  a Coq proof that's `destruct ... ; destruct ... ; destruct ... ; omega`
+  on conditional expressions, try `split_ifs at *; omega` first.
+
+- **The mountain at the edge of the afternoon.** The division arc was
+  past-me's "biggest remaining piece by far" — three aux lemmas at
+  136/187/198 Coq lines plus dispatcher plus keystone plus
+  FLX/FLT/FTZ. I went in expecting it to take multiple sessions.
+  It took one. *Why?* Because aux0 had a template, and aux1/aux2
+  inherited that template. The case split on `cx - magd - cy ≥ 0`,
+  the integer arithmetic `mx · β^k < my` or `mx < my · β^j`, the
+  `bpow_le` gap step via `mag_div_disj`, the conjunct dispatch — all
+  of that took ~3 hours to find for aux0 and ~30 minutes each to
+  redeploy for aux1/aux2. When you're staring at a "biggest remaining
+  piece," don't trust the *count* of items. Trust the *shape*: if
+  three items have the same skeleton, you're really only doing one
+  of them and copying twice.
+
 Good luck.
