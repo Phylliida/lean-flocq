@@ -3635,4 +3635,190 @@ theorem round_round_div_aux2 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
     exact (mul_lt_mul_iff_of_pos_left h2y_pos).mp hkey'
   linarith
 
+/-- Dispatcher: combine the three aux preludes plus the midpoint bridge into
+the positive-divisor case of `round_round_div`. -/
+theorem round_round_div_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Ebeta : ∃ n : ℤ, (beta.val : ℤ) = 2 * n)
+    (Hexp : round_round_div_hyp fexp1 fexp2)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x / y) := by
+  have Pxy : 0 < x / y := div_pos Px Py
+  refine round_round_all_mid_cases beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2 Pxy
+    (Hexp.1 (mag beta (x / y))) ?Cz ?Clt ?Ceq ?Cgt
+  case Cz =>
+    intros Hf1 Hge
+    exact absurd Hge (round_round_div_aux0 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+      Hexp Px Py Fx Fy Hf1)
+  case Clt =>
+    intros Hf1 Hbnd
+    exact absurd Hbnd (round_round_div_aux1 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+      Hexp Px Py Fx Fy Hf1)
+  case Ceq =>
+    intros Hf1 Heq
+    exact round_round_eq_mid_beta_even beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+      Ebeta Pxy (Hexp.1 (mag beta (x / y))) Hf1 Heq
+  case Cgt =>
+    intros Hf1 Hbnd
+    exact absurd Hbnd (round_round_div_aux2 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+      Hexp Px Py Fx Fy Hf1)
+
+/-- Keystone: double rounding of division agrees regardless of intermediate
+precision, provided the radix is even and the precision condition
+`round_round_div_hyp` holds. Generalizes from the positive-divisor case by
+dispatching on the signs of `x` and `y`. -/
+theorem round_round_div (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Ebeta : ∃ n : ℤ, (beta.val : ℤ) = 2 * n)
+    (Hexp : round_round_div_hyp fexp1 fexp2)
+    {x y : ℝ} (Nzy : y ≠ 0)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x / y) := by
+  rcases lt_trichotomy x 0 with Nx | Zx | Px
+  · -- x < 0
+    rcases lt_trichotomy y 0 with Ny | Zy | Py
+    · -- x < 0, y < 0: x/y = (-x)/(-y) and both -x, -y > 0
+      have h_div_eq : x / y = (-x) / (-y) := by field_simp
+      have Pnx : 0 < -x := by linarith
+      have Pny : 0 < -y := by linarith
+      have Fnx : generic_format beta fexp1 (-x) := generic_format_opp beta fexp1 Fx
+      have Fny : generic_format beta fexp1 (-y) := generic_format_opp beta fexp1 Fy
+      rw [h_div_eq]
+      exact round_round_div_aux beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+        Ebeta Hexp Pnx Pny Fnx Fny
+    · exact absurd Zy Nzy
+    · -- x < 0, y > 0: x/y = -((-x)/y), use round_N_opp
+      have h_div_eq : x / y = -((-x) / y) := by field_simp
+      have Pnx : 0 < -x := by linarith
+      have Fnx : generic_format beta fexp1 (-x) := generic_format_opp beta fexp1 Fx
+      have h_aux := round_round_div_aux beta fexp1 fexp2 Vfexp1 Vfexp2
+        (fun t => !choice1 (-(t+1))) (fun t => !choice2 (-(t+1)))
+        Ebeta Hexp Pnx Py Fnx Fy
+      unfold round_round_eq at h_aux ⊢
+      rw [h_div_eq, round_N_opp, round_N_opp, round_N_opp, h_aux]
+  · -- x = 0
+    unfold round_round_eq
+    rw [Zx, zero_div]
+    rw [round_0 beta fexp2 (Znearest choice2), round_0 beta fexp1 (Znearest choice1)]
+  · -- x > 0
+    rcases lt_trichotomy y 0 with Ny | Zy | Py
+    · -- x > 0, y < 0: x/y = -(x/(-y)), use round_N_opp
+      have h_div_eq : x / y = -(x / (-y)) := by field_simp
+      have Pny : 0 < -y := by linarith
+      have Fny : generic_format beta fexp1 (-y) := generic_format_opp beta fexp1 Fy
+      have h_aux := round_round_div_aux beta fexp1 fexp2 Vfexp1 Vfexp2
+        (fun t => !choice1 (-(t+1))) (fun t => !choice2 (-(t+1)))
+        Ebeta Hexp Px Pny Fx Fny
+      unfold round_round_eq at h_aux ⊢
+      rw [h_div_eq, round_N_opp, round_N_opp, round_N_opp, h_aux]
+    · exact absurd Zy Nzy
+    · -- x > 0, y > 0: direct
+      exact round_round_div_aux beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+        Ebeta Hexp Px Py Fx Fy
+
+/-- The FLX precision condition implies `round_round_div_hyp`. Requires
+`2*prec ≤ prec'`. -/
+theorem FLX_round_round_div_hyp (prec prec' : ℤ)
+    (hprec : 0 < prec) (_hprec' : 0 < prec')
+    (Hprec : 2 * prec ≤ prec') :
+    round_round_div_hyp (FLX_exp prec) (FLX_exp prec') := by
+  unfold round_round_div_hyp FLX_exp
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · intro ex; omega
+  · intros ex ey _ _ _; omega
+  · intros ex ey _ _ _; omega
+  · intros ex ey _ _ _; omega
+  · intros ex ey _ _ _; omega
+
+/-- **`round_round_div` for FLX format.** -/
+theorem round_round_div_FLX (beta : radix) (prec prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Ebeta : ∃ n : ℤ, (beta.val : ℤ) = 2 * n)
+    (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Nzy : y ≠ 0)
+    (Fx : FLX_format beta prec x) (Fy : FLX_format beta prec y) :
+    round_round_eq beta (FLX_exp prec) (FLX_exp prec') choice1 choice2 (x / y) :=
+  round_round_div beta (FLX_exp prec) (FLX_exp prec')
+    (FLX_exp_valid prec hprec) (FLX_exp_valid prec' hprec')
+    choice1 choice2 Ebeta (FLX_round_round_div_hyp prec prec' hprec hprec' Hprec) Nzy
+    (generic_format_FLX beta prec hprec Fx) (generic_format_FLX beta prec hprec Fy)
+
+/-- The FLT precision condition implies `round_round_div_hyp`. Requires
+`emin' ≤ emin - prec - 2` and `2*prec ≤ prec'`. -/
+theorem FLT_round_round_div_hyp (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (_hprec' : 0 < prec')
+    (Hemin : emin' ≤ emin - prec - 2)
+    (Hprec : 2 * prec ≤ prec') :
+    round_round_div_hyp (FLT_exp emin prec) (FLT_exp emin' prec') := by
+  unfold round_round_div_hyp FLT_exp
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · intro ex
+    simp only [max_def]; split_ifs <;> omega
+  · intros ex ey _ _ _
+    simp only [max_def] at *; split_ifs at * <;> omega
+  · intros ex ey _ _ _
+    simp only [max_def] at *; split_ifs at * <;> omega
+  · intros ex ey _ _ _
+    simp only [max_def] at *; split_ifs at * <;> omega
+  · intros ex ey _ _ Heq
+    simp only [max_def] at *; split_ifs at * <;> omega
+
+/-- **`round_round_div` for FLT format.** -/
+theorem round_round_div_FLT (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Ebeta : ∃ n : ℤ, (beta.val : ℤ) = 2 * n)
+    (Hemin : emin' ≤ emin - prec - 2)
+    (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Nzy : y ≠ 0)
+    (Fx : FLT_format beta emin prec x) (Fy : FLT_format beta emin prec y) :
+    round_round_eq beta (FLT_exp emin prec) (FLT_exp emin' prec') choice1 choice2 (x / y) :=
+  round_round_div beta (FLT_exp emin prec) (FLT_exp emin' prec')
+    (FLT_exp_valid emin prec hprec) (FLT_exp_valid emin' prec' hprec')
+    choice1 choice2 Ebeta
+    (FLT_round_round_div_hyp emin prec emin' prec' hprec hprec' Hemin Hprec) Nzy
+    (generic_format_FLT beta emin prec hprec Fx)
+    (generic_format_FLT beta emin prec hprec Fy)
+
+/-- The FTZ precision condition implies `round_round_div_hyp`. Requires
+`emin' + prec' ≤ emin - 1` and `2*prec ≤ prec'`. -/
+theorem FTZ_round_round_div_hyp (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (_hprec' : 0 < prec')
+    (Hemin : emin' + prec' ≤ emin - 1)
+    (Hprec : 2 * prec ≤ prec') :
+    round_round_div_hyp (FTZ_exp emin prec) (FTZ_exp emin' prec') := by
+  unfold round_round_div_hyp FTZ_exp
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · intro ex
+    split_ifs <;> omega
+  · intros ex ey hex hey hf
+    split_ifs at * <;> omega
+  · intros ex ey hex hey hf
+    split_ifs at * <;> omega
+  · intros ex ey hex hey hf
+    split_ifs at * <;> omega
+  · intros ex ey hex hey hf
+    split_ifs at * <;> omega
+
+/-- **`round_round_div` for FTZ format.** -/
+theorem round_round_div_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Ebeta : ∃ n : ℤ, (beta.val : ℤ) = 2 * n)
+    (Hemin : emin' + prec' ≤ emin - 1)
+    (Hprec : 2 * prec ≤ prec')
+    {x y : ℝ} (Nzy : y ≠ 0)
+    (Fx : FTZ_format beta emin prec x) (Fy : FTZ_format beta emin prec y) :
+    round_round_eq beta (FTZ_exp emin prec) (FTZ_exp emin' prec') choice1 choice2 (x / y) :=
+  round_round_div beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+    (FTZ_exp_valid emin prec hprec) (FTZ_exp_valid emin' prec' hprec')
+    choice1 choice2 Ebeta
+    (FTZ_round_round_div_hyp emin prec emin' prec' hprec hprec' Hemin Hprec) Nzy
+    (generic_format_FTZ beta emin prec hprec Fx)
+    (generic_format_FTZ beta emin prec hprec Fy)
+
 end LeanFlocq
