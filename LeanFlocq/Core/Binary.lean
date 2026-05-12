@@ -870,6 +870,266 @@ the exponent accordingly. Returns the new `shr_record` and new exponent. -/
 def shr (mrs : shr_record) (e n : ℤ) : shr_record × ℤ :=
   if 0 < n then (shr_1^[n.toNat] mrs, e + n) else (mrs, e)
 
+/-- `shr_1` preserves the `inbetween_float` invariant: if `x` lies between
+floats with mantissa `m = mrs.m` and `m + 1` at exponent `e` with location
+`loc_of_shr_record mrs`, then it also lies between floats with mantissa
+`(shr_1 mrs).m` and `(shr_1 mrs).m + 1` at exponent `e + 1` with location
+`loc_of_shr_record (shr_1 mrs)`. Requires `mrs.m ≥ 0`. -/
+theorem inbetween_shr_1 (mrs : shr_record) (e : ℤ) (x : ℝ)
+    (Hm : 0 ≤ mrs.m)
+    (Hl : inbetween_float radix2 mrs.m e x (loc_of_shr_record mrs)) :
+    inbetween_float radix2 (shr_1 mrs).m (e + 1) x (loc_of_shr_record (shr_1 mrs)) := by
+  -- Notation
+  set m := mrs.m with hm_def
+  set m' := (shr_1 mrs).m with hm'_def
+  -- Key arithmetic: m' = m / 2, with parity tracked in r
+  have h_radix2 : (radix2 : radix).val = 2 := rfl
+  have h_step_pos : (0 : ℝ) < bpow radix2 e := bpow_gt_0 _ _
+  have h_2_pos : (0 : ℝ) < 2 := by norm_num
+  -- bpow (e+1) = 2 * bpow e
+  have h_bpow_e1 : bpow radix2 (e + 1) = 2 * bpow radix2 e := by
+    rw [bpow_plus]
+    have h1 : bpow radix2 (1 : ℤ) = 2 := by
+      show ((radix2 : radix).val : ℝ) ^ (1 : ℤ) = 2
+      rw [zpow_one, h_radix2]; norm_num
+    rw [h1]; ring
+  -- Define the "start" of the new interval
+  -- F2R ⟨m', e+1⟩ = m' * 2 * bpow e
+  have h_F2R_start : F2R (beta := radix2) ⟨m', e + 1⟩ = (m' : ℝ) * 2 * bpow radix2 e := by
+    show (m' : ℝ) * bpow radix2 (e + 1) = (m' : ℝ) * 2 * bpow radix2 e
+    rw [h_bpow_e1]; ring
+  -- F2R ⟨m'+1, e+1⟩ = (m'+1) * 2 * bpow e = m'*2*bpow e + 2 * bpow e
+  have h_F2R_end : F2R (beta := radix2) ⟨m' + 1, e + 1⟩
+      = (m' : ℝ) * 2 * bpow radix2 e + 2 * bpow radix2 e := by
+    show ((m' + 1 : ℤ) : ℝ) * bpow radix2 (e + 1)
+      = (m' : ℝ) * 2 * bpow radix2 e + 2 * bpow radix2 e
+    rw [h_bpow_e1]
+    push_cast; ring
+  -- F2R ⟨m, e⟩ = m * bpow e
+  have h_F2R_m : F2R (beta := radix2) ⟨m, e⟩ = (m : ℝ) * bpow radix2 e := rfl
+  have h_F2R_m1 : F2R (beta := radix2) ⟨m + 1, e⟩ = ((m + 1 : ℤ) : ℝ) * bpow radix2 e := rfl
+  -- Key relation: m = 2 * m' + (if r_new then 1 else 0)
+  -- And (shr_1 mrs).r tracks the parity of mrs.m (when mrs.m ≠ 0)
+  -- Case split on m = 0 vs m > 0
+  rcases eq_or_lt_of_le Hm with Hm_eq | Hm_pos
+  · -- m = 0 case
+    have hm0 : m = 0 := Hm_eq.symm
+    -- shr_1 mrs = ⟨0, false, mrs.r || mrs.s⟩
+    have h_shr1 : shr_1 mrs = ⟨0, false, mrs.r || mrs.s⟩ := by
+      show shr_1 mrs = _
+      unfold shr_1
+      rw [if_pos hm0]
+    have hm'0 : m' = 0 := by rw [hm'_def, h_shr1]
+    -- Subcase: original location
+    unfold inbetween_float at Hl ⊢
+    rw [hm0] at Hl
+    rw [hm'0]
+    -- Goal: inbetween (F2R ⟨0, e+1⟩) (F2R ⟨0+1, e+1⟩) x (loc_of_shr_record (shr_1 mrs))
+    -- Have Hl : inbetween (F2R ⟨0, e⟩) (F2R ⟨0+1, e⟩) x (loc_of_shr_record mrs)
+    -- F2R ⟨0, e⟩ = 0 = F2R ⟨0, e+1⟩
+    -- F2R ⟨1, e⟩ = bpow e, F2R ⟨1, e+1⟩ = 2 * bpow e
+    have h_F2R_0e : F2R (beta := radix2) ⟨(0 : ℤ), e⟩ = 0 := by
+      show ((0 : ℤ) : ℝ) * bpow radix2 e = 0; simp
+    have h_F2R_0e1 : F2R (beta := radix2) ⟨(0 : ℤ), e + 1⟩ = 0 := by
+      show ((0 : ℤ) : ℝ) * bpow radix2 (e + 1) = 0; simp
+    have h_F2R_1e : F2R (beta := radix2) ⟨(0 + 1 : ℤ), e⟩ = bpow radix2 e := by
+      show ((0 + 1 : ℤ) : ℝ) * bpow radix2 e = bpow radix2 e
+      push_cast; ring
+    have h_F2R_1e1 : F2R (beta := radix2) ⟨(0 + 1 : ℤ), e + 1⟩ = 2 * bpow radix2 e := by
+      show ((0 + 1 : ℤ) : ℝ) * bpow radix2 (e + 1) = 2 * bpow radix2 e
+      rw [h_bpow_e1]; push_cast; ring
+    rw [h_F2R_0e] at Hl
+    rw [h_F2R_1e] at Hl
+    rw [h_F2R_0e1, h_F2R_1e1]
+    -- Apply new_location_even_correct with start = 0, step = bpow e, nb_steps = 2, k = 0
+    have h_new := new_location_even_correct (start := 0) (step := bpow radix2 e) h_step_pos
+      (nb_steps := 2) (by norm_num) (by norm_num : (2 : ℤ) % 2 = 0)
+      x 0 (loc_of_shr_record mrs) ⟨le_refl _, by norm_num⟩
+      (by
+        have h1 : (0 : ℝ) + ((0 : ℤ) : ℝ) * bpow radix2 e = 0 := by push_cast; ring
+        have h2 : (0 : ℝ) + (((0 + 1) : ℤ) : ℝ) * bpow radix2 e = bpow radix2 e := by
+          push_cast; ring
+        rw [h1, h2]; exact Hl)
+    have h_target : (0 : ℝ) + ((2 : ℤ) : ℝ) * bpow radix2 e = 2 * bpow radix2 e := by
+      push_cast; ring
+    rw [h_target] at h_new
+    -- new_location_even 2 0 l simplifies; show equals loc_of_shr_record (shr_1 mrs)
+    -- shr_1 mrs has r = false, s = mrs.r || mrs.s
+    -- loc_of_shr_record (shr_1 mrs):
+    --   if mrs.r || mrs.s = false → Exact
+    --   if mrs.r || mrs.s = true → Inexact .lt
+    -- new_location_even 2 0 l:
+    --   k = 0 branch: if l = Exact then Exact else Inexact .lt
+    -- These match iff: loc_of_shr_record mrs = Exact iff mrs.r || mrs.s = false
+    have h_match : new_location_even 2 0 (loc_of_shr_record mrs)
+        = loc_of_shr_record (shr_1 mrs) := by
+      rw [h_shr1]
+      unfold new_location_even loc_of_shr_record
+      simp only [if_pos rfl]
+      obtain ⟨_, r, s⟩ := mrs
+      cases r <;> cases s <;> rfl
+    rw [h_match] at h_new
+    exact h_new
+  · -- m > 0 case
+    have hm_ne : m ≠ 0 := ne_of_gt Hm_pos
+    -- shr_1 mrs = ⟨m / 2, m % 2 ≠ 0, mrs.r || mrs.s⟩
+    have h_shr1 : shr_1 mrs = ⟨m / 2, decide (m % 2 ≠ 0), mrs.r || mrs.s⟩ := by
+      show shr_1 mrs = _
+      unfold shr_1
+      rw [if_neg hm_ne]
+    have hm'_eq : m' = m / 2 := by rw [hm'_def, h_shr1]
+    -- Parity split
+    by_cases h_par : m % 2 = 0
+    · -- m even: m = 2 * (m/2), shr_1.r = false
+      have h_m_eq : m = 2 * m' := by
+        rw [hm'_eq]
+        omega
+      have h_shr1' : shr_1 mrs = ⟨m', false, mrs.r || mrs.s⟩ := by
+        rw [h_shr1, hm'_eq]
+        congr 1
+        simp [h_par]
+      unfold inbetween_float at Hl ⊢
+      rw [h_F2R_start, h_F2R_end]
+      -- F2R ⟨m, e⟩ = (2 m') * bpow e = start + 0 * step
+      -- F2R ⟨m+1, e⟩ = (2m'+1) * bpow e = start + 1 * step
+      have h_Hl1 : F2R (beta := radix2) ⟨m, e⟩
+          = (m' : ℝ) * 2 * bpow radix2 e + ((0 : ℤ) : ℝ) * bpow radix2 e := by
+        show (m : ℝ) * bpow radix2 e
+          = (m' : ℝ) * 2 * bpow radix2 e + ((0 : ℤ) : ℝ) * bpow radix2 e
+        rw [show (m : ℝ) = 2 * m' from by exact_mod_cast h_m_eq]
+        push_cast; ring
+      have h_Hl2 : F2R (beta := radix2) ⟨m + 1, e⟩
+          = (m' : ℝ) * 2 * bpow radix2 e + ((0 + 1 : ℤ) : ℝ) * bpow radix2 e := by
+        show ((m + 1 : ℤ) : ℝ) * bpow radix2 e
+          = (m' : ℝ) * 2 * bpow radix2 e + ((0 + 1 : ℤ) : ℝ) * bpow radix2 e
+        rw [show ((m + 1 : ℤ) : ℝ) = 2 * m' + 1 from by exact_mod_cast (by omega : m + 1 = 2 * m' + 1)]
+        push_cast; ring
+      rw [h_Hl1, h_Hl2] at Hl
+      have h_new := new_location_even_correct
+        (start := (m' : ℝ) * 2 * bpow radix2 e) (step := bpow radix2 e) h_step_pos
+        (nb_steps := 2) (by norm_num) (by norm_num : (2 : ℤ) % 2 = 0)
+        x 0 (loc_of_shr_record mrs) ⟨le_refl _, by norm_num⟩ Hl
+      have h_target : (m' : ℝ) * 2 * bpow radix2 e + ((2 : ℤ) : ℝ) * bpow radix2 e
+          = (m' : ℝ) * 2 * bpow radix2 e + 2 * bpow radix2 e := by push_cast; ring
+      rw [h_target] at h_new
+      have h_match : new_location_even 2 0 (loc_of_shr_record mrs)
+          = loc_of_shr_record (shr_1 mrs) := by
+        rw [h_shr1']
+        unfold new_location_even loc_of_shr_record
+        simp only [if_pos rfl]
+        obtain ⟨_, r, s⟩ := mrs
+        cases r <;> cases s <;> rfl
+      rw [h_match] at h_new
+      exact h_new
+    · -- m odd: m = 2 * (m/2) + 1, shr_1.r = true
+      have h_par' : m % 2 = 1 := by omega
+      have h_m_eq : m = 2 * m' + 1 := by
+        rw [hm'_eq]
+        omega
+      have h_shr1' : shr_1 mrs = ⟨m', true, mrs.r || mrs.s⟩ := by
+        rw [h_shr1, hm'_eq]
+        congr 1
+        simp [h_par']
+      unfold inbetween_float at Hl ⊢
+      rw [h_F2R_start, h_F2R_end]
+      have h_Hl1 : F2R (beta := radix2) ⟨m, e⟩
+          = (m' : ℝ) * 2 * bpow radix2 e + ((1 : ℤ) : ℝ) * bpow radix2 e := by
+        show (m : ℝ) * bpow radix2 e
+          = (m' : ℝ) * 2 * bpow radix2 e + ((1 : ℤ) : ℝ) * bpow radix2 e
+        rw [show (m : ℝ) = 2 * m' + 1 from by exact_mod_cast h_m_eq]
+        push_cast; ring
+      have h_Hl2 : F2R (beta := radix2) ⟨m + 1, e⟩
+          = (m' : ℝ) * 2 * bpow radix2 e + ((1 + 1 : ℤ) : ℝ) * bpow radix2 e := by
+        show ((m + 1 : ℤ) : ℝ) * bpow radix2 e
+          = (m' : ℝ) * 2 * bpow radix2 e + ((1 + 1 : ℤ) : ℝ) * bpow radix2 e
+        rw [show ((m + 1 : ℤ) : ℝ) = 2 * m' + 2 from by exact_mod_cast (by omega : m + 1 = 2 * m' + 2)]
+        push_cast; ring
+      rw [h_Hl1, h_Hl2] at Hl
+      have h_new := new_location_even_correct
+        (start := (m' : ℝ) * 2 * bpow radix2 e) (step := bpow radix2 e) h_step_pos
+        (nb_steps := 2) (by norm_num) (by norm_num : (2 : ℤ) % 2 = 0)
+        x 1 (loc_of_shr_record mrs) ⟨by norm_num, by norm_num⟩ Hl
+      have h_target : (m' : ℝ) * 2 * bpow radix2 e + ((2 : ℤ) : ℝ) * bpow radix2 e
+          = (m' : ℝ) * 2 * bpow radix2 e + 2 * bpow radix2 e := by push_cast; ring
+      rw [h_target] at h_new
+      have h_match : new_location_even 2 1 (loc_of_shr_record mrs)
+          = loc_of_shr_record (shr_1 mrs) := by
+        rw [h_shr1']
+        unfold new_location_even loc_of_shr_record
+        simp only [if_neg (by norm_num : (1 : ℤ) ≠ 0)]
+        have h_cmp : compare (2 * (1 : ℤ)) 2 = .eq := by decide
+        rw [h_cmp]
+        obtain ⟨_, r, s⟩ := mrs
+        cases r <;> cases s <;> rfl
+      rw [h_match] at h_new
+      exact h_new
+
+/-- `shr_1` preserves `0 ≤ m`. -/
+theorem shr_1_nonneg (mrs : shr_record) (Hm : 0 ≤ mrs.m) :
+    0 ≤ (shr_1 mrs).m := by
+  unfold shr_1
+  split_ifs with h
+  · exact le_refl _
+  · show 0 ≤ mrs.m / 2
+    exact Int.ediv_nonneg Hm (by norm_num)
+
+/-- Iterating `shr_1` preserves `0 ≤ m`. -/
+theorem shr_1_iter_nonneg (mrs : shr_record) (n : ℕ) (Hm : 0 ≤ mrs.m) :
+    0 ≤ (shr_1^[n] mrs).m := by
+  induction n with
+  | zero => exact Hm
+  | succ k ih =>
+    rw [Function.iterate_succ', Function.comp_apply]
+    exact shr_1_nonneg _ ih
+
+/-- Iterating `shr_1` preserves the `inbetween_float` invariant. -/
+theorem inbetween_shr_iter (mrs : shr_record) (e : ℤ) (x : ℝ) (n : ℕ)
+    (Hm : 0 ≤ mrs.m)
+    (Hl : inbetween_float radix2 mrs.m e x (loc_of_shr_record mrs)) :
+    inbetween_float radix2 (shr_1^[n] mrs).m (e + n) x
+      (loc_of_shr_record (shr_1^[n] mrs)) := by
+  induction n with
+  | zero =>
+    show inbetween_float radix2 mrs.m (e + (0 : ℕ)) x (loc_of_shr_record mrs)
+    have h_eq : (e + (0 : ℕ) : ℤ) = e := by push_cast; ring
+    rw [h_eq]; exact Hl
+  | succ k ih =>
+    rw [Function.iterate_succ', Function.comp_apply]
+    have h_nonneg : 0 ≤ (shr_1^[k] mrs).m := shr_1_iter_nonneg mrs k Hm
+    have h_step := inbetween_shr_1 (shr_1^[k] mrs) (e + k) x h_nonneg ih
+    have h_eq : e + k + 1 = e + ((k + 1 : ℕ) : ℤ) := by push_cast; ring
+    rw [← h_eq]; exact h_step
+
+/-- `inbetween_shr`: the `shr` iteration preserves the `inbetween_float`
+invariant when starting from `shr_record_of_loc m l`. -/
+theorem inbetween_shr (x : ℝ) (m e : ℤ) (l : location) (n : ℤ)
+    (Hm : 0 ≤ m)
+    (Hl : inbetween_float radix2 m e x l) :
+    let (mrs, e') := shr (shr_record_of_loc m l) e n
+    inbetween_float radix2 mrs.m e' x (loc_of_shr_record mrs) := by
+  unfold shr
+  by_cases hn : 0 < n
+  · rw [if_pos hn]
+    show inbetween_float radix2 (shr_1^[n.toNat] (shr_record_of_loc m l)).m (e + n) x
+      (loc_of_shr_record (shr_1^[n.toNat] (shr_record_of_loc m l)))
+    have h_Hm' : 0 ≤ (shr_record_of_loc m l).m := by
+      rw [m_shr_record_of_loc]; exact Hm
+    have h_Hl' : inbetween_float radix2 (shr_record_of_loc m l).m e x
+        (loc_of_shr_record (shr_record_of_loc m l)) := by
+      rw [m_shr_record_of_loc, loc_of_shr_record_of_loc]
+      exact Hl
+    have h_iter := inbetween_shr_iter (shr_record_of_loc m l) e x n.toNat h_Hm' h_Hl'
+    have h_eq : (e + (n.toNat : ℤ) : ℤ) = e + n := by
+      have : (n.toNat : ℤ) = n := Int.toNat_of_nonneg (le_of_lt hn)
+      rw [this]
+    rw [h_eq] at h_iter
+    exact h_iter
+  · rw [if_neg hn]
+    show inbetween_float radix2 (shr_record_of_loc m l).m e x
+      (loc_of_shr_record (shr_record_of_loc m l))
+    rw [m_shr_record_of_loc, loc_of_shr_record_of_loc]
+    exact Hl
+
 end shr_record
 
 end LeanFlocq
