@@ -2825,6 +2825,72 @@ theorem round_round_zero (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
     linarith
   exact round_N_small_pos beta fexp1 choice1 ⟨Hx''_lo, Hx''_hi⟩ H_small
 
+/-- The all-cases dispatcher for midpoint reasoning. Trichotomy on `mag x` vs
+`fexp1(mag x) - 1` first, then a finer split on `x` vs `midp`. The four
+"interior" cases (close to or at a midpoint, or above with no protection) are
+delegated to user callbacks. The trivial cases dispatch to
+`round_round_really_zero`, `round_round_zero`, or the existing
+`_further_place` lemmas. The subtle case where `midp + (1/2)u₂ < x` but
+`x ∈ F1` uses `round_generic` directly; otherwise `round_UP_DN_ulp` collapses
+`midp'` to `midp` and `_gt_mid_further_place` applies. -/
+theorem round_round_all_mid_cases (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x)
+    (Hf2 : fexp2 (mag beta x) ≤ fexp1 (mag beta x) - 1)
+    (Cz : fexp1 (mag beta x) = mag beta x + 1 →
+          bpow beta (mag beta x) - (1/2) * ulp beta fexp2 x ≤ x →
+          round_round_eq beta fexp1 fexp2 choice1 choice2 x)
+    (Clt : fexp1 (mag beta x) ≤ mag beta x →
+           midp beta fexp1 x - (1/2) * ulp beta fexp2 x ≤ x ∧ x < midp beta fexp1 x →
+           round_round_eq beta fexp1 fexp2 choice1 choice2 x)
+    (Ceq : fexp1 (mag beta x) ≤ mag beta x →
+           x = midp beta fexp1 x →
+           round_round_eq beta fexp1 fexp2 choice1 choice2 x)
+    (Cgt : fexp1 (mag beta x) ≤ mag beta x →
+           midp beta fexp1 x < x ∧ x ≤ midp beta fexp1 x + (1/2) * ulp beta fexp2 x →
+           round_round_eq beta fexp1 fexp2 choice1 choice2 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  rcases lt_trichotomy (mag beta x) (fexp1 (mag beta x) - 1) with Hlt | Heq | Hgt
+  · -- mag x < fexp1(mag x) - 1: deep small case
+    exact round_round_really_zero beta fexp1 fexp2 Vfexp1 Vfexp2
+      choice1 choice2 Px (by omega)
+  · -- mag x = fexp1(mag x) - 1: boundary
+    have Hfeq : fexp1 (mag beta x) = mag beta x + 1 := by omega
+    rcases lt_or_ge x (bpow beta (mag beta x) - (1/2) * ulp beta fexp2 x) with Hlt' | Hge'
+    · exact round_round_zero beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2 Px Hfeq Hlt'
+    · exact Cz Hfeq Hge'
+  · -- fexp1(mag x) ≤ mag x: interior
+    have Hfle : fexp1 (mag beta x) ≤ mag beta x := by omega
+    rcases lt_trichotomy x (midp beta fexp1 x) with Hlt' | Heq' | Hgt'
+    · -- x < midp
+      rcases lt_or_ge x (midp beta fexp1 x - (1/2) * ulp beta fexp2 x) with Hlt'' | Hle''
+      · exact round_round_lt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
+          Hf2 Hfle Hlt''
+      · exact Clt Hfle ⟨Hle'', Hlt'⟩
+    · -- x = midp
+      exact Ceq Hfle Heq'
+    · -- x > midp
+      rcases le_or_gt x (midp beta fexp1 x + (1/2) * ulp beta fexp2 x) with Hle'' | Hlt''
+      · exact Cgt Hfle ⟨Hgt', Hle''⟩
+      · -- midp + (1/2) u₂ < x: dispatch on x ∈ F1
+        rcases generic_format_EM beta fexp1 Vfexp1 x with Fx | Nfx
+        · -- x ∈ F1: inner rounding is identity
+          unfold round_round_eq
+          have Hf2x : generic_format beta fexp2 x :=
+            generic_inclusion_mag beta fexp1 fexp2 (fun _ => by omega) Fx
+          rw [round_generic beta fexp2 _ Hf2x]
+        · -- x ∉ F1: collapse midp' = midp, then _gt_mid_further_place
+          have Hceil : round beta fexp1 (fun y : ℝ => ⌈y⌉) x
+              = round beta fexp1 (fun y : ℝ => ⌊y⌋) x + ulp beta fexp1 x :=
+            round_UP_DN_ulp beta fexp1 Nfx
+          have Hmidp' : midp' beta fexp1 x = midp beta fexp1 x := by
+            unfold midp midp'; rw [Hceil]; ring
+          have Hgt'' : midp' beta fexp1 x + (1/2) * ulp beta fexp2 x < x := by
+            rw [Hmidp']; exact Hlt''
+          exact round_round_gt_mid_further_place beta Vfexp1 Vfexp2 choice1 choice2 Px
+            Hf2 Hfle Hgt''
+
 /-- `mag (x / y) ∈ {mag x - mag y, mag x - mag y + 1}` when `x, y > 0`. -/
 theorem mag_div_disj (beta : radix) {x y : ℝ} (Px : 0 < x) (Py : 0 < y) :
     mag beta (x / y) = mag beta x - mag beta y ∨
