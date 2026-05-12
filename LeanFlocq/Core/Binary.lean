@@ -794,6 +794,17 @@ noncomputable def round_mode (m : mode) : ℝ → ℤ :=
 instance valid_rnd_round_mode (m : mode) : Valid_rnd (round_mode m) := by
   cases m <;> unfold round_mode <;> infer_instance
 
+/-- `choice_mode m sx mx lx`: given a rounding mode `m`, a sign bit `sx`,
+a mantissa `mx`, and the location `lx` of the true value within `[mx, mx+1)`,
+return the rounded mantissa. -/
+def choice_mode (m : mode) (sx : Bool) (mx : ℤ) (lx : location) : ℤ :=
+  match m with
+  | .mode_NE => cond_incr (round_N (decide (¬ Even mx)) lx) mx
+  | .mode_ZR => mx
+  | .mode_DN => cond_incr (round_sign_DN sx lx) mx
+  | .mode_UP => cond_incr (round_sign_UP sx lx) mx
+  | .mode_NA => cond_incr (round_N true lx) mx
+
 /-- `overflow_to_inf m s`: under mode `m` and sign `s`, does an overflow round
 to `±∞` (`true`) or saturate to the maximum finite (`false`)? -/
 def overflow_to_inf (m : mode) (s : Bool) : Bool :=
@@ -1236,5 +1247,45 @@ theorem shr_truncate (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (m e : ℤ)
     rw [h_lhs, h_rhs]
 
 end shr_record
+
+namespace binary_float
+
+/-- **`binary_round_aux`**: the IEEE-754 rounding kernel. Given a rounding
+mode, a sign bit, a mantissa `mx`, an exponent `ex`, and the location `lx`
+of the true value within `[mx·β^ex, (mx+1)·β^ex)`, produce the IEEE-754
+`full_float` representing the rounded result.
+
+The kernel works in three steps:
+1. `shr_fexp` shifts `(mx, ex, lx)` down to the canonical exponent under
+   `FLT_exp (3 - emax - prec) prec`, accumulating the round-and-sticky
+   bits into the resulting `shr_record`.
+2. `choice_mode` consumes the round/sticky encoding (via
+   `loc_of_shr_record`) and rounds the mantissa per the mode.
+3. A second `shr_fexp` re-normalizes after the round (which may have
+   carried into a higher exponent).
+
+The result is then classified: zero, finite (if the exponent fits in
+`[emin, emax - prec]`), or overflow (handled by `binary_overflow`). The
+negative-mantissa branch is unreachable post-truncation; we emit a dummy
+NaN there. -/
+noncomputable def binary_round_aux (prec emax : ℤ) (m : mode)
+    (sx : Bool) (mx ex : ℤ) (lx : location) : full_float :=
+  let fexp := FLT_exp (3 - emax - prec) prec
+  let mrs_e := shr_record.shr_fexp fexp mx ex lx
+  let mrs' := mrs_e.1
+  let e' := mrs_e.2
+  let mx2 := choice_mode m sx mrs'.m (shr_record.loc_of_shr_record mrs')
+  let mrs_e2 := shr_record.shr_fexp fexp mx2 e' location.Exact
+  let mrs'' := mrs_e2.1
+  let e'' := mrs_e2.2
+  match mrs''.m with
+  | Int.ofNat 0 => full_float.F754_zero sx
+  | Int.ofNat (n + 1) =>
+      if e'' ≤ emax - prec
+      then full_float.F754_finite sx (Int.ofNat (n + 1)) e''
+      else binary_overflow prec emax m sx
+  | Int.negSucc _ => full_float.F754_nan false 1
+
+end binary_float
 
 end LeanFlocq
