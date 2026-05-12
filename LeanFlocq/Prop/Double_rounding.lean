@@ -2160,4 +2160,67 @@ theorem round_round_plus_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
       · exact round_round_plus_aux2 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
           Hexp Px Py H Fx Fy
 
+/-! ### Minus arc -/
+
+/-- Mirror of `plus_aux0_aux`: rewrite `x - y` as `x + (-y)` and reuse. -/
+theorem round_round_minus_aux0_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ) (x y : ℝ)
+    (Hlnx : fexp2 (mag beta (x - y)) ≤ fexp1 (mag beta x))
+    (Hlny : fexp2 (mag beta (x - y)) ≤ fexp1 (mag beta y))
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    generic_format beta fexp2 (x - y) := by
+  have h_eq : x - y = x + (-y) := by ring
+  rw [h_eq]
+  rw [h_eq] at Hlnx Hlny
+  rw [← mag_opp beta y] at Hlny
+  exact round_round_plus_aux0_aux beta fexp1 fexp2 x (-y) Hlnx Hlny Fx
+    (generic_format_opp beta fexp1 Fy)
+
+/-- Mirror of `plus_aux0`: when `fexp1 (mag x) - 1 ≤ mag y`, `x - y` is in
+`fexp2`-format. Dispatches on whether `mag y` is close to `mag x` (using
+`mag_minus` upper bound) or far (using `mag_minus_disj`). -/
+theorem round_round_minus_aux0 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ} (Py : 0 < y) (Hyx : y < x)
+    (Hln : fexp1 (mag beta x) - 1 ≤ mag beta y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    generic_format beta fexp2 (x - y) := by
+  have Px : 0 < x := lt_trans Py Hyx
+  obtain ⟨Hexp1, _, Hexp3, Hexp4⟩ := Hexp
+  have Lyx : mag beta y ≤ mag beta x := by
+    apply mag_le_abs beta (ne_of_gt Py)
+    rw [abs_of_pos Py, abs_of_pos Px]; exact le_of_lt Hyx
+  rcases lt_or_ge (mag beta x - 2) (mag beta y) with Hlt | Hge
+  · -- mag x - 2 < mag y ⟹ mag y ∈ {mag x - 1, mag x}
+    -- mag (x - y) ≤ mag x (mag_minus)
+    have hxy_pos : 0 < x - y := by linarith
+    have h_xmy_le : mag beta (x - y) ≤ mag beta x := mag_minus beta Py Hyx
+    rcases (by omega : mag beta y = mag beta x ∨ mag beta y = mag beta x - 1)
+      with Heq | Heqm1
+    · -- mag y = mag x
+      refine round_round_minus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+      · exact Hexp4 _ _ (by omega)
+      · rw [Heq]; exact Hexp4 _ _ (by omega)
+    · -- mag y = mag x - 1
+      refine round_round_minus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+      · exact Hexp4 _ _ (by omega)
+      · rw [Heqm1]; exact Hexp4 _ _ (by omega)
+  · -- mag y ≤ mag x - 2: use mag_minus_disj
+    rcases mag_minus_disj beta Px Py Hge with Lxmy | Lxmy
+    · -- mag (x - y) = mag x
+      refine round_round_minus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+      · rw [Lxmy]; exact Hexp4 _ _ (by omega)
+      · rw [Lxmy]; exact Hexp3 _ _ Hln
+    · -- mag (x - y) = mag x - 1
+      refine round_round_minus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+      · rw [Lxmy]
+        have h_req : fexp1 ((mag beta x - 1) + 1) - 1 ≤ mag beta x := by
+          have heq : (mag beta x - 1) + 1 = mag beta x := by ring
+          rw [heq]; omega
+        exact Hexp1 _ _ h_req
+      · rw [Lxmy]
+        have h_req : fexp1 ((mag beta x - 1) + 1) - 1 ≤ mag beta y := by
+          have heq : (mag beta x - 1) + 1 = mag beta x := by ring
+          rw [heq]; omega
+        exact Hexp1 _ _ h_req
+
 end LeanFlocq
