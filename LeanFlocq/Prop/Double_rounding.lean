@@ -2223,6 +2223,119 @@ theorem round_round_minus_aux0 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
           rw [heq]; omega
         exact Hexp1 _ _ h_req
 
+/-- `round_round_minus_aux2_aux`: workhorse for `minus_aux2`. When
+`mag y ≤ fexp(mag x) - 1`, the ceiling-rounded `x - y` exceeds `x - y`
+by at most `y`. Case-splits on whether `x` is strictly above
+`bpow(mag x - 1)` or exactly at the boundary. -/
+theorem round_round_minus_aux2_aux (beta : radix) (fexp : ℤ → ℤ)
+    (Vfexp : Valid_exp fexp)
+    {x y : ℝ} (Py : 0 < y) (Hxy : y < x)
+    (Hly : mag beta y ≤ fexp (mag beta x) - 1)
+    (Fx : generic_format beta fexp x) (Fy : generic_format beta fexp y) :
+    round beta fexp (fun y : ℝ => ⌈y⌉) (x - y) - (x - y) ≤ y := by
+  have Px : 0 < x := lt_trans Py Hxy
+  have hxy_pos : 0 < x - y := by linarith
+  have hxy_ne : x - y ≠ 0 := ne_of_gt hxy_pos
+  set mx : ℤ := Ztrunc (scaled_mantissa beta fexp x) with hmx_def
+  set ce : ℤ := fexp (mag beta x) with hce_def
+  have hFx : x = (mx : ℝ) * bpow beta ce := Fx
+  have Hfx : fexp (mag beta x) < mag beta x :=
+    mag_generic_gt beta fexp Vfexp (ne_of_gt Px) Fx
+  have Hfy : fexp (mag beta y) < mag beta y :=
+    mag_generic_gt beta fexp Vfexp (ne_of_gt Py) Fy
+  have h_bp_neg_ce_pos : 0 < bpow beta (-ce) := bpow_gt_0 _ _
+  -- x * bpow(-ce) = mx
+  have hx_unscale : x * bpow beta (-ce) = (mx : ℝ) := by
+    conv_lhs => rw [hFx]
+    rw [mul_assoc, ← bpow_plus, show ce + (-ce) = 0 from by ring,
+        bpow_zero, mul_one]
+  rcases lt_or_ge (bpow beta (mag beta x - 1)) x with Hx | Hx
+  · -- Case 1: bpow(mag x - 1) < x
+    have Lxy : mag beta (x - y) = mag beta x := by
+      apply mag_minus_separated beta fexp Vfexp Px Py Hxy Hx Fx
+      omega
+    have h_cxy : cexp beta fexp (x - y) = ce := by unfold cexp; rw [Lxy]
+    -- sm(x - y) = mx - y * bpow(-ce)
+    have h_sm_xy : scaled_mantissa beta fexp (x - y)
+        = (mx : ℝ) - y * bpow beta (-ce) := by
+      unfold scaled_mantissa; rw [h_cxy, sub_mul, hx_unscale]
+    -- y * bpow(-ce) < 1
+    have h_ys_lt_1 : y * bpow beta (-ce) < 1 := by
+      have hy_high : |y| < bpow beta (mag beta y) := bpow_mag_gt _ _
+      rw [abs_of_pos Py] at hy_high
+      have hpow_le : bpow beta (mag beta y) ≤ bpow beta (ce - 1) :=
+        bpow_le beta (by omega)
+      have hy_lt : y < bpow beta (ce - 1) := lt_of_lt_of_le hy_high hpow_le
+      have h_combine : bpow beta (-1)
+          = bpow beta (ce - 1) * bpow beta (-ce) := by
+        rw [← bpow_plus]; congr 1; ring
+      have hys_lt : y * bpow beta (-ce) < bpow beta (-1) := by
+        rw [h_combine]
+        exact mul_lt_mul_of_pos_right hy_lt h_bp_neg_ce_pos
+      have hbp1 : bpow beta (-1) ≤ 1 / 2 := bpow_neg_one_le_half beta
+      linarith
+    have h_ys_nn : 0 ≤ y * bpow beta (-ce) :=
+      le_of_lt (mul_pos Py h_bp_neg_ce_pos)
+    -- ⌈mx - y * bpow(-ce)⌉ = mx
+    have h_ceil : ⌈(mx : ℝ) - y * bpow beta (-ce)⌉ = mx := by
+      apply Int.ceil_eq_iff.mpr
+      refine ⟨?_, ?_⟩
+      · push_cast; linarith
+      · push_cast; linarith
+    -- round_UP(x-y) = x
+    have h_rxy : round beta fexp (fun y : ℝ => ⌈y⌉) (x - y) = x := by
+      unfold round
+      show ((⌈scaled_mantissa beta fexp (x - y)⌉ : ℤ) : ℝ)
+            * bpow beta (cexp beta fexp (x - y)) = x
+      rw [h_cxy, h_sm_xy, h_ceil]
+      exact hFx.symm
+    linarith
+  · -- Case 2: x ≤ bpow(mag x - 1), so x = bpow(mag x - 1)
+    have hx_low : bpow beta (mag beta x - 1) ≤ x := by
+      have := bpow_mag_le beta (ne_of_gt Px)
+      rwa [abs_of_pos Px] at this
+    set mxg : ℤ := mag beta x with hmxg_def
+    have Xpow : x = bpow beta (mxg - 1) := le_antisymm Hx hx_low
+    have h_mag_y_le : mag beta y ≤ mxg - 2 := by omega
+    have Lxy : mag beta (x - y) = mxg - 1 := by
+      apply le_antisymm
+      · apply mag_le_bpow beta hxy_ne
+        rw [abs_of_pos hxy_pos]
+        nth_rewrite 1 [Xpow]; linarith
+      · exact mag_minus_lb beta Px Py h_mag_y_le
+    have Hfx1 : fexp (mxg - 1) < mxg - 1 :=
+      valid_exp_large Vfexp Hfy (by omega : mag beta y ≤ mxg - 1)
+    have hnn : 0 ≤ mxg - 1 - fexp (mxg - 1) := by omega
+    have h_cxy : cexp beta fexp (x - y) = fexp (mxg - 1) := by
+      unfold cexp; rw [Lxy]
+    -- x * bpow(-fexp(mxg - 1)) = bpow(mxg - 1 - fexp(mxg - 1))
+    have h_x_bpow : x * bpow beta (-fexp (mxg - 1))
+        = bpow beta (mxg - 1 - fexp (mxg - 1)) := by
+      rw [Xpow, ← bpow_plus]; congr 1
+    -- x = bpow(mxg - 1 - fexp(mxg - 1)) * bpow(fexp(mxg - 1))
+    have h_x_pow_eq : x = bpow beta (mxg - 1 - fexp (mxg - 1))
+                            * bpow beta (fexp (mxg - 1)) := by
+      rw [show x = bpow beta (mxg - 1) from Xpow, ← bpow_plus]
+      congr 1; ring
+    -- round_UP(x-y) ≤ x
+    have h_rxy : round beta fexp (fun y : ℝ => ⌈y⌉) (x - y) ≤ x := by
+      unfold round
+      show ((⌈scaled_mantissa beta fexp (x - y)⌉ : ℤ) : ℝ)
+            * bpow beta (cexp beta fexp (x - y)) ≤ x
+      rw [h_cxy]
+      conv_rhs => rw [h_x_pow_eq]
+      apply mul_le_mul_of_nonneg_right _ (bpow_ge_0 _ _)
+      rw [← IZR_Zpower beta hnn]
+      exact_mod_cast Int.ceil_le.mpr (by
+        unfold scaled_mantissa; rw [h_cxy]
+        rw [IZR_Zpower beta hnn]
+        have h_xy_le_x : x - y ≤ x := by linarith
+        calc (x - y) * bpow beta (-fexp (mxg - 1))
+            ≤ x * bpow beta (-fexp (mxg - 1)) :=
+              mul_le_mul_of_nonneg_right h_xy_le_x (bpow_ge_0 _ _)
+          _ = bpow beta (mxg - 1 - fexp (mxg - 1)) := h_x_bpow)
+    linarith
+
 /-- `round_round_minus_aux1`: when `mag y ≤ fexp1(mag x) - 2` AND
 `fexp1(mag(x-y)) - 1 ≤ mag y`, the subtraction is exact in `fexp2`-format. -/
 theorem round_round_minus_aux1 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
