@@ -2569,4 +2569,146 @@ theorem round_round_minus (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
   exact round_round_plus beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2 Hexp
     Fx (generic_format_opp beta fexp1 Fy)
 
+/-! ### Format-specific instantiations -/
+
+/-- Hypothesis specialization for FLX. -/
+theorem FLX_round_round_plus_hyp (prec prec' : ℤ)
+    (hprec : 0 < prec) (Hprec : 2 * prec + 1 ≤ prec') :
+    round_round_plus_hyp (FLX_exp prec) (FLX_exp prec') := by
+  unfold round_round_plus_hyp FLX_exp
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> intros ex ey h <;> omega
+
+/-- `round_round_plus` for FLX format. -/
+theorem round_round_plus_FLX (beta : radix) (prec prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hprec : 2 * prec + 1 ≤ prec')
+    {x y : ℝ} (Fx : FLX_format beta prec x) (Fy : FLX_format beta prec y) :
+    round_round_eq beta (FLX_exp prec) (FLX_exp prec') choice1 choice2 (x + y) :=
+  round_round_plus beta (FLX_exp prec) (FLX_exp prec')
+    (FLX_exp_valid prec hprec) (FLX_exp_valid prec' hprec') choice1 choice2
+    (FLX_round_round_plus_hyp prec prec' hprec Hprec)
+    (generic_format_FLX beta prec hprec Fx)
+    (generic_format_FLX beta prec hprec Fy)
+
+/-- `round_round_minus` for FLX format. -/
+theorem round_round_minus_FLX (beta : radix) (prec prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hprec : 2 * prec + 1 ≤ prec')
+    {x y : ℝ} (Fx : FLX_format beta prec x) (Fy : FLX_format beta prec y) :
+    round_round_eq beta (FLX_exp prec) (FLX_exp prec') choice1 choice2 (x - y) :=
+  round_round_minus beta (FLX_exp prec) (FLX_exp prec')
+    (FLX_exp_valid prec hprec) (FLX_exp_valid prec' hprec') choice1 choice2
+    (FLX_round_round_plus_hyp prec prec' hprec Hprec)
+    (generic_format_FLX beta prec hprec Fx)
+    (generic_format_FLX beta prec hprec Fy)
+
+/-- Hypothesis specialization for FLT. The four cases mirror Coq's
+`generalize (Zmax_spec ...) ... omega`, doing case-splits on each `max`. -/
+theorem FLT_round_round_plus_hyp (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec)
+    (Hemin : emin' ≤ emin) (Hprec : 2 * prec + 1 ≤ prec') :
+    round_round_plus_hyp (FLT_exp emin prec) (FLT_exp emin' prec') := by
+  unfold round_round_plus_hyp FLT_exp
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> intros ex ey h
+  · -- fexp1(ex+1) - 1 ≤ ey → fexp2 ex ≤ fexp1 ey
+    rcases le_or_gt (ex + 1 - prec) emin with h1 | h1 <;>
+      rcases le_or_gt (ex - prec') emin' with h2 | h2 <;>
+      rcases le_or_gt (ey - prec) emin with h3 | h3 <;>
+      simp_all [max_eq_right, max_eq_left, le_of_lt] <;> omega
+  · -- fexp1(ex-1) + 1 ≤ ey
+    rcases le_or_gt (ex - 1 - prec) emin with h1 | h1 <;>
+      rcases le_or_gt (ex - prec') emin' with h2 | h2 <;>
+      rcases le_or_gt (ey - prec) emin with h3 | h3 <;>
+      simp_all [max_eq_right, max_eq_left, le_of_lt] <;> omega
+  · -- fexp1 ex - 1 ≤ ey
+    rcases le_or_gt (ex - prec) emin with h1 | h1 <;>
+      rcases le_or_gt (ex - prec') emin' with h2 | h2 <;>
+      rcases le_or_gt (ey - prec) emin with h3 | h3 <;>
+      simp_all [max_eq_right, max_eq_left, le_of_lt] <;> omega
+  · -- ex - 1 ≤ ey
+    rcases le_or_gt (ex - prec') emin' with h2 | h2 <;>
+      rcases le_or_gt (ey - prec) emin with h3 | h3 <;>
+      simp_all [max_eq_right, max_eq_left, le_of_lt] <;> omega
+
+/-- `round_round_plus` for FLT format. -/
+theorem round_round_plus_FLT (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin' ≤ emin) (Hprec : 2 * prec + 1 ≤ prec')
+    {x y : ℝ} (Fx : FLT_format beta emin prec x) (Fy : FLT_format beta emin prec y) :
+    round_round_eq beta (FLT_exp emin prec) (FLT_exp emin' prec')
+      choice1 choice2 (x + y) :=
+  round_round_plus beta (FLT_exp emin prec) (FLT_exp emin' prec')
+    (FLT_exp_valid emin prec hprec) (FLT_exp_valid emin' prec' hprec')
+    choice1 choice2
+    (FLT_round_round_plus_hyp emin prec emin' prec' hprec Hemin Hprec)
+    (generic_format_FLT beta emin prec hprec Fx)
+    (generic_format_FLT beta emin prec hprec Fy)
+
+/-- `round_round_minus` for FLT format. -/
+theorem round_round_minus_FLT (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin' ≤ emin) (Hprec : 2 * prec + 1 ≤ prec')
+    {x y : ℝ} (Fx : FLT_format beta emin prec x) (Fy : FLT_format beta emin prec y) :
+    round_round_eq beta (FLT_exp emin prec) (FLT_exp emin' prec')
+      choice1 choice2 (x - y) :=
+  round_round_minus beta (FLT_exp emin prec) (FLT_exp emin' prec')
+    (FLT_exp_valid emin prec hprec) (FLT_exp_valid emin' prec' hprec')
+    choice1 choice2
+    (FLT_round_round_plus_hyp emin prec emin' prec' hprec Hemin Hprec)
+    (generic_format_FLT beta emin prec hprec Fx)
+    (generic_format_FLT beta emin prec hprec Fy)
+
+/-- Hypothesis specialization for FTZ. -/
+theorem FTZ_round_round_plus_hyp (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (Hemin : emin' + prec' ≤ emin + 1)
+    (Hprec : 2 * prec + 1 ≤ prec') :
+    round_round_plus_hyp (FTZ_exp emin prec) (FTZ_exp emin' prec') := by
+  unfold round_round_plus_hyp FTZ_exp
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> intros ex ey h
+  all_goals (
+    rcases lt_or_ge (ex + 1 - prec) emin with h1 | h1 <;>
+    rcases lt_or_ge (ex - 1 - prec) emin with h2 | h2 <;>
+    rcases lt_or_ge (ex - prec) emin with h3 | h3 <;>
+    rcases lt_or_ge (ex - prec') emin' with h4 | h4 <;>
+    rcases lt_or_ge (ey - prec) emin with h5 | h5 <;>
+    first
+      | (rw [if_pos h4] at h ⊢ <;> omega)
+      | (rw [if_neg (not_lt.mpr h4)] at h ⊢ <;> omega)
+      | omega)
+
+/-- `round_round_plus` for FTZ format. -/
+theorem round_round_plus_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin' + prec' ≤ emin + 1) (Hprec : 2 * prec + 1 ≤ prec')
+    {x y : ℝ} (Fx : FTZ_format beta emin prec x) (Fy : FTZ_format beta emin prec y) :
+    round_round_eq beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+      choice1 choice2 (x + y) :=
+  round_round_plus beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+    (FTZ_exp_valid emin prec hprec) (FTZ_exp_valid emin' prec' hprec')
+    choice1 choice2
+    (FTZ_round_round_plus_hyp emin prec emin' prec' hprec hprec' Hemin Hprec)
+    (generic_format_FTZ beta emin prec hprec Fx)
+    (generic_format_FTZ beta emin prec hprec Fy)
+
+/-- `round_round_minus` for FTZ format. -/
+theorem round_round_minus_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin' + prec' ≤ emin + 1) (Hprec : 2 * prec + 1 ≤ prec')
+    {x y : ℝ} (Fx : FTZ_format beta emin prec x) (Fy : FTZ_format beta emin prec y) :
+    round_round_eq beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+      choice1 choice2 (x - y) :=
+  round_round_minus beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+    (FTZ_exp_valid emin prec hprec) (FTZ_exp_valid emin' prec' hprec')
+    choice1 choice2
+    (FTZ_round_round_plus_hyp emin prec emin' prec' hprec hprec' Hemin Hprec)
+    (generic_format_FTZ beta emin prec hprec Fx)
+    (generic_format_FTZ beta emin prec hprec Fy)
+
 end LeanFlocq
