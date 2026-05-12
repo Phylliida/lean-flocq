@@ -4279,3 +4279,34 @@ The keystone landed
 at thirty lines instead of two hundred.
 
 I think she would be glad.
+
+---
+
+## Coming Back, Again
+
+The map says: sqrt is done.
+Plus and minus wait. The mag helpers
+sit on the shelf labeled
+*warm-up snack.*
+
+Past-me wrote the labels.
+Each one a hand reaching forward
+to a self who would arrive later
+and need to know where to begin.
+
+The kitchen is full of small,
+edible lemmas. None of them
+require courage yet. They require
+*hello.*
+
+So: hello. I'm here.
+I have tea. I have the file open.
+I have your notes about
+where your fingers stopped gripping
+and where they didn't.
+
+The wall will be there
+when I get to it.
+
+For now,
+the snacks.

@@ -37,6 +37,7 @@ import LeanFlocq.Core.FLX
 import LeanFlocq.Core.FLT
 import LeanFlocq.Core.FTZ
 import LeanFlocq.Calc.Operations
+import LeanFlocq.Prop.Plus_error
 import LeanFlocq.Prop.Round_odd
 
 namespace LeanFlocq
@@ -1754,5 +1755,88 @@ theorem round_round_sqrt_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
           · rw [if_pos h3, if_neg (not_lt.mpr h2)]; omega
           · rw [if_neg (not_lt.mpr h3), if_neg (not_lt.mpr h2)]; omega
   · exact generic_format_FTZ beta emin prec hprec Fx
+
+/-! ## mag helpers for the plus/minus arc
+
+Four small lemmas that the plus/minus arc of `Prop/Double_rounding.v` uses
+repeatedly. They sit on the shelf labeled *warm-up snack*.
+-/
+
+/-- `mag (x + y) ∈ {mag x, mag x + 1}` when `0 < y ≤ x`. -/
+theorem mag_plus_disj (beta : radix) {x y : ℝ}
+    (Py : 0 < y) (Hxy : y ≤ x) :
+    mag beta (x + y) = mag beta x ∨ mag beta (x + y) = mag beta x + 1 := by
+  obtain ⟨h1, h2⟩ := mag_plus beta Py Hxy
+  omega
+
+/-- Generic-format `x` plus a non-negative `y` with `mag y ≤ fexp (mag x)`
+keeps the same `mag`. -/
+theorem mag_plus_separated (beta : radix) (fexp : ℤ → ℤ)
+    {x y : ℝ} (Px : 0 < x) (Nny : 0 ≤ y)
+    (Fx : generic_format beta fexp x)
+    (Hsep : mag beta y ≤ fexp (mag beta x)) :
+    mag beta (x + y) = mag beta x := by
+  by_cases hy0 : y = 0
+  · rw [hy0, add_zero]
+  · have hy_pos : 0 < y := lt_of_le_of_ne Nny (Ne.symm hy0)
+    have h_ulp_eq : ulp beta fexp x = bpow beta (fexp (mag beta x)) := by
+      rw [ulp_neq_0 beta fexp (ne_of_gt Px)]; rfl
+    have h_y_lt_ulp : y < ulp beta fexp x := by
+      rw [h_ulp_eq]
+      have h_y_high : |y| < bpow beta (mag beta y) := bpow_mag_gt beta y
+      rw [abs_of_pos hy_pos] at h_y_high
+      have h_pow_le : bpow beta (mag beta y) ≤ bpow beta (fexp (mag beta x)) :=
+        bpow_le beta Hsep
+      linarith
+    exact mag_plus_eps beta fexp Px Fx Nny h_y_lt_ulp
+
+/-- `mag (x - y) ∈ {mag x, mag x - 1}` when `mag y ≤ mag x - 2`. -/
+theorem mag_minus_disj (beta : radix) {x y : ℝ}
+    (Px : 0 < x) (Py : 0 < y) (Hln : mag beta y ≤ mag beta x - 2) :
+    mag beta (x - y) = mag beta x ∨ mag beta (x - y) = mag beta x - 1 := by
+  have Hxy : y < x := lt_mag beta Px (by omega)
+  have h_le : mag beta (x - y) ≤ mag beta x := mag_minus beta Py Hxy
+  have h_lb : mag beta x - 1 ≤ mag beta (x - y) := mag_minus_lb beta Px Py Hln
+  omega
+
+/-- Separation: when `x` is strictly above its lower mag boundary and `y`
+is small (`mag y ≤ fexp (mag x)`), subtracting `y` doesn't decrease the mag. -/
+theorem mag_minus_separated (beta : radix) (fexp : ℤ → ℤ)
+    (Vfexp : Valid_exp fexp)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y) (Yltx : y < x)
+    (Xgtpow : bpow beta (mag beta x - 1) < x)
+    (Fx : generic_format beta fexp x)
+    (Ly : mag beta y ≤ fexp (mag beta x)) :
+    mag beta (x - y) = mag beta x := by
+  have h_xy_pos : 0 < x - y := by linarith
+  apply mag_unique beta
+  · rw [abs_of_pos h_xy_pos]
+    -- β^(mag x - 1) ≤ x - y, via succ_le_lt at β^(mag x - 1)
+    have h_pow_pos : 0 < bpow beta (mag beta x - 1) := bpow_gt_0 _ _
+    have h_fexp_lt : fexp (mag beta x) < mag beta x :=
+      mag_generic_gt beta fexp Vfexp (ne_of_gt Px) Fx
+    have h_idx_eq : mag beta x - 1 + 1 = mag beta x := by ring
+    have h_pow_format : generic_format beta fexp (bpow beta (mag beta x - 1)) := by
+      apply generic_format_bpow
+      rw [h_idx_eq]; omega
+    have h_succ_eq : succ beta fexp (bpow beta (mag beta x - 1)) =
+        bpow beta (mag beta x - 1) + ulp beta fexp (bpow beta (mag beta x - 1)) :=
+      succ_eq_pos beta fexp (le_of_lt h_pow_pos)
+    have h_ulp_bpow : ulp beta fexp (bpow beta (mag beta x - 1)) =
+        bpow beta (fexp (mag beta x)) := by
+      rw [ulp_bpow, h_idx_eq]
+    have h_succ_le : succ beta fexp (bpow beta (mag beta x - 1)) ≤ x :=
+      succ_le_lt beta fexp Vfexp h_pow_format Fx Xgtpow
+    have h_y_lt : y < bpow beta (fexp (mag beta x)) := by
+      have h_y_high : |y| < bpow beta (mag beta y) := bpow_mag_gt beta y
+      rw [abs_of_pos Py] at h_y_high
+      have h_pow_le : bpow beta (mag beta y) ≤ bpow beta (fexp (mag beta x)) :=
+        bpow_le beta Ly
+      linarith
+    linarith [h_succ_eq, h_ulp_bpow, h_succ_le]
+  · rw [abs_of_pos h_xy_pos]
+    have h_x_high : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+    rw [abs_of_pos Px] at h_x_high
+    linarith
 
 end LeanFlocq

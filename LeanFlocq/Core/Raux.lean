@@ -448,4 +448,48 @@ theorem mag_div (beta : radix) {x y : ℝ} (hx : x ≠ 0) (hy : y ≠ 0) :
           apply mul_le_mul_of_nonneg_left h_y_lower
           exact bpow_ge_0 _ _
 
+/-- Sandwich bound for `mag` of a sum: if `0 < y ≤ x` then
+`mag x ≤ mag (x+y) ≤ mag x + 1`. -/
+theorem mag_plus (beta : radix) {x y : ℝ}
+    (Py : 0 < y) (Hxy : y ≤ x) :
+    mag beta x ≤ mag beta (x + y) ∧ mag beta (x + y) ≤ mag beta x + 1 := by
+  have Hx : 0 < x := lt_of_lt_of_le Py Hxy
+  have h_xy_pos : 0 < x + y := by linarith
+  have h_xy_ne : x + y ≠ 0 := ne_of_gt h_xy_pos
+  have hx_ne : x ≠ 0 := ne_of_gt Hx
+  -- |x| ≤ |x + y|
+  have h_abs_le : |x| ≤ |x + y| := by
+    rw [abs_of_pos Hx, abs_of_pos h_xy_pos]; linarith
+  -- |x + y| < β^(mag x + 1)
+  have h_beta_ge : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have h_upper : |x + y| < bpow beta (mag beta x + 1) := by
+    rw [abs_of_pos h_xy_pos]
+    have h_x_upper : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
+    rw [abs_of_pos Hx] at h_x_upper
+    have h_y_lt : y < bpow beta (mag beta x) := lt_of_le_of_lt Hxy h_x_upper
+    have h_sum_lt : x + y < 2 * bpow beta (mag beta x) := by linarith
+    have h_pow_pos : 0 < bpow beta (mag beta x) := bpow_gt_0 beta _
+    have h_pow_eq : bpow beta (mag beta x + 1)
+        = (beta.val : ℝ) * bpow beta (mag beta x) := by
+      rw [show mag beta x + 1 = 1 + mag beta x from by ring, bpow_plus, bpow_one]
+    rw [h_pow_eq]
+    calc x + y
+        < 2 * bpow beta (mag beta x) := h_sum_lt
+      _ ≤ (beta.val : ℝ) * bpow beta (mag beta x) :=
+          mul_le_mul_of_nonneg_right h_beta_ge (le_of_lt h_pow_pos)
+  refine ⟨?_, ?_⟩
+  · exact mag_le_abs beta hx_ne h_abs_le
+  · exact mag_le_bpow beta h_xy_ne h_upper
+
+/-- `mag (x - y) ≤ mag x` when `0 < y < x`. -/
+theorem mag_minus (beta : radix) {x y : ℝ}
+    (Py : 0 < y) (Hxy : y < x) :
+    mag beta (x - y) ≤ mag beta x := by
+  have Hx : 0 < x := lt_trans Py Hxy
+  have h_xy_pos : 0 < x - y := by linarith
+  have h_xy_ne : x - y ≠ 0 := ne_of_gt h_xy_pos
+  apply mag_le_abs beta h_xy_ne
+  rw [abs_of_pos h_xy_pos, abs_of_pos Hx]
+  linarith
+
 end LeanFlocq
