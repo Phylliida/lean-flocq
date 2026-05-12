@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `6f2d2bb`)
+## Status (as of commit `b9f07a0`)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -29,7 +29,7 @@ including both round-trip theorems. The IEEE 754 binary
 encoding is now a proven bijection between `binary_float` and integers in
 `[0, 2^(mw+ew+1))`.
 
-**~22400 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
+**~22700 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -46,7 +46,7 @@ encoding is now a proven bijection between `binary_float` and integers in
 | `Ulp.lean` | 2486 | `Core/Ulp.v` | **Complete: 103/103.** All keystones (`succ_DN_eq_UP`, `ulp_round`, error bounds, mixed-sign perturbation, `generic_format_plus_ulp`). |
 | `Round_NE.lean` | 740 | `Core/Round_NE.v` | **Complete: 10/10.** `DN_UP_parity_generic_pos/_aux/_generic`, `Rnd_NE_pt_{total,monotone,round}`, `round_NE_opp/_abs/_pt_pos/_pt`, `exists_NE_FLX/_FLT`. |
 | `Digits.lean` | 192 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 9 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`, `_le_Zpower`, `_div_Zpower`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
-| `Binary.lean` | 813 | `IEEE754/Binary.v` (lines 1–963) | **Structural part done.** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, `overflow_to_inf`, `binary_overflow`. `binary_round_aux` and arithmetic ops blocked behind `Calc/`. |
+| `Binary.lean` | 1075 | `IEEE754/Binary.v` (lines 1–963) | **Structural part + shr_record infrastructure done.** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, `overflow_to_inf`, `binary_overflow`. **`shr_record`** struct + `shr_1` / `loc_of_shr_record` / `shr_record_of_loc` with two round-trip lemmas, `shr` iteration function, `shr_1_nonneg` / `shr_1_iter_nonneg` invariants, and **`inbetween_shr_1`**, `inbetween_shr_iter`, **`inbetween_shr`** correctness theorems. `shr_fexp`, `shr_truncate`, and `binary_round_aux` (and downstream arithmetic ops) still to do. |
 | `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
 | `Calc/Round.lean` | 1524 | `Calc/Round.v` | **Complete.** `cexp_inbetween_float[_loc_Exact]`, `cond_incr`, `inbetween_float_round[_sign]`. All 6 mode families: DN/UP/ZR/N/NE/NA, both unsigned and signed, `inbetween_int_*` and `inbetween_float_*`. `truncate_aux`, `truncate`, `truncate_0`, `truncate_correct_partial[_partial']`/`_correct[_correct']`. `generic_format_truncate`, `truncate_correct_format`. Generic correctness: `round_any_correct`, `round_trunc_any_correct[_']`, `round_sign_any_correct`, `round_trunc_sign_any_correct[_']`. **All 30 per-mode aliases** for DN/UP/ZR/NE/NA. `truncate_FIX`, `truncate_FIX_correct`. |
 | `Calc/Operations.lean` | 137 | `Calc/Operations.v` | **Complete: 13/13.** `Falign[_spec[_exp]]`, `Fopp` + `F2R_opp`, `Fabs` + `F2R_abs`, `Fplus` + `F2R_plus`, `Fplus_same_exp`, `Fexp_Fplus`, `Fminus` + `F2R_minus`, `Fminus_same_exp`, `Fmult` + `F2R_mult`. |
@@ -280,11 +280,14 @@ arc + plus/minus radix_ge_3 + division arc, all with FLX/FLT/FTZ
 instantiations) are done. The remaining work is the substantial part of
 `Binary.lean` and the rest of `IEEE754/Bits.v`:
 
-1. **Back to `Binary.lean`**: `shr_record` infrastructure (lines 745–925 of
-   Binary.v), `binary_round_aux`, then the arithmetic ops (`Bplus`, `Bmult`,
-   `Bdiv`, `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`, `Bsucc`, `Bpred`.
+1. **`Binary.lean` arithmetic ops**: `shr_record` infrastructure DONE
+   (lines 745–865 of Binary.v ported as of 2026-05-12). Next: `shr_fexp`
+   (one-liner using `Zdigits2`), `shr_truncate` (connects `shr_fexp` to
+   `truncate` from `Calc/Round.lean` — substantial proof), then
+   `binary_round_aux`, then the arithmetic ops (`Bplus`, `Bmult`, `Bdiv`,
+   `Bsqrt`), then `Bldexp`, `Bfrexp`, `Bulp`, `Bsucc`, `Bpred`.
    `error_N_FLT` from `Prop/Relative.lean` is the keystone for the
-   correctness proofs. **This is the biggest remaining piece by far.**
+   correctness proofs.
 
 2. **`IEEE754/Bits.v` (remainder)** — beyond the encoding/decoding round-trips
    already proven, there are B32/B64-specific instantiations and helper lemmas.
@@ -293,6 +296,29 @@ instantiations) are done. The remaining work is the substantial part of
 3. **`Calc/Round.v` cleanup**: add `Zdigits_div_Zpower` to `Digits.lean` to
    unblock the few remaining `generic_format_truncate`/`truncate_correct_format`
    polish points. Mostly nice-to-have.
+
+### Notes from the shr_record port (2026-05-12 cont.)
+
+The `shr_record` data type ported with no surprises. The substantial
+proof `inbetween_shr_1` (Coq is ~30 dense lines of `bpow_simplify` +
+positive-case-destructs; Lean is ~100 lines of explicit case analysis)
+landed first try after one type-mismatch fix.
+
+Strategy: case-split mrs.m into `= 0`, `> 0 ∧ even`, `> 0 ∧ odd`, then in
+each case identify the right `k` (0, 0, or 1 respectively) and apply
+`new_location_even_correct` with `start = m' * 2 * bpow e`, `step = bpow e`,
+`nb_steps = 2`. The trick: Lean's `↑0 * bpow e` doesn't trivially equal `0`,
+so massage the bounds via `push_cast; ring` rewrites before applying.
+
+The Coq proof uses `iter_pos` which we replace with `Function.iterate^[n]`
+and prove `inbetween_shr_iter` by induction on the iterate count. The
+exponent-arithmetic conversion `(e + ↑k) + 1 = e + ↑(k + 1)` is a one-line
+`push_cast; ring`.
+
+The structural lemmas (`shr_1_nonneg`, `shr_1_iter_nonneg`,
+`m_shr_record_of_loc`, `loc_of_shr_record_of_loc`) are all under 5 lines.
+Use `split_ifs with h` to handle the `shr_1` conditional cleanly rather
+than `rw [if_pos h]` + cleanup.
 
 ### Notes from the secondary-radix-tracks port (2026-05-12 cont.)
 
