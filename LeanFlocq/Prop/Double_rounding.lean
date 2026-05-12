@@ -1756,6 +1756,76 @@ theorem round_round_sqrt_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
           · rw [if_neg (not_lt.mpr h3), if_neg (not_lt.mpr h2)]; omega
   · exact generic_format_FTZ beta emin prec hprec Fx
 
+/-! ## plus/minus arc -/
+
+/-- Hypothesis for `round_round_plus`/`round_round_minus`: four bounds
+relating `fexp2` to `fexp1` at related arguments. Compare Coq's
+`round_round_plus_hyp`. -/
+def round_round_plus_hyp (fexp1 fexp2 : ℤ → ℤ) : Prop :=
+  (∀ ex ey : ℤ, fexp1 (ex + 1) - 1 ≤ ey → fexp2 ex ≤ fexp1 ey)
+  ∧ (∀ ex ey : ℤ, fexp1 (ex - 1) + 1 ≤ ey → fexp2 ex ≤ fexp1 ey)
+  ∧ (∀ ex ey : ℤ, fexp1 ex - 1 ≤ ey → fexp2 ex ≤ fexp1 ey)
+  ∧ (∀ ex ey : ℤ, ex - 1 ≤ ey → fexp2 ex ≤ fexp1 ey)
+
+/-- Core building block: given exponent bounds, `x + y` is in `fexp2`-format.
+When both `x` and `y` are nonzero, builds the explicit float
+`⟨mx + my * β^(fexp1 (mag y) - fexp1 (mag x)), fexp1 (mag x)⟩`. -/
+theorem round_round_plus_aux0_aux_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (x y : ℝ)
+    (Oxy : fexp1 (mag beta x) ≤ fexp1 (mag beta y))
+    (Hlnx : fexp2 (mag beta (x + y)) ≤ fexp1 (mag beta x))
+    (Hlny : fexp2 (mag beta (x + y)) ≤ fexp1 (mag beta y))
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    generic_format beta fexp2 (x + y) := by
+  by_cases hx0 : x = 0
+  · subst hx0
+    rw [zero_add] at Hlny ⊢
+    exact generic_inclusion_mag beta fexp1 fexp2 (fun _ => Hlny) Fy
+  · by_cases hy0 : y = 0
+    · subst hy0
+      rw [add_zero] at Hlnx ⊢
+      exact generic_inclusion_mag beta fexp1 fexp2 (fun _ => Hlnx) Fx
+    · -- Both nonzero. Build the explicit float.
+      set mx := Ztrunc (scaled_mantissa beta fexp1 x) with hmx
+      set my := Ztrunc (scaled_mantissa beta fexp1 y) with hmy
+      have hFx : x = (mx : ℝ) * bpow beta (fexp1 (mag beta x)) := Fx
+      have hFy : y = (my : ℝ) * bpow beta (fexp1 (mag beta y)) := Fy
+      set d : ℤ := fexp1 (mag beta y) - fexp1 (mag beta x) with hd_def
+      have hd_nn : 0 ≤ d := sub_nonneg.mpr Oxy
+      have hdtn : ((d.toNat : ℕ) : ℤ) = d := Int.toNat_of_nonneg hd_nn
+      set f : float beta :=
+        ⟨mx + my * (beta.val : ℤ) ^ d.toNat, fexp1 (mag beta x)⟩ with hf_def
+      have h_F2R : F2R f = x + y := by
+        show ((mx + my * (beta.val : ℤ) ^ d.toNat : ℤ) : ℝ)
+              * bpow beta (fexp1 (mag beta x)) = x + y
+        have h_pow_real : ((beta.val : ℝ)) ^ d.toNat = bpow beta d := by
+          unfold bpow
+          conv_rhs => rw [show d = ((d.toNat : ℕ) : ℤ) from hdtn.symm]
+          rw [zpow_natCast]
+        have hbpow_combine :
+            bpow beta d * bpow beta (fexp1 (mag beta x)) =
+              bpow beta (fexp1 (mag beta y)) := by
+          rw [← bpow_plus]; congr 1; omega
+        push_cast
+        rw [h_pow_real, add_mul, mul_assoc, hbpow_combine, ← hFx, ← hFy]
+      refine generic_format_F2R' beta fexp2 f h_F2R ?_
+      intro _
+      show fexp2 (mag beta (x + y)) ≤ fexp1 (mag beta x)
+      exact Hlnx
+
+/-- Symmetric wrapper: drop the `fexp1 (mag x) ≤ fexp1 (mag y)` ordering
+assumption by case-split and `add_comm`. -/
+theorem round_round_plus_aux0_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ) (x y : ℝ)
+    (Hlnx : fexp2 (mag beta (x + y)) ≤ fexp1 (mag beta x))
+    (Hlny : fexp2 (mag beta (x + y)) ≤ fexp1 (mag beta y))
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    generic_format beta fexp2 (x + y) := by
+  rcases le_or_gt (fexp1 (mag beta x)) (fexp1 (mag beta y)) with Hle | Hgt
+  · exact round_round_plus_aux0_aux_aux beta fexp1 fexp2 x y Hle Hlnx Hlny Fx Fy
+  · rw [add_comm] at Hlnx Hlny ⊢
+    exact round_round_plus_aux0_aux_aux beta fexp1 fexp2 y x (le_of_lt Hgt)
+      Hlny Hlnx Fy Fx
+
 /-! ## mag helpers for the plus/minus arc
 
 Four small lemmas that the plus/minus arc of `Prop/Double_rounding.v` uses
@@ -1838,5 +1908,45 @@ theorem mag_minus_separated (beta : radix) (fexp : ℤ → ℤ)
     have h_x_high : |x| < bpow beta (mag beta x) := bpow_mag_gt beta x
     rw [abs_of_pos Px] at h_x_high
     linarith
+
+/-- `round_round_plus_aux0`: when `fexp1 (mag x) - 1 ≤ mag y`, the addition
+`x + y` is in `fexp2`-format (exact in the larger precision). -/
+theorem round_round_plus_aux0 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y) (Hyx : y ≤ x)
+    (Hln : fexp1 (mag beta x) - 1 ≤ mag beta y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    generic_format beta fexp2 (x + y) := by
+  obtain ⟨_, Hexp2, Hexp3, Hexp4⟩ := Hexp
+  rcases le_or_gt (mag beta y) (fexp1 (mag beta x)) with Hle | Hgt
+  · -- mag y ≤ fexp1 (mag x): mag (x+y) = mag x via mag_plus_separated
+    have Lxy : mag beta (x + y) = mag beta x :=
+      mag_plus_separated beta fexp1 Px (le_of_lt Py) Fx Hle
+    refine round_round_plus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+    · rw [Lxy]; exact Hexp4 _ _ (by omega)
+    · rw [Lxy]; exact Hexp3 _ _ Hln
+  · -- fexp1 (mag x) < mag y: mag (x+y) ∈ {mag x, mag x + 1}
+    have hmy_le_mx : mag beta y ≤ mag beta x := by
+      have hx_ne : x ≠ 0 := ne_of_gt Px
+      have hy_ne : y ≠ 0 := ne_of_gt Py
+      apply mag_le_abs beta hy_ne
+      rw [abs_of_pos Py, abs_of_pos Px]; exact Hyx
+    refine round_round_plus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+    · rcases mag_plus_disj beta Py Hyx with Lxy | Lxy
+      · rw [Lxy]; exact Hexp4 _ _ (by omega)
+      · rw [Lxy]
+        have h_req : fexp1 ((mag beta x + 1) - 1) + 1 ≤ mag beta x := by
+          have : fexp1 (mag beta x) + 1 ≤ mag beta x := by omega
+          have heq : (mag beta x + 1) - 1 = mag beta x := by ring
+          rw [heq]; omega
+        exact Hexp2 _ _ h_req
+    · rcases mag_plus_disj beta Py Hyx with Lxy | Lxy
+      · rw [Lxy]; exact Hexp3 _ _ (by omega)
+      · rw [Lxy]
+        have h_req : fexp1 ((mag beta x + 1) - 1) + 1 ≤ mag beta y := by
+          have heq : (mag beta x + 1) - 1 = mag beta x := by ring
+          rw [heq]; omega
+        exact Hexp2 _ _ h_req
 
 end LeanFlocq
