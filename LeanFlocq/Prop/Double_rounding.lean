@@ -1862,7 +1862,7 @@ theorem round_round_plus_aux1_aux (beta : radix) {k : ℤ} (Hk : 0 < k)
   -- ⌊mx + y * bpow(-ce)⌋ = mx
   have h_floor : ⌊(mx : ℝ) + y * bpow beta (-ce)⌋ = mx := by
     apply Int.floor_eq_iff.mpr
-    refine ⟨by linarith, by push_cast; linarith⟩
+    refine ⟨by linarith, by linarith⟩
   -- round_DN(x+y) = x
   have h_round_eq_x : round beta fexp (fun y : ℝ => ⌊y⌋) (x + y) = x := by
     unfold round
@@ -2108,5 +2108,56 @@ theorem round_round_plus_aux0 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
           have heq : (mag beta x + 1) - 1 = mag beta x := by ring
           rw [heq]; omega
         exact Hexp2 _ _ h_req
+
+/-- Combine `aux0` and `aux1` by dispatching on `mag y` vs `fexp1(mag x) - 2`. -/
+theorem round_round_plus_aux2 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ} (Px : 0 < x) (Py : 0 < y) (Hyx : y ≤ x)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x + y) := by
+  rcases le_or_gt (mag beta y) (fexp1 (mag beta x) - 2) with Hly | Hly
+  · -- Small y: aux1
+    exact round_round_plus_aux1 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+      Hexp Px Py Hly Fx
+  · -- Larger y: x + y is in fexp2-format, so the inner round is the identity
+    unfold round_round_eq
+    have Hxy_fmt : generic_format beta fexp2 (x + y) :=
+      round_round_plus_aux0 beta fexp1 fexp2 Vfexp1 Hexp Px Py Hyx
+        (by omega) Fx Fy
+    rw [round_generic beta fexp2 (Znearest choice2) Hxy_fmt]
+
+/-- Drop the `y ≤ x` assumption to `0 ≤ x` and `0 ≤ y`. -/
+theorem round_round_plus_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ} (Nnx : 0 ≤ x) (Nny : 0 ≤ y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x + y) := by
+  have Hexp4 := Hexp.2.2.2
+  by_cases hx0 : x = 0
+  · subst hx0
+    rw [zero_add]
+    unfold round_round_eq
+    have Hy_fmt2 : generic_format beta fexp2 y :=
+      generic_inclusion_mag beta fexp1 fexp2 (fun _ => Hexp4 _ _ (by omega)) Fy
+    rw [round_generic beta fexp2 (Znearest choice2) Hy_fmt2]
+  · by_cases hy0 : y = 0
+    · subst hy0
+      rw [add_zero]
+      unfold round_round_eq
+      have Hx_fmt2 : generic_format beta fexp2 x :=
+        generic_inclusion_mag beta fexp1 fexp2 (fun _ => Hexp4 _ _ (by omega)) Fx
+      rw [round_generic beta fexp2 (Znearest choice2) Hx_fmt2]
+    · have Px : 0 < x := lt_of_le_of_ne Nnx (Ne.symm hx0)
+      have Py : 0 < y := lt_of_le_of_ne Nny (Ne.symm hy0)
+      rcases lt_or_ge x y with H | H
+      · rw [add_comm]
+        exact round_round_plus_aux2 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+          Hexp Py Px (le_of_lt H) Fy Fx
+      · exact round_round_plus_aux2 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+          Hexp Px Py H Fx Fy
 
 end LeanFlocq
