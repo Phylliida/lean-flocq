@@ -2223,4 +2223,21 @@ theorem round_round_minus_aux0 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
           rw [heq]; omega
         exact Hexp1 _ _ h_req
 
+/-- `round_round_minus_aux1`: when `mag y ≤ fexp1(mag x) - 2` AND
+`fexp1(mag(x-y)) - 1 ≤ mag y`, the subtraction is exact in `fexp2`-format. -/
+theorem round_round_minus_aux1 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ} (Py : 0 < y) (Hyx : y < x)
+    (Hln : mag beta y ≤ fexp1 (mag beta x) - 2)
+    (Hln' : fexp1 (mag beta (x - y)) - 1 ≤ mag beta y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    generic_format beta fexp2 (x - y) := by
+  obtain ⟨_, _, Hexp3, Hexp4⟩ := Hexp
+  refine round_round_minus_aux0_aux beta fexp1 fexp2 x y ?_ ?_ Fx Fy
+  · -- fexp2(mag(x-y)) ≤ fexp1(mag(x-y)) ≤ fexp1(mag x) (the second via Hln + Hln')
+    have h1 : fexp2 (mag beta (x - y)) ≤ fexp1 (mag beta (x - y)) :=
+      Hexp4 _ _ (by omega)
+    omega
+  · exact Hexp3 _ _ Hln'
+
 end LeanFlocq
