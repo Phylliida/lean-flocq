@@ -1436,7 +1436,135 @@ theorem binary_round_aux_correct' (hp : 0 < prec) (hmax : prec < emax)
       round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x
     rw [h_round_zero]; rfl
   · -- ===== Case m1' > 0 =====
-    sorry
+    -- |round x| = F2R⟨m1', e1⟩ (from Hround + sign-absorbing |cond_Zopp _ m1'| = m1').
+    have h_abs_round : |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+        = F2R (beta := radix2) ⟨m1', e1⟩ := by
+      have h_abs_cond : |cond_Zopp (decide (x < 0)) m1'| = m1' := by
+        cases hd : decide (x < 0)
+        · show |m1'| = m1'; exact abs_of_nonneg Hm1'_nonneg
+        · show |(-m1')| = m1'; rw [abs_neg]; exact abs_of_nonneg Hm1'_nonneg
+      rw [Hround, ← F2R_Zabs]
+      show F2R (beta := radix2) ⟨|cond_Zopp (decide (x < 0)) m1'|, e1⟩
+        = F2R (beta := radix2) ⟨m1', e1⟩
+      rw [h_abs_cond]
+    -- 0 < F2R⟨m1', e1⟩, hence round x ≠ 0.
+    have h_F2R_pos : 0 < F2R (beta := radix2) ⟨m1', e1⟩ :=
+      F2R_gt_0 ⟨m1', e1⟩ h_pos
+    have h_round_ne :
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x ≠ 0 := by
+      intro hr0
+      have : |(0 : ℝ)| = F2R (beta := radix2) ⟨m1', e1⟩ := by
+        rw [← hr0]; exact h_abs_round
+      rw [abs_zero] at this
+      exact ne_of_gt h_F2R_pos this.symm
+    -- F2R⟨m1', e1⟩ ∈ generic_format.
+    have h_F2R_fmt :
+        generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (F2R (beta := radix2) ⟨m1', e1⟩) := by
+      rw [← h_abs_round]
+      exact generic_format_abs radix2 (FLT_exp (3 - emax - prec) prec)
+        (generic_format_round radix2 (FLT_exp (3 - emax - prec) prec) hValid
+          (round_mode m) x)
+    -- e1 ≤ fexp(Zdigits m1' + e1) — via cexp_round_ge + H1b + mag rewrite.
+    have h_mag_F2R : mag radix2 (F2R (beta := radix2) ⟨m1', e1⟩)
+                   = Zdigits radix2 m1' + e1 :=
+      mag_F2R_Zdigits m1' e1 (ne_of_gt h_pos)
+    have h_e1_le_fexp :
+        e1 ≤ FLT_exp (3 - emax - prec) prec (Zdigits radix2 m1' + e1) := by
+      have h_cexp_round :
+          cexp radix2 (FLT_exp (3 - emax - prec) prec) x ≤
+          cexp radix2 (FLT_exp (3 - emax - prec) prec)
+            (round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x) :=
+        cexp_round_ge radix2 (FLT_exp (3 - emax - prec) prec) hValid
+          (FLT_exp_monotone (3 - emax - prec) prec) (round_mode m) h_round_ne
+      calc e1
+          = cexp radix2 (FLT_exp (3 - emax - prec) prec) x := by
+              rw [H1b, cexp_abs]
+        _ ≤ cexp radix2 (FLT_exp (3 - emax - prec) prec)
+              (round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x) :=
+              h_cexp_round
+        _ = cexp radix2 (FLT_exp (3 - emax - prec) prec)
+              |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x| :=
+              (cexp_abs radix2 _ _).symm
+        _ = FLT_exp (3 - emax - prec) prec
+              (mag radix2 |round radix2 (FLT_exp (3 - emax - prec) prec)
+                (round_mode m) x|) := rfl
+        _ = FLT_exp (3 - emax - prec) prec
+              (mag radix2 (F2R (beta := radix2) ⟨m1', e1⟩)) := by rw [h_abs_round]
+        _ = FLT_exp (3 - emax - prec) prec (Zdigits radix2 m1' + e1) := by
+              rw [h_mag_F2R]
+    -- Apply truncate_correct_format: get F2R-eq + cexp-eq for the truncate result.
+    have h_tcf := truncate_correct_format
+      (beta := radix2) (fexp := FLT_exp (3 - emax - prec) prec)
+      (m := m1') (e := e1) (ne_of_gt h_pos) h_F2R_fmt h_e1_le_fexp
+    obtain ⟨H3, H4⟩ := h_tcf
+    -- Name the truncate result components.
+    set m2 := (truncate radix2 (FLT_exp (3 - emax - prec) prec)
+                (m1', e1, location.Exact)).1 with hm2_def
+    set e2 := (truncate radix2 (FLT_exp (3 - emax - prec) prec)
+                (m1', e1, location.Exact)).2.1 with he2_def
+    -- 0 < m2 (since F2R⟨m2, e2⟩ = F2R⟨m1', e1⟩ > 0).
+    have h_m2_pos : 0 < m2 := by
+      apply gt_0_F2R (beta := radix2) (m := m2) (e := e2)
+      rw [← H3]; exact h_F2R_pos
+    -- Express m2 = Int.ofNat (k + 1).
+    obtain ⟨k, hk⟩ : ∃ k : ℕ, m2 = Int.ofNat (k + 1) := by
+      refine ⟨(m2 - 1).toNat, ?_⟩
+      have hpos1 : 0 ≤ m2 - 1 := by linarith
+      have hcast : ((m2 - 1).toNat : ℤ) = m2 - 1 := Int.toNat_of_nonneg hpos1
+      show m2 = ((m2 - 1).toNat + 1 : ℤ)
+      push_cast [hcast]; ring
+    -- Canonical mantissa fact: FLT_exp(Zdigits m2 + e2) = e2.
+    -- Derived from H4 (e2 = cexp F2R⟨m1', e1⟩) and mag(F2R⟨m2,e2⟩) = Zdigits m2 + e2
+    -- bridged via H3 (F2R⟨m1', e1⟩ = F2R⟨m2, e2⟩).
+    have hm2_ne : m2 ≠ 0 := ne_of_gt h_m2_pos
+    have h_mag2 : mag radix2 (F2R (beta := radix2) ⟨m2, e2⟩)
+                = Zdigits radix2 m2 + e2 :=
+      mag_F2R_Zdigits m2 e2 hm2_ne
+    have h_canonical_eq :
+        FLT_exp (3 - emax - prec) prec (Zdigits radix2 m2 + e2) = e2 := by
+      have h_cexp_F2R :
+          cexp radix2 (FLT_exp (3 - emax - prec) prec)
+              (F2R (beta := radix2) ⟨m1', e1⟩)
+          = FLT_exp (3 - emax - prec) prec (Zdigits radix2 m2 + e2) := by
+        show FLT_exp (3 - emax - prec) prec
+              (mag radix2 (F2R (beta := radix2) ⟨m1', e1⟩))
+            = FLT_exp (3 - emax - prec) prec (Zdigits radix2 m2 + e2)
+        rw [H3, h_mag2]
+      rw [← h_cexp_F2R, ← H4]
+    -- Fire the right match branch, and reduce the pair projection.
+    rw [hk]
+    simp only []
+    -- Case split on e2 ≤ emax - prec.
+    by_cases h_e2_le : e2 ≤ emax - prec
+    · -- ===== Bounded sub-case (|round x| < bpow emax) =====
+      rw [if_pos h_e2_le]
+      -- The result is F754_finite (decide (x<0)) (Int.ofNat (k+1)) e2.
+      -- Build bounded, then conclude all three facts of the Rlt_bool true branch.
+      have h_bnd : bounded prec emax (Int.ofNat (k + 1)) e2 := by
+        refine ⟨?_, ?_, h_e2_le⟩
+        · -- 1 ≤ Int.ofNat (k+1) — trivial.
+          show (1 : ℤ) ≤ Int.ofNat (k + 1); omega
+        · -- canonical_mantissa: FLT_exp(Zdigits (Int.ofNat (k+1)) + e2) = e2.
+          show FLT_exp (3 - emax - prec) prec
+              (Zdigits radix2 (Int.ofNat (k + 1)) + e2) = e2
+          rw [← hk]; exact h_canonical_eq
+      refine ⟨h_bnd, ?_⟩
+      -- |round x| < bpow emax via bounded_lt_emax.
+      have h_abs_lt :
+          |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+          < bpow radix2 emax := by
+        rw [h_abs_round, H3]
+        exact bounded_lt_emax (prec := prec) (emax := emax) hp hmax m2 e2
+          (by rw [hk]; exact h_bnd)
+      rw [if_pos h_abs_lt]
+      refine ⟨?_, rfl, rfl⟩
+      -- FF2R (F754_finite sx (k+1) e2) = round x.
+      show F2R (beta := radix2) ⟨cond_Zopp (decide (x < 0)) (Int.ofNat (k + 1)), e2⟩
+        = round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x
+      rw [Hround, ← hk, F2R_cond_Zopp, F2R_cond_Zopp, H3]
+    · -- ===== Overflow sub-case (|round x| ≥ bpow emax) =====
+      sorry
 
 end binary_float
 
