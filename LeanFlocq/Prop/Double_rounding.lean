@@ -2441,4 +2441,80 @@ theorem round_round_minus_aux2 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
       rw [h_split]; nlinarith
     linarith
 
+/-- Combine `minus_aux0`, `minus_aux1`, `minus_aux2` into one statement
+under `0 < y ≤ x`. -/
+theorem round_round_minus_aux3 (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ} (Py : 0 < y) (Hyx : y ≤ x)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x - y) := by
+  by_cases hy_eq : y = x
+  · rw [hy_eq]
+    unfold round_round_eq
+    rw [show x - x = 0 from by ring, round_0, round_0]
+  · have Hyx' : y < x := lt_of_le_of_ne Hyx hy_eq
+    rcases le_or_gt (mag beta y) (fexp1 (mag beta x) - 2) with Hly | Hly
+    · -- mag y ≤ fexp1 (mag x) - 2
+      rcases le_or_gt (mag beta y) (fexp1 (mag beta (x - y)) - 2) with Hly' | Hly'
+      · -- mag y ≤ fexp1 (mag (x - y)) - 2: aux2
+        exact round_round_minus_aux2 beta fexp1 fexp2 Vfexp1 Vfexp2
+          choice1 choice2 Hexp Py Hyx' Hly Hly' Fx Fy
+      · -- mag y > fexp1 (mag (x - y)) - 2: subtraction exact via aux1
+        unfold round_round_eq
+        have Hxy_fmt : generic_format beta fexp2 (x - y) :=
+          round_round_minus_aux1 beta fexp1 fexp2 Hexp Py Hyx'
+            Hly (by omega) Fx Fy
+        rw [round_generic beta fexp2 (Znearest choice2) Hxy_fmt]
+    · -- mag y > fexp1 (mag x) - 2: subtraction exact via aux0
+      unfold round_round_eq
+      have Hxy_fmt : generic_format beta fexp2 (x - y) :=
+        round_round_minus_aux0 beta fexp1 fexp2 Hexp Py Hyx'
+          (by omega) Fx Fy
+      rw [round_generic beta fexp2 (Znearest choice2) Hxy_fmt]
+
+/-- Drop the `y ≤ x` assumption: `0 ≤ x ∧ 0 ≤ y`. When `x < y`, rewrite
+`x - y` as `-(y - x)` and use `round_N_opp` to flip signs, then apply
+`minus_aux3` with the transformed choice functions. -/
+theorem round_round_minus_aux (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_plus_hyp fexp1 fexp2)
+    {x y : ℝ} (Nnx : 0 ≤ x) (Nny : 0 ≤ y)
+    (Fx : generic_format beta fexp1 x) (Fy : generic_format beta fexp1 y) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (x - y) := by
+  have Hexp4 := Hexp.2.2.2
+  by_cases hx0 : x = 0
+  · subst hx0
+    -- x - y = 0 - y = -y; y is in fexp2-format
+    have Hy_fmt2 : generic_format beta fexp2 y :=
+      generic_inclusion_mag beta fexp1 fexp2 (fun _ => Hexp4 _ _ (by omega)) Fy
+    have Hny_fmt2 : generic_format beta fexp2 (0 - y) := by
+      rw [zero_sub]; exact generic_format_opp beta fexp2 Hy_fmt2
+    unfold round_round_eq
+    rw [round_generic beta fexp2 (Znearest choice2) Hny_fmt2]
+  · by_cases hy0 : y = 0
+    · subst hy0
+      have Hx_fmt2 : generic_format beta fexp2 (x - 0) := by
+        rw [sub_zero]
+        exact generic_inclusion_mag beta fexp1 fexp2
+          (fun _ => Hexp4 _ _ (by omega)) Fx
+      unfold round_round_eq
+      rw [round_generic beta fexp2 (Znearest choice2) Hx_fmt2]
+    · have Px : 0 < x := lt_of_le_of_ne Nnx (Ne.symm hx0)
+      have Py : 0 < y := lt_of_le_of_ne Nny (Ne.symm hy0)
+      rcases lt_or_ge x y with H | H
+      · -- x < y: rewrite x - y = -(y - x), apply round_N_opp three times
+        unfold round_round_eq
+        rw [show x - y = -(y - x) from by ring]
+        rw [round_N_opp beta fexp2 choice2]
+        rw [round_N_opp beta fexp1 choice1]
+        rw [round_N_opp beta fexp1 choice1 (y - x)]
+        congr 1
+        exact round_round_minus_aux3 beta fexp1 fexp2 Vfexp1 Vfexp2 _ _
+          Hexp Px (le_of_lt H) Fy Fx
+      · exact round_round_minus_aux3 beta fexp1 fexp2 Vfexp1 Vfexp2 choice1 choice2
+          Hexp Py H Fx Fy
+
 end LeanFlocq
