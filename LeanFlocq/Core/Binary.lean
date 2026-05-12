@@ -1303,6 +1303,141 @@ noncomputable def binary_round_aux (prec emax : ℤ) (m : mode)
       else binary_overflow prec emax m sx
   | Int.negSucc _ => full_float.F754_nan false 1
 
+/-- **`binary_round_aux_correct'`** (Coq lines 974–1154): the IEEE-754
+rounding-kernel correctness theorem.
+
+Given a nonzero real `x` bracketed by `[mx·2^ex, (mx+1)·2^ex)` with location
+`lx`, and with `ex` no larger than the canonical exponent of `x` under
+`FLT_exp (3 - emax - prec) prec`, the result of `binary_round_aux`:
+
+* is always a valid `binary_float`;
+* if `|round x|` fits in the `[0, β^emax)` range, equals the rounded value
+  (as `FF2R`), is finite, and has sign `decide (x < 0)`;
+* otherwise equals the canonical `binary_overflow` (which is either `±∞`
+  or the maximum finite float, per `overflow_to_inf`).
+
+The conditional structure is delicate: the post-rounding mantissa may carry
+into a higher exponent and push the result over `bpow emax`. -/
+theorem binary_round_aux_correct' (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (x : ℝ) (mx ex : ℤ) (lx : location)
+    (Px : x ≠ 0)
+    (Bx : inbetween_float radix2 mx ex |x| lx)
+    (Ex : ex ≤ cexp radix2 (FLT_exp (3 - emax - prec) prec) x) :
+    let z := binary_round_aux prec emax m (decide (x < 0)) mx ex lx
+    valid_binary prec emax z ∧
+    (if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+        < bpow radix2 emax then
+      FF2R radix2 z = round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x ∧
+      is_finite_FF z = true ∧
+      sign_FF z = decide (x < 0)
+    else
+      z = binary_overflow prec emax m (decide (x < 0))) := by
+  intro z
+  -- Abbreviate `fexp` as a Lean `let` (not `set`, since the unfolding of
+  -- `binary_round_aux` introduces its own internal `have fexp := ...` that
+  -- a `set` reverse-rewrite would conflict with).
+  let fexp : ℤ → ℤ := FLT_exp (3 - emax - prec) prec
+  have hValid : Valid_exp fexp := FLT_exp_valid (3 - emax - prec) prec hp
+  -- Expand `z` everywhere in the goal so subsequent rewrites propagate to
+  -- all occurrences (FF2R z, is_finite_FF z, sign_FF z, etc.).
+  show valid_binary prec emax
+      (binary_round_aux prec emax m (decide (x < 0)) mx ex lx) ∧
+    (if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+        < bpow radix2 emax then
+      FF2R radix2 (binary_round_aux prec emax m (decide (x < 0)) mx ex lx) =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x ∧
+      is_finite_FF (binary_round_aux prec emax m (decide (x < 0)) mx ex lx) = true ∧
+      sign_FF (binary_round_aux prec emax m (decide (x < 0)) mx ex lx) = decide (x < 0)
+    else
+      binary_round_aux prec emax m (decide (x < 0)) mx ex lx =
+        binary_overflow prec emax m (decide (x < 0)))
+  -- `0 ≤ mx` follows from the bracket: |x| < F2R⟨mx+1, ex⟩ and |x| ≥ 0.
+  have Hmx : 0 ≤ mx := by
+    have hbounds := inbetween_float_bounds (beta := radix2) mx ex |x| lx Bx
+    have hpos : 0 < F2R (beta := radix2) ⟨mx + 1, ex⟩ :=
+      lt_of_le_of_lt (abs_nonneg x) hbounds.2
+    have hmx_succ_pos : 0 < mx + 1 := gt_0_F2R (beta := radix2) (m := mx + 1) (e := ex) hpos
+    omega
+  -- The truncate result and its three components.
+  set T := truncate radix2 fexp (mx, ex, lx) with hT_def
+  set m1 := T.1 with hm1_def
+  set e1 := T.2.1 with he1_def
+  set l1 := T.2.2 with hl1_def
+  -- The post-rounding mantissa.
+  set m1' := choice_mode m (decide (x < 0)) m1 l1 with hm1'_def
+  -- The abstract correctness equation: round x = F2R⟨sign-flipped m1', e1⟩.
+  have Hround : round radix2 fexp (round_mode m) x =
+      F2R (beta := radix2) ⟨cond_Zopp (decide (x < 0)) m1', e1⟩ := by
+    have := round_trunc_sign_any_correct' (beta := radix2) (fexp := fexp)
+      (round_mode m) (choice_mode m)
+      (fun y mxy lxy hin => inbetween_int_valid_round_mode m y mxy lxy hin)
+      hValid Bx (Or.inl Ex)
+    exact this
+  -- The truncate-after-bracket fact: m1, e1, l1 bracket |x| at the canonical
+  -- exponent for |x|.
+  have Hpartial : inbetween_float radix2 m1 e1 |x| l1 ∧ e1 = cexp radix2 fexp |x| := by
+    have h := truncate_correct_partial' (beta := radix2) (fexp := fexp) hValid
+      (abs_pos.mpr Px) Bx (by rw [cexp_abs]; exact Ex)
+    exact h
+  obtain ⟨H1a, H1b⟩ := Hpartial
+  -- m1 ≤ m1': every mode's choice_mode either preserves m1 or adds 1.
+  have Hm_le : m1 ≤ m1' := by
+    show m1 ≤ choice_mode m (decide (x < 0)) m1 l1
+    cases m <;> simp only [choice_mode, cond_incr] <;>
+      first | (split_ifs <;> omega) | omega
+  -- 0 ≤ m1 (truncate preserves nonneg, via inbetween_float_bounds on |x|).
+  have Hm1_nonneg : 0 ≤ m1 := by
+    have hb := inbetween_float_bounds (beta := radix2) m1 e1 |x| l1 H1a
+    have hpos : 0 < F2R (beta := radix2) ⟨m1 + 1, e1⟩ :=
+      lt_of_le_of_lt (abs_nonneg x) hb.2
+    have hm1_succ_pos : 0 < m1 + 1 :=
+      gt_0_F2R (beta := radix2) (m := m1 + 1) (e := e1) hpos
+    omega
+  -- Hence 0 ≤ m1'.
+  have Hm1'_nonneg : 0 ≤ m1' := le_trans Hm1_nonneg Hm_le
+  -- Drive the goal: unfold binary_round_aux via simp (which also β/ζ-reduces
+  -- the internal lets, exposing the actual shr_fexp calls).
+  simp only [binary_round_aux]
+  -- Rewrite the first shr_fexp using shr_truncate.
+  rw [shr_record.shr_truncate (FLT_exp (3 - emax - prec) prec) hValid mx ex lx Hmx,
+      shr_record.m_shr_record_of_loc,
+      shr_record.loc_of_shr_record_of_loc]
+  -- Apply shr_truncate to the second shr_fexp.
+  rw [shr_record.shr_truncate (FLT_exp (3 - emax - prec) prec) hValid m1' e1
+        location.Exact Hm1'_nonneg,
+      shr_record.m_shr_record_of_loc]
+  -- Case split on m1' = 0 vs m1' > 0 (the negSucc branch is unreachable since
+  -- m1' ≥ 0, and likewise post-truncate the mantissa stays ≥ 0).
+  rcases eq_or_lt_of_le Hm1'_nonneg with h_zero | h_pos
+  · -- ===== Case m1' = 0 =====
+    -- truncate (0, e1, Exact).1 = 0, so the match hits F754_zero.
+    have h_trunc_zero :
+        (truncate radix2 (FLT_exp (3 - emax - prec) prec)
+           (m1', e1, location.Exact)).1 = 0 := by
+      rw [← h_zero]; exact truncate_0 radix2 (FLT_exp (3 - emax - prec) prec)
+        e1 location.Exact
+    rw [h_trunc_zero]
+    -- round x = F2R⟨cond_Zopp sx 0, e1⟩ = 0
+    have h_round_zero :
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x = 0 := by
+      rw [Hround, ← h_zero]
+      show F2R (beta := radix2) ⟨cond_Zopp (decide (x < 0)) 0, e1⟩ = 0
+      cases decide (x < 0) <;> simp [cond_Zopp, F2R_0]
+    -- |round x| < bpow emax (since |round x| = 0)
+    have h_abs_lt : |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+        < bpow radix2 emax := by
+      rw [h_round_zero, abs_zero]; exact bpow_gt_0 radix2 _
+    -- Conclude: valid F754_zero, and the if-true branch gives the three facts.
+    refine ⟨trivial, ?_⟩
+    rw [if_pos h_abs_lt]
+    refine ⟨?_, rfl, rfl⟩
+    -- FF2R F754_zero = 0 = round x
+    show FF2R radix2 (full_float.F754_zero (decide (x < 0))) =
+      round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x
+    rw [h_round_zero]; rfl
+  · -- ===== Case m1' > 0 =====
+    sorry
+
 end binary_float
 
 end LeanFlocq
