@@ -1756,6 +1756,479 @@ theorem round_round_sqrt_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
           · rw [if_neg (not_lt.mpr h3), if_neg (not_lt.mpr h2)]; omega
   · exact generic_format_FTZ beta emin prec hprec Fx
 
+/-! ## sqrt arc, radix ≥ 4 variant
+
+A parallel variant of `round_round_sqrt` with a weaker hypothesis (only
+`≤ 2 * fexp1 - 1` instead of `≤ 2 * fexp1 - 2` in the last conjunct of
+`round_round_sqrt_hyp`), valid when `4 ≤ beta`. The proof mirrors
+`round_round_sqrt_aux` exactly, replacing `bpow(-2) ≤ 1/4` with
+`bpow(-1) ≤ 1/4` (which holds when `4 ≤ beta`). -/
+
+/-- A radix ≥ 4 makes `bpow(-1) ≤ 1/4`. Used in the algebraic chain
+inside `round_round_sqrt_radix_ge_4_aux`. -/
+private theorem bpow_neg_one_le_quarter_of_beta_ge_4 (beta : radix)
+    (Hbeta : 4 ≤ beta.val) :
+    bpow beta (-1) ≤ (1 : ℝ) / 4 := by
+  have h4 : (4 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast Hbeta
+  have h_b_pos : 0 < (beta.val : ℝ) := by linarith
+  have h_inv : bpow beta (-1) = 1 / (beta.val : ℝ) := by
+    show (beta.val : ℝ) ^ (-1 : ℤ) = 1 / (beta.val : ℝ)
+    rw [zpow_neg, zpow_one]; field_simp
+  rw [h_inv]
+  exact one_div_le_one_div_of_le (by norm_num) h4
+
+/-- The hypothesis on `(fexp1, fexp2)` for `round_round_sqrt_radix_ge_4`:
+three conjuncts, with the last giving `≤ 2 * fexp1 - 1` (weaker than the
+`round_round_sqrt_hyp` version's `≤ 2 * fexp1 - 2`). -/
+def round_round_sqrt_radix_ge_4_hyp (fexp1 fexp2 : ℤ → ℤ) : Prop :=
+  (∀ ex : ℤ, 2 * fexp1 ex ≤ fexp1 (2 * ex))
+  ∧ (∀ ex : ℤ, 2 * fexp1 ex ≤ fexp1 (2 * ex - 1))
+  ∧ (∀ ex : ℤ, fexp1 (2 * ex) < 2 * ex → fexp2 ex + ex ≤ 2 * fexp1 ex - 1)
+
+/-- **The sqrt mid-rounding auxiliary lemma, radix ≥ 4 variant.**
+
+`√x` is more than `(1/2)·ulp2(√x)` away from the F1 midpoint, given the
+weaker `round_round_sqrt_radix_ge_4_hyp` precision condition and `4 ≤ beta`.
+Proof structure mirrors `round_round_sqrt_aux` exactly, using
+`bpow(-1) ≤ 1/4` (true for `beta ≥ 4`) where the regular version uses
+`bpow(-2) ≤ 1/4`. -/
+theorem round_round_sqrt_radix_ge_4_aux (beta : radix) (Hbeta : 4 ≤ beta.val)
+    (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (Hexp : round_round_sqrt_radix_ge_4_hyp fexp1 fexp2)
+    {x : ℝ} (Px : 0 < x)
+    (Hf2 : fexp2 (mag beta (Real.sqrt x)) ≤ fexp1 (mag beta (Real.sqrt x)) - 1)
+    (Fx : generic_format beta fexp1 x) :
+    (1/2) * ulp beta fexp2 (Real.sqrt x)
+      < |Real.sqrt x - midp beta fexp1 (Real.sqrt x)| := by
+  by_contra Hcontra
+  push_neg at Hcontra
+  obtain ⟨Hex1, Hex21, Hex22⟩ := Hexp
+  set s := Real.sqrt x with hs_def
+  have Ps : 0 < s := Real.sqrt_pos.mpr Px
+  have Ps_ne : s ≠ 0 := ne_of_gt Ps
+  have Ps_nonneg : 0 ≤ s := le_of_lt Ps
+  have h_s_sq : s * s = x := Real.mul_self_sqrt (le_of_lt Px)
+  set mag_s := mag beta s with hms_def
+  set u1 := bpow beta (fexp1 mag_s) with hu1_def
+  set u2 := bpow beta (fexp2 mag_s) with hu2_def
+  have h_u1_pos : 0 < u1 := bpow_gt_0 _ _
+  have h_u2_pos : 0 < u2 := bpow_gt_0 _ _
+  have h_u2_lt_u1 : u2 < u1 := bpow_lt beta (by linarith [Hf2])
+  have h_ulp1_s : ulp beta fexp1 s = u1 := by rw [ulp_neq_0 beta fexp1 Ps_ne]; rfl
+  have h_ulp2_s : ulp beta fexp2 s = u2 := by rw [ulp_neq_0 beta fexp2 Ps_ne]; rfl
+  set a := round beta fexp1 (fun y : ℝ => ⌊y⌋) s with ha_def
+  have h_DN : Rnd_DN_pt (generic_format beta fexp1) s a := round_DN_pt beta fexp1 Vfexp1 s
+  have h_a_format : generic_format beta fexp1 a := h_DN.1
+  have h_a_le_s : a ≤ s := h_DN.2.1
+  have h_a_nonneg : 0 ≤ a := by
+    have h_0_F1 : generic_format beta fexp1 0 := generic_format_0 beta fexp1
+    exact h_DN.2.2 0 h_0_F1 Ps_nonneg
+  have h_midp : midp beta fexp1 s = a + (1/2) * u1 := by
+    unfold midp
+    rw [h_ulp1_s]
+  set b := (u1 - u2) / 2 with hb_def
+  set b' := (u1 + u2) / 2 with hb'_def
+  have h_b_pos : 0 < b := by show (u1 - u2) / 2 > 0; linarith
+  have h_b'_pos : 0 < b' := by show (u1 + u2) / 2 > 0; linarith
+  rw [h_ulp2_s, h_midp] at Hcontra
+  rw [abs_le] at Hcontra
+  obtain ⟨h_Hcl, h_Hcr⟩ := Hcontra
+  have Hl : a + b ≤ s := by show a + (u1 - u2)/2 ≤ s; linarith
+  have Hr : s ≤ a + b' := by show s ≤ a + (u1 + u2)/2; linarith
+  have h_ab_nonneg : 0 ≤ a + b := by linarith
+  have h_ab'_nonneg : 0 ≤ a + b' := by linarith
+  have Hsl : a * a + u1 * a - u2 * a + b * b ≤ x := by
+    have h1 : (a + b) * (a + b) ≤ s * s :=
+      mul_self_le_mul_self h_ab_nonneg Hl
+    have h2 : (a + b) * (a + b) = a * a + u1 * a - u2 * a + b * b := by
+      show (a + (u1 - u2)/2) * (a + (u1 - u2)/2)
+        = a * a + u1 * a - u2 * a + (u1 - u2)/2 * ((u1 - u2)/2)
+      ring
+    linarith [h1, h2.symm, h_s_sq]
+  have Hsr : x ≤ a * a + u1 * a + u2 * a + b' * b' := by
+    have h1 : s * s ≤ (a + b') * (a + b') :=
+      mul_self_le_mul_self Ps_nonneg Hr
+    have h2 : (a + b') * (a + b') = a * a + u1 * a + u2 * a + b' * b' := by
+      show (a + (u1 + u2)/2) * (a + (u1 + u2)/2)
+        = a * a + u1 * a + u2 * a + (u1 + u2)/2 * ((u1 + u2)/2)
+      ring
+    linarith [h1, h2, h_s_sq]
+  have h_x_ne : x ≠ 0 := ne_of_gt Px
+  have h_mag_lt : fexp1 (mag beta x) < mag beta x :=
+    mag_generic_gt beta fexp1 Vfexp1 h_x_ne Fx
+  have Hf1 : 2 * fexp1 mag_s ≤ fexp1 (mag beta x) := by
+    rcases mag_sqrt_disj beta Px with h | h
+    · rw [h]; exact Hex21 mag_s
+    · rw [h]; exact Hex1 mag_s
+  have Hlx : fexp1 (2 * mag_s) < 2 * mag_s := by
+    rcases mag_sqrt_disj beta Px with h | h
+    · have h_mx_le : mag beta x ≤ 2 * mag_s := by linarith
+      exact valid_exp_large Vfexp1 h_mag_lt h_mx_le
+    · have h_mx_eq : mag beta x = 2 * mag_s := h
+      rw [← h_mx_eq]; exact h_mag_lt
+  -- The radix-ge-4 form: ≤ 2·fexp1 - 1 (rather than - 2)
+  have h_hexp22 : fexp2 mag_s + mag_s ≤ 2 * fexp1 mag_s - 1 := Hex22 mag_s Hlx
+  by_cases Za : a = 0
+  · -- a = 0 case (identical to regular variant)
+    have Hsr_a0 : x ≤ b' * b' := by
+      rw [Za] at Hsr
+      have : a * a + u1 * a + u2 * a + b' * b' = b' * b' := by rw [Za]; ring
+      linarith [Hsr, this]
+    have h_b'_lt_u1 : b' < u1 := by
+      show (u1 + u2)/2 < u1
+      linarith
+    have h_b'_sq_lt : b' * b' < u1 * u1 :=
+      mul_lt_mul' (le_of_lt h_b'_lt_u1) h_b'_lt_u1 (le_of_lt h_b'_pos) h_u1_pos
+    have h_u1_sq_eq : u1 * u1 = bpow beta (2 * fexp1 mag_s) := by
+      show bpow beta (fexp1 mag_s) * bpow beta (fexp1 mag_s) = bpow beta (2 * fexp1 mag_s)
+      rw [← bpow_plus]; congr 1; ring
+    have h_x_lt : x < bpow beta (fexp1 (mag beta x)) := by
+      calc x ≤ b' * b' := Hsr_a0
+        _ < u1 * u1 := h_b'_sq_lt
+        _ = bpow beta (2 * fexp1 mag_s) := h_u1_sq_eq
+        _ ≤ bpow beta (fexp1 (mag beta x)) := bpow_le beta Hf1
+    have h_bpow_pos : 0 < bpow beta (-fexp1 (mag beta x)) := bpow_gt_0 _ _
+    have h_bpow_prod : bpow beta (fexp1 (mag beta x)) * bpow beta (-fexp1 (mag beta x)) = 1 := by
+      rw [← bpow_plus]; simp
+    have h_sm_pos : 0 < x * bpow beta (-fexp1 (mag beta x)) :=
+      mul_pos Px h_bpow_pos
+    have h_sm_lt_1 : x * bpow beta (-fexp1 (mag beta x)) < 1 := by
+      have := (mul_lt_mul_iff_of_pos_right h_bpow_pos).mpr h_x_lt
+      rw [h_bpow_prod] at this
+      exact this
+    have h_ztrunc_0 : Ztrunc (x * bpow beta (-fexp1 (mag beta x))) = 0 := by
+      unfold Ztrunc
+      rw [if_neg (not_lt.mpr (le_of_lt h_sm_pos))]
+      exact Int.floor_eq_zero_iff.mpr ⟨le_of_lt h_sm_pos, h_sm_lt_1⟩
+    have h_x_eq_0 : x = 0 := by
+      have hFx : x = (Ztrunc (x * bpow beta (-fexp1 (mag beta x))) : ℝ)
+          * bpow beta (fexp1 (mag beta x)) := Fx
+      rw [h_ztrunc_0] at hFx
+      simp at hFx
+      exact hFx
+    exact absurd h_x_eq_0 h_x_ne
+  · -- a > 0 case
+    have Pa : 0 < a := lt_of_le_of_ne h_a_nonneg (Ne.symm Za)
+    have h_mag_a : mag beta a = mag_s := by
+      show mag beta a = mag beta s
+      have h_round_pos : 0 < round beta fexp1 (fun y : ℝ => ⌊y⌋) s := by rw [← ha_def]; exact Pa
+      exact mag_DN beta fexp1 Vfexp1 h_round_pos
+    have h_ulp_a : ulp beta fexp1 a = u1 := by
+      rw [ulp_neq_0 beta fexp1 (ne_of_gt Pa)]
+      show bpow beta (fexp1 (mag beta a)) = u1
+      rw [h_mag_a]
+    have h_s_lt_bpow_mag_s : s < bpow beta mag_s := by
+      have := bpow_mag_gt beta s
+      rw [abs_of_nonneg Ps_nonneg] at this
+      exact this
+    have h_a_lt_bpow_mag_s : a < bpow beta mag_s :=
+      lt_of_le_of_lt h_a_le_s h_s_lt_bpow_mag_s
+    have h_a_u1_le : a + u1 ≤ bpow beta mag_s := by
+      rw [← h_ulp_a]
+      exact id_p_ulp_le_bpow beta fexp1 Pa h_a_format h_a_lt_bpow_mag_s
+    -- Hl' chain — now with -1 instead of -2
+    have h_amid_lt_bpow : a + (1/2) * u1 < bpow beta mag_s := by linarith
+    have h_amid_u2 : (a + (1/2) * u1) * u2 < bpow beta mag_s * u2 :=
+      (mul_lt_mul_iff_of_pos_right h_u2_pos).mpr h_amid_lt_bpow
+    have h_bpow_u2_eq : bpow beta mag_s * u2 = bpow beta (fexp2 mag_s + mag_s) := by
+      show bpow beta mag_s * bpow beta (fexp2 mag_s) = bpow beta (fexp2 mag_s + mag_s)
+      rw [← bpow_plus]; congr 1; ring
+    have h_bpow_le : bpow beta (fexp2 mag_s + mag_s) ≤ bpow beta (2 * fexp1 mag_s - 1) :=
+      bpow_le beta h_hexp22
+    have h_u1_sq_eq : u1 * u1 = bpow beta (2 * fexp1 mag_s) := by
+      show bpow beta (fexp1 mag_s) * bpow beta (fexp1 mag_s) = bpow beta (2 * fexp1 mag_s)
+      rw [← bpow_plus]; congr 1; ring
+    have h_bpow_split : bpow beta (2 * fexp1 mag_s - 1) = bpow beta (-1) * (u1 * u1) := by
+      rw [h_u1_sq_eq]
+      show bpow beta (2 * fexp1 mag_s - 1) = bpow beta (-1) * bpow beta (2 * fexp1 mag_s)
+      rw [← bpow_plus]; congr 1; ring
+    have h_u1_sq_nonneg : 0 ≤ u1 * u1 := mul_nonneg (le_of_lt h_u1_pos) (le_of_lt h_u1_pos)
+    have h_bpow_neg_1_le : bpow beta (-1) ≤ 1 / 4 :=
+      bpow_neg_one_le_quarter_of_beta_ge_4 beta Hbeta
+    have h_bpow_u1_sq_le : bpow beta (-1) * (u1 * u1) ≤ (1/4) * (u1 * u1) :=
+      mul_le_mul_of_nonneg_right h_bpow_neg_1_le h_u1_sq_nonneg
+    have h_amid_u2_lt_quarter : (a + (1/2) * u1) * u2 < (1/4) * (u1 * u1) := by
+      calc (a + (1/2) * u1) * u2
+          < bpow beta mag_s * u2 := h_amid_u2
+        _ = bpow beta (fexp2 mag_s + mag_s) := h_bpow_u2_eq
+        _ ≤ bpow beta (2 * fexp1 mag_s - 1) := h_bpow_le
+        _ = bpow beta (-1) * (u1 * u1) := h_bpow_split
+        _ ≤ (1/4) * (u1 * u1) := h_bpow_u1_sq_le
+    have Hl' : 0 < -(u2 * a) + b * b := by
+      have h_expand : (a + (1/2) * u1) * u2 = u2 * a + u1 * u2 / 2 := by ring
+      have h_combined : u2 * a + u1 * u2 / 2 < (1/4) * (u1 * u1) := by
+        rw [← h_expand]; exact h_amid_u2_lt_quarter
+      have h_u2_sq_nonneg : 0 ≤ u2 * u2 :=
+        mul_nonneg (le_of_lt h_u2_pos) (le_of_lt h_u2_pos)
+      have h_b_sq_eq : b * b = (u1 * u1 - 2 * u1 * u2 + u2 * u2) / 4 := by
+        show (u1 - u2)/2 * ((u1 - u2)/2) = (u1 * u1 - 2 * u1 * u2 + u2 * u2) / 4
+        ring
+      linarith [h_combined, h_u2_sq_nonneg, h_b_sq_eq]
+    -- Hr' chain — same idea
+    have h_u2_sq_lt : u2 * u2 < u1 * u1 :=
+      mul_lt_mul' (le_of_lt h_u2_lt_u1) h_u2_lt_u1 (le_of_lt h_u2_pos) h_u1_pos
+    have h_bpow_neg_1_le_half : bpow beta (-1) ≤ 1 / 2 := by
+      have h1 : (1 : ℝ) / 4 ≤ 1 / 2 := by norm_num
+      linarith [h_bpow_neg_1_le, h1]
+    have h_bpow_u1_sq_le_half : bpow beta (-1) * (u1 * u1) ≤ (1/2) * (u1 * u1) :=
+      mul_le_mul_of_nonneg_right h_bpow_neg_1_le_half h_u1_sq_nonneg
+    have h_amid_u2_lt_half : (a + (1/2) * u1) * u2 ≤ (1/2) * (u1 * u1) := by
+      calc (a + (1/2) * u1) * u2
+          ≤ bpow beta mag_s * u2 := le_of_lt h_amid_u2
+        _ = bpow beta (fexp2 mag_s + mag_s) := h_bpow_u2_eq
+        _ ≤ bpow beta (2 * fexp1 mag_s - 1) := h_bpow_le
+        _ = bpow beta (-1) * (u1 * u1) := h_bpow_split
+        _ ≤ (1/2) * (u1 * u1) := h_bpow_u1_sq_le_half
+    have Hr_step : u2 * a + b' * b' < u1 * u1 := by
+      have h_expand : (a + (1/2) * u1) * u2 = u2 * a + u1 * u2 / 2 := by ring
+      have h_combined : u2 * a + u1 * u2 / 2 ≤ (1/2) * (u1 * u1) := by
+        rw [← h_expand]; exact h_amid_u2_lt_half
+      have h_b'_sq_eq : b' * b' = (u1 * u1 + 2 * u1 * u2 + u2 * u2) / 4 := by
+        show (u1 + u2)/2 * ((u1 + u2)/2) = (u1 * u1 + 2 * u1 * u2 + u2 * u2) / 4
+        ring
+      linarith [h_combined, h_u2_sq_lt, h_b'_sq_eq]
+    -- Integer-multiple argument (identical to regular variant)
+    set fexp_x := fexp1 (mag beta x) with hfx_def
+    have h_k_nonneg : 0 ≤ fexp_x - 2 * fexp1 mag_s := by linarith [Hf1]
+    set k_nat := (fexp_x - 2 * fexp1 mag_s).toNat with hkn_def
+    have h_k_eq : (k_nat : ℤ) = fexp_x - 2 * fexp1 mag_s :=
+      Int.toNat_of_nonneg h_k_nonneg
+    have h_bpow_fexpx_split : bpow beta fexp_x =
+        bpow beta (2 * fexp1 mag_s) * ((beta.val : ℝ) ^ k_nat) := by
+      have h1 : fexp_x = 2 * fexp1 mag_s + (k_nat : ℤ) := by linarith [h_k_eq]
+      rw [h1, bpow_plus]
+      have h2 : bpow beta ((k_nat : ℤ)) = (beta.val : ℝ) ^ k_nat := by
+        unfold bpow; exact zpow_natCast _ _
+      rw [h2]
+    set mx := Ztrunc (x * bpow beta (-fexp_x)) with hmx_def
+    have hFx' : x = (mx : ℝ) * bpow beta fexp_x := Fx
+    set ma := Ztrunc (a * bpow beta (-fexp1 mag_s)) with hma_def
+    have h_ma_eq : a = (ma : ℝ) * u1 := by
+      have hFa : a = (Ztrunc (a * bpow beta (-cexp beta fexp1 a)) : ℝ)
+          * bpow beta (cexp beta fexp1 a) := h_a_format
+      unfold cexp at hFa
+      rw [h_mag_a] at hFa
+      exact hFa
+    set B := u1 * u1 with hB_def
+    have h_B_pos : 0 < B := mul_pos h_u1_pos h_u1_pos
+    have h_B_eq : B = bpow beta (2 * fexp1 mag_s) := h_u1_sq_eq
+    set kx := mx * ((beta.val : ℤ) ^ k_nat) with hkx_def
+    have h_x_kxB : x = (kx : ℝ) * B := by
+      rw [hFx', h_bpow_fexpx_split, h_B_eq]
+      show (mx : ℝ) * (bpow beta (2 * fexp1 mag_s) * ((beta.val : ℝ) ^ k_nat))
+        = ((mx * ((beta.val : ℤ) ^ k_nat) : ℤ) : ℝ) * bpow beta (2 * fexp1 mag_s)
+      push_cast
+      ring
+    set ka := ma * ma + ma with hka_def
+    have h_aapua_eq : a * a + u1 * a = (ka : ℝ) * B := by
+      rw [h_ma_eq, hB_def]
+      show ((ma : ℝ) * u1) * ((ma : ℝ) * u1) + u1 * ((ma : ℝ) * u1) = ((ma * ma + ma : ℤ) : ℝ) * (u1 * u1)
+      push_cast
+      ring
+    have h_x_strict : x < a * a + u1 * a + B := by
+      have := Hsr
+      linarith [Hr_step]
+    have h_x_strict' : (kx : ℝ) * B < ((ka : ℝ) + 1) * B := by
+      have h_eq1 : x = (kx : ℝ) * B := h_x_kxB
+      have h_eq2 : a * a + u1 * a = (ka : ℝ) * B := h_aapua_eq
+      have h_add : ((ka : ℝ) + 1) * B = (ka : ℝ) * B + B := by ring
+      linarith [h_x_strict, h_eq1, h_eq2, h_add]
+    have h_kx_lt : (kx : ℝ) < (ka : ℝ) + 1 :=
+      (mul_lt_mul_iff_of_pos_right h_B_pos).mp h_x_strict'
+    have h_kx_lt_int : kx < ka + 1 := by exact_mod_cast h_kx_lt
+    have h_kx_le_int : kx ≤ ka := Int.lt_add_one_iff.mp h_kx_lt_int
+    have h_kx_le : (kx : ℝ) ≤ (ka : ℝ) := by exact_mod_cast h_kx_le_int
+    have Hr' : x ≤ a * a + u1 * a := by
+      rw [h_x_kxB, h_aapua_eq]
+      exact (mul_le_mul_iff_of_pos_right h_B_pos).mpr h_kx_le
+    have h_chain : a * a + u1 * a < x := by linarith [Hsl, Hl']
+    linarith [h_chain, Hr']
+
+/-- **The sqrt double-rounding theorem, radix ≥ 4 variant.**
+
+Given the weaker `round_round_sqrt_radix_ge_4_hyp` precision condition,
+`4 ≤ beta`, and `x ∈ F1`, double-rounding `Real.sqrt x` is innocuous. -/
+theorem round_round_sqrt_radix_ge_4 (beta : radix) (Hbeta : 4 ≤ beta.val)
+    {fexp1 fexp2 : ℤ → ℤ}
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool)
+    (Hexp : round_round_sqrt_radix_ge_4_hyp fexp1 fexp2)
+    {x : ℝ} (Fx : generic_format beta fexp1 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 (Real.sqrt x) := by
+  rcases le_or_gt x 0 with Npx | Px
+  · have h_sqrt_zero : Real.sqrt x = 0 := by
+      rw [Real.sqrt_eq_zero']; exact Npx
+    rw [h_sqrt_zero]
+    unfold round_round_eq
+    rw [round_0, round_0]
+  · have h_s_pos : 0 < Real.sqrt x := Real.sqrt_pos.mpr Px
+    have h_x_ne : x ≠ 0 := ne_of_gt Px
+    have Hfx : fexp1 (mag beta x) < mag beta x :=
+      mag_generic_gt beta fexp1 Vfexp1 h_x_ne Fx
+    have Hfsx : fexp1 (mag beta (Real.sqrt x)) < mag beta (Real.sqrt x) := by
+      rcases le_or_gt x 1 with hx1 | hx1
+      · have h_x_le_sqrt : x ≤ Real.sqrt x := by
+          have h_eq : Real.sqrt x * Real.sqrt x = x := Real.mul_self_sqrt (le_of_lt Px)
+          have h1 : Real.sqrt x ≤ 1 := by
+            rw [show (1 : ℝ) = Real.sqrt 1 from Real.sqrt_one.symm]
+            exact Real.sqrt_le_sqrt hx1
+          nlinarith [Real.sqrt_nonneg x, h_eq, h1]
+        have h_mag : mag beta x ≤ mag beta (Real.sqrt x) := by
+          apply mag_le_abs beta h_x_ne
+          rw [abs_of_pos Px, abs_of_pos h_s_pos]
+          exact h_x_le_sqrt
+        exact valid_exp_large Vfexp1 Hfx h_mag
+      · obtain ⟨_, Hex21, _⟩ := Hexp
+        have h_fexp1_at_1 : 2 * fexp1 1 ≤ fexp1 (2 * 1 - 1) := Hex21 1
+        have h_fexp1_1_lt : fexp1 1 < 1 := by
+          have : fexp1 (2 * 1 - 1) = fexp1 1 := by norm_num
+          linarith [h_fexp1_at_1, this]
+        have h_sqrt_ge_1 : 1 ≤ Real.sqrt x := by
+          rw [show (1 : ℝ) = Real.sqrt 1 from Real.sqrt_one.symm]
+          exact Real.sqrt_le_sqrt (le_of_lt hx1)
+        have h_mag_ge_1 : 1 ≤ mag beta (Real.sqrt x) := by
+          apply mag_ge_bpow beta
+          show bpow beta (1 - 1) ≤ |Real.sqrt x|
+          rw [show (1 : ℤ) - 1 = 0 from by norm_num, bpow_zero,
+              abs_of_nonneg (Real.sqrt_nonneg x)]
+          exact h_sqrt_ge_1
+        exact valid_exp_large Vfexp1 h_fexp1_1_lt h_mag_ge_1
+    have Hf2 : fexp2 (mag beta (Real.sqrt x)) ≤ fexp1 (mag beta (Real.sqrt x)) - 1 := by
+      obtain ⟨_, _, Hex22⟩ := Hexp
+      have Hlx : fexp1 (2 * mag beta (Real.sqrt x)) < 2 * mag beta (Real.sqrt x) := by
+        rcases mag_sqrt_disj beta Px with h | h
+        · have h_mx_le : mag beta x ≤ 2 * mag beta (Real.sqrt x) := by linarith
+          exact valid_exp_large Vfexp1 Hfx h_mx_le
+        · rw [← h]; exact Hfx
+      have h := Hex22 (mag beta (Real.sqrt x)) Hlx
+      linarith [h, Hfsx]
+    apply round_round_mid_cases beta Vfexp1 Vfexp2 choice1 choice2 h_s_pos Hf2 (le_of_lt Hfsx)
+    intro Hmid
+    exfalso
+    have h_aux := round_round_sqrt_radix_ge_4_aux beta Hbeta fexp1 fexp2 Vfexp1 Vfexp2 Hexp Px Hf2 Fx
+    linarith [h_aux, Hmid]
+
+/-- **`round_round_sqrt_radix_ge_4` for FLX format.** -/
+theorem round_round_sqrt_radix_ge_4_FLX (beta : radix) (Hbeta : 4 ≤ beta.val)
+    (prec prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hprec : 2 * prec + 1 ≤ prec')
+    {x : ℝ} (Fx : FLX_format beta prec x) :
+    round_round_eq beta (FLX_exp prec) (FLX_exp prec') choice1 choice2 (Real.sqrt x) := by
+  apply round_round_sqrt_radix_ge_4 beta Hbeta
+    (FLX_exp_valid prec hprec) (FLX_exp_valid prec' hprec') choice1 choice2
+  · unfold round_round_sqrt_radix_ge_4_hyp FLX_exp
+    refine ⟨?_, ?_, ?_⟩
+    · intro ex; omega
+    · intro ex; omega
+    · intro ex _; omega
+  · exact generic_format_FLX beta prec hprec Fx
+
+/-- **`round_round_sqrt_radix_ge_4` for FLT format.**
+Requires `emin ≤ 0`, `2*prec + 1 ≤ prec'`, and either
+`emin' ≤ emin - prec - 1` or `2*emin' ≤ emin - 4*prec - 1`. -/
+theorem round_round_sqrt_radix_ge_4_FLT (beta : radix) (Hbeta : 4 ≤ beta.val)
+    (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin : emin ≤ 0)
+    (Hemin' : emin' ≤ emin - prec - 1 ∨ 2 * emin' ≤ emin - 4 * prec - 1)
+    (Hprec : 2 * prec + 1 ≤ prec')
+    {x : ℝ} (Fx : FLT_format beta emin prec x) :
+    round_round_eq beta (FLT_exp emin prec) (FLT_exp emin' prec')
+      choice1 choice2 (Real.sqrt x) := by
+  apply round_round_sqrt_radix_ge_4 beta Hbeta
+    (FLT_exp_valid emin prec hprec) (FLT_exp_valid emin' prec' hprec') choice1 choice2
+  · unfold round_round_sqrt_radix_ge_4_hyp FLT_exp
+    refine ⟨?_, ?_, ?_⟩
+    · intro ex
+      rcases le_or_gt (ex - prec) emin with h1 | h1
+      · rcases le_or_gt (2 * ex - prec) emin with h2 | h2
+        · rw [max_eq_right h1, max_eq_right h2]; omega
+        · rw [max_eq_right h1, max_eq_left (le_of_lt h2)]; omega
+      · rcases le_or_gt (2 * ex - prec) emin with h2 | h2
+        · rw [max_eq_left (le_of_lt h1), max_eq_right h2]; omega
+        · rw [max_eq_left (le_of_lt h1), max_eq_left (le_of_lt h2)]; omega
+    · intro ex
+      rcases le_or_gt (ex - prec) emin with h1 | h1
+      · rcases le_or_gt (2 * ex - 1 - prec) emin with h2 | h2
+        · rw [max_eq_right h1, max_eq_right h2]; omega
+        · rw [max_eq_right h1, max_eq_left (le_of_lt h2)]; omega
+      · rcases le_or_gt (2 * ex - 1 - prec) emin with h2 | h2
+        · rw [max_eq_left (le_of_lt h1), max_eq_right h2]; omega
+        · rw [max_eq_left (le_of_lt h1), max_eq_left (le_of_lt h2)]; omega
+    · intro ex Hlx
+      have h_emin_lt : emin < 2 * ex := by
+        rcases le_or_gt (2 * ex - prec) emin with h | h
+        · rw [max_eq_right h] at Hlx; exact Hlx
+        · linarith
+      rcases le_or_gt (ex - prec) emin with h1 | h1
+      · rcases le_or_gt (ex - prec') emin' with h2 | h2
+        · rw [max_eq_right h2, max_eq_right h1]
+          rcases Hemin' with h | h <;> omega
+        · rw [max_eq_left (le_of_lt h2), max_eq_right h1]
+          rcases Hemin' with h | h <;> omega
+      · rcases le_or_gt (ex - prec') emin' with h2 | h2
+        · rw [max_eq_right h2, max_eq_left (le_of_lt h1)]
+          rcases Hemin' with h | h <;> omega
+        · rw [max_eq_left (le_of_lt h2), max_eq_left (le_of_lt h1)]
+          rcases Hemin' with h | h <;> omega
+  · exact generic_format_FLT beta emin prec hprec Fx
+
+/-- **`round_round_sqrt_radix_ge_4` for FTZ format.**
+Requires `2*(emin' + prec') ≤ emin + prec ≤ 1` and `2*prec + 1 ≤ prec'`. -/
+theorem round_round_sqrt_radix_ge_4_FTZ (beta : radix) (Hbeta : 4 ≤ beta.val)
+    (emin prec emin' prec' : ℤ)
+    (hprec : 0 < prec) (hprec' : 0 < prec')
+    (choice1 choice2 : ℤ → Bool)
+    (Hemin_lo : 2 * (emin' + prec') ≤ emin + prec)
+    (Hemin_hi : emin + prec ≤ 1)
+    (Hprec : 2 * prec + 1 ≤ prec')
+    {x : ℝ} (Fx : FTZ_format beta emin prec x) :
+    round_round_eq beta (FTZ_exp emin prec) (FTZ_exp emin' prec')
+      choice1 choice2 (Real.sqrt x) := by
+  apply round_round_sqrt_radix_ge_4 beta Hbeta
+    (FTZ_exp_valid emin prec hprec) (FTZ_exp_valid emin' prec' hprec') choice1 choice2
+  · unfold round_round_sqrt_radix_ge_4_hyp FTZ_exp
+    refine ⟨?_, ?_, ?_⟩
+    · intro ex
+      rcases lt_or_ge (ex - prec) emin with h1 | h1
+      · rcases lt_or_ge (2 * ex - prec) emin with h2 | h2
+        · rw [if_pos h1, if_pos h2]; omega
+        · rw [if_pos h1, if_neg (not_lt.mpr h2)]; omega
+      · rcases lt_or_ge (2 * ex - prec) emin with h2 | h2
+        · rw [if_neg (not_lt.mpr h1), if_pos h2]; omega
+        · rw [if_neg (not_lt.mpr h1), if_neg (not_lt.mpr h2)]; omega
+    · intro ex
+      rcases lt_or_ge (ex - prec) emin with h1 | h1
+      · rcases lt_or_ge (2 * ex - 1 - prec) emin with h2 | h2
+        · rw [if_pos h1, if_pos h2]; omega
+        · rw [if_pos h1, if_neg (not_lt.mpr h2)]; omega
+      · rcases lt_or_ge (2 * ex - 1 - prec) emin with h2 | h2
+        · rw [if_neg (not_lt.mpr h1), if_pos h2]; omega
+        · rw [if_neg (not_lt.mpr h1), if_neg (not_lt.mpr h2)]; omega
+    · intro ex Hlx
+      rcases lt_or_ge (2 * ex - prec) emin with h1 | h1
+      · rw [if_pos h1] at Hlx
+        rcases lt_or_ge (ex - prec) emin with h2 | h2
+        · rcases lt_or_ge (ex - prec') emin' with h3 | h3
+          · rw [if_pos h3, if_pos h2]; omega
+          · rw [if_neg (not_lt.mpr h3), if_pos h2]; omega
+        · rcases lt_or_ge (ex - prec') emin' with h3 | h3
+          · rw [if_pos h3, if_neg (not_lt.mpr h2)]; omega
+          · rw [if_neg (not_lt.mpr h3), if_neg (not_lt.mpr h2)]; omega
+      · rw [if_neg (not_lt.mpr h1)] at Hlx
+        rcases lt_or_ge (ex - prec) emin with h2 | h2
+        · rcases lt_or_ge (ex - prec') emin' with h3 | h3
+          · rw [if_pos h3, if_pos h2]; omega
+          · rw [if_neg (not_lt.mpr h3), if_pos h2]; omega
+        · rcases lt_or_ge (ex - prec') emin' with h3 | h3
+          · rw [if_pos h3, if_neg (not_lt.mpr h2)]; omega
+          · rw [if_neg (not_lt.mpr h3), if_neg (not_lt.mpr h2)]; omega
+  · exact generic_format_FTZ beta emin prec hprec Fx
+
 /-! ## plus/minus arc -/
 
 /-- Hypothesis for `round_round_plus`/`round_round_minus`: four bounds
