@@ -23,6 +23,7 @@ Differences from Coq:
 import LeanFlocq.Core.FLT
 import LeanFlocq.Core.Digits
 import LeanFlocq.Core.Round_NE
+import LeanFlocq.Calc.Bracket
 
 namespace LeanFlocq
 
@@ -809,5 +810,66 @@ def binary_overflow (prec emax : ℤ) (m : mode) (s : Bool) : full_float :=
   else full_float.F754_finite s (2 ^ prec.toNat - 1) (emax - prec)
 
 end binary_float
+
+/-! ### Truncation: shr_record
+
+A "round-and-sticky" record carrying a mantissa `m`, a round bit `r`, and a
+sticky bit `s`. The pair `(r, s)` encodes a 4-way location classification:
+`(false, false) = Exact`, `(false, true) = Inexact Lt`,
+`(true, false) = Inexact Eq` (i.e., exactly halfway), and
+`(true, true) = Inexact Gt`. `shr_1` halves `m` (toward zero), shifts the
+old `r` into the new `s`, and writes the dropped bit into the new `r`. -/
+
+structure shr_record where
+  m : ℤ
+  r : Bool
+  s : Bool
+  deriving DecidableEq
+
+namespace shr_record
+
+/-- Shift right by 1: halve `m` toward zero, write the dropped bit into the
+new round bit, and shift the old round bit into the sticky bit. -/
+def shr_1 (mrs : shr_record) : shr_record :=
+  let s' := mrs.r || mrs.s
+  if mrs.m = 0 then ⟨0, false, s'⟩
+  else
+    let r' := decide (mrs.m % 2 ≠ 0)
+    ⟨mrs.m / 2, r', s'⟩
+
+/-- Decode a `shr_record` into the corresponding `location`. -/
+def loc_of_shr_record (mrs : shr_record) : location :=
+  match mrs with
+  | ⟨_, false, false⟩ => location.Exact
+  | ⟨_, false, true⟩ => location.Inexact .lt
+  | ⟨_, true, false⟩ => location.Inexact .eq
+  | ⟨_, true, true⟩ => location.Inexact .gt
+
+/-- Build a `shr_record` from a mantissa and location. -/
+def shr_record_of_loc (m : ℤ) (l : location) : shr_record :=
+  match l with
+  | location.Exact => ⟨m, false, false⟩
+  | location.Inexact .lt => ⟨m, false, true⟩
+  | location.Inexact .eq => ⟨m, true, false⟩
+  | location.Inexact .gt => ⟨m, true, true⟩
+
+theorem m_shr_record_of_loc (m : ℤ) (l : location) :
+    (shr_record_of_loc m l).m = m := by
+  cases l with
+  | Exact => rfl
+  | Inexact c => cases c <;> rfl
+
+theorem loc_of_shr_record_of_loc (m : ℤ) (l : location) :
+    loc_of_shr_record (shr_record_of_loc m l) = l := by
+  cases l with
+  | Exact => rfl
+  | Inexact c => cases c <;> rfl
+
+/-- Iterate `shr_1` `n` times (treating non-positive `n` as no-op), adjusting
+the exponent accordingly. Returns the new `shr_record` and new exponent. -/
+def shr (mrs : shr_record) (e n : ℤ) : shr_record × ℤ :=
+  if 0 < n then (shr_1^[n.toNat] mrs, e + n) else (mrs, e)
+
+end shr_record
 
 end LeanFlocq
