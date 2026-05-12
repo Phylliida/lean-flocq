@@ -2711,4 +2711,145 @@ theorem round_round_minus_FTZ (beta : radix) (emin prec emin' prec' : ℤ)
     (generic_format_FTZ beta emin prec hprec Fx)
     (generic_format_FTZ beta emin prec hprec Fy)
 
+/-! ### Division arc -/
+
+/-- When `x` is so small that `mag x ≤ fexp1(mag x) - 2` (well below `fexp1`'s
+representable range), both round-then-round and round-direct yield zero.
+
+The interesting case is when `x''` (the inner rounding) lands exactly at
+`bpow(mag x)`: there we apply `round_N_small_pos` on `bpow(mag x)` with
+`ex := mag x + 1`, using the small-regime stability of `fexp1`. -/
+theorem round_round_really_zero (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x) (Hf1 : mag beta x ≤ fexp1 (mag beta x) - 2) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  unfold round_round_eq
+  have Hx_ne : x ≠ 0 := ne_of_gt Px
+  have Hlx_lo : bpow beta (mag beta x - 1) ≤ x := by
+    have h := bpow_mag_le beta Hx_ne; rwa [abs_of_pos Px] at h
+  have Hlx_hi : x < bpow beta (mag beta x) := by
+    have h := bpow_mag_gt beta x; rwa [abs_of_pos Px] at h
+  have H_small : mag beta x < fexp1 (mag beta x) := by omega
+  have H_direct : round beta fexp1 (Znearest choice1) x = 0 :=
+    round_N_small_pos beta fexp1 choice1 ⟨Hlx_lo, Hlx_hi⟩ H_small
+  rw [H_direct]
+  set x'' := round beta fexp2 (Znearest choice2) x with hx''_def
+  -- Trivial case: x'' = 0
+  by_cases Zx'' : x'' = 0
+  · rw [Zx'']; exact round_0 beta fexp1 (Znearest choice1)
+  -- x'' ≠ 0: must have fexp2(mag x) ≤ mag x
+  have He2 : fexp2 (mag beta x) ≤ mag beta x := by
+    by_contra h
+    push_neg at h
+    apply Zx''
+    rw [hx''_def]
+    exact round_N_small_pos beta fexp2 choice2 ⟨Hlx_lo, Hlx_hi⟩ h
+  -- x'' > 0 since round of positive is ≥ 0
+  have Hx''_nn : 0 ≤ x'' := by
+    rw [hx''_def, ← round_0 beta fexp2 (Znearest choice2)]
+    exact round_le beta fexp2 Vfexp2 (Znearest choice2) (le_of_lt Px)
+  have Hx''_pos : 0 < x'' := lt_of_le_of_ne Hx''_nn (Ne.symm Zx'')
+  -- Case x'' < bpow(mag x) vs ≥
+  rcases lt_or_ge x'' (bpow beta (mag beta x)) with Hx''_lt | Hx''_ge
+  · -- x'' < bpow(mag x): use round_N_small_pos on x'' with ex := mag x
+    have Hx''_lo : bpow beta (mag beta x - 1) ≤ x'' := by
+      rw [hx''_def]
+      exact round_large_pos_ge_bpow beta fexp2 (Znearest choice2)
+        (by rw [← hx''_def]; exact Hx''_pos) Hlx_lo
+    exact round_N_small_pos beta fexp1 choice1 ⟨Hx''_lo, Hx''_lt⟩ H_small
+  · -- bpow(mag x) ≤ x'': show x'' = bpow(mag x), then use small-regime
+    have Hfmt : generic_format beta fexp2 (bpow beta (mag beta x)) :=
+      generic_format_bpow' beta fexp2 Vfexp2 _ He2
+    have Hround_bpow :
+        round beta fexp2 (Znearest choice2) (bpow beta (mag beta x))
+          = bpow beta (mag beta x) :=
+      round_generic beta fexp2 (Znearest choice2) Hfmt
+    have Hx''_le : x'' ≤ bpow beta (mag beta x) := by
+      rw [hx''_def, ← Hround_bpow]
+      exact round_le beta fexp2 Vfexp2 (Znearest choice2) (le_of_lt Hlx_hi)
+    have Hx''_eq : x'' = bpow beta (mag beta x) := le_antisymm Hx''_le Hx''_ge
+    rw [Hx''_eq]
+    -- round β fexp1 N₁ (bpow(mag x)) = 0 via round_N_small_pos with ex := mag x + 1
+    have Hbpow_lo : bpow beta (mag beta x + 1 - 1) ≤ bpow beta (mag beta x) := by
+      apply bpow_le; omega
+    have Hbpow_hi : bpow beta (mag beta x) < bpow beta (mag beta x + 1) :=
+      bpow_lt beta (by omega)
+    have Hfsmall : mag beta x ≤ fexp1 (mag beta x) := by omega
+    have Hsta := (Vfexp1 (mag beta x)).2 Hfsmall
+    have Hfexp_eq : fexp1 (mag beta x + 1) = fexp1 (mag beta x) :=
+      Hsta.2 (mag beta x + 1) (by omega)
+    have Hf_new : mag beta x + 1 < fexp1 (mag beta x + 1) := by
+      rw [Hfexp_eq]; omega
+    exact round_N_small_pos beta fexp1 choice1 ⟨Hbpow_lo, Hbpow_hi⟩ Hf_new
+
+/-- Boundary "round-to-zero" case. When `fexp1(mag x) = mag x + 1` (so `x` is
+just below `fexp1`'s representable range) and `x` is at least a half-ulp below
+`bpow(mag x)`, both rounded values fall in `[bpow(mag x - 1), bpow(mag x))` —
+small enough that `fexp1` rounds them to zero. -/
+theorem round_round_zero (beta : radix) (fexp1 fexp2 : ℤ → ℤ)
+    (Vfexp1 : Valid_exp fexp1) (Vfexp2 : Valid_exp fexp2)
+    (choice1 choice2 : ℤ → Bool) {x : ℝ}
+    (Px : 0 < x) (Hf1 : fexp1 (mag beta x) = mag beta x + 1)
+    (Hx : x < bpow beta (mag beta x) - (1/2) * ulp beta fexp2 x) :
+    round_round_eq beta fexp1 fexp2 choice1 choice2 x := by
+  unfold round_round_eq
+  have Hx_ne : x ≠ 0 := ne_of_gt Px
+  have Hlx_lo : bpow beta (mag beta x - 1) ≤ x := by
+    have h := bpow_mag_le beta Hx_ne; rwa [abs_of_pos Px] at h
+  have Hlx_hi : x < bpow beta (mag beta x) := by
+    have h := bpow_mag_gt beta x; rwa [abs_of_pos Px] at h
+  have H_small : mag beta x < fexp1 (mag beta x) := by omega
+  have H_direct : round beta fexp1 (Znearest choice1) x = 0 :=
+    round_N_small_pos beta fexp1 choice1 ⟨Hlx_lo, Hlx_hi⟩ H_small
+  rw [H_direct]
+  set x'' := round beta fexp2 (Znearest choice2) x with hx''_def
+  by_cases Zx'' : x'' = 0
+  · rw [Zx'']; exact round_0 beta fexp1 (Znearest choice1)
+  -- x'' ≠ 0
+  have Hx''_nn : 0 ≤ x'' := by
+    rw [hx''_def, ← round_0 beta fexp2 (Znearest choice2)]
+    exact round_le beta fexp2 Vfexp2 (Znearest choice2) (le_of_lt Px)
+  have Hx''_pos : 0 < x'' := lt_of_le_of_ne Hx''_nn (Ne.symm Zx'')
+  -- bpow(mag x - 1) ≤ x'' from round_large_pos_ge_bpow
+  have Hx''_lo : bpow beta (mag beta x - 1) ≤ x'' := by
+    rw [hx''_def]
+    exact round_large_pos_ge_bpow beta fexp2 (Znearest choice2)
+      (by rw [← hx''_def]; exact Hx''_pos) Hlx_lo
+  -- x'' < bpow(mag x) from x < bpow - (1/2)ulp and |x'' - x| ≤ (1/2)ulp
+  have Herr : |x'' - x| ≤ (1/2) * ulp beta fexp2 x := by
+    rw [hx''_def]; exact error_le_half_ulp beta fexp2 Vfexp2 choice2 x
+  have Hx''_hi : x'' < bpow beta (mag beta x) := by
+    have h1 : x'' - x ≤ (1/2) * ulp beta fexp2 x := by
+      have := abs_le.mp Herr; linarith
+    linarith
+  exact round_N_small_pos beta fexp1 choice1 ⟨Hx''_lo, Hx''_hi⟩ H_small
+
+/-- `mag (x / y) ∈ {mag x - mag y, mag x - mag y + 1}` when `x, y > 0`. -/
+theorem mag_div_disj (beta : radix) {x y : ℝ} (Px : 0 < x) (Py : 0 < y) :
+    mag beta (x / y) = mag beta x - mag beta y ∨
+    mag beta (x / y) = mag beta x - mag beta y + 1 := by
+  obtain ⟨h1, h2⟩ := mag_div beta (ne_of_gt Px) (ne_of_gt Py)
+  omega
+
+/-- Precision condition for the division arc of double rounding. The five
+conjuncts mirror Coq's `round_round_div_hyp`: the first requires `fexp2` to be
+strictly coarser than `fexp1`; the remaining four bound `fexp2` at quotient
+exponents `ex - ey` or `ex - ey + 1` in terms of `fexp1` and the input
+exponents `ex`, `ey`. -/
+def round_round_div_hyp (fexp1 fexp2 : ℤ → ℤ) : Prop :=
+  (∀ ex : ℤ, fexp2 ex ≤ fexp1 ex - 1)
+  ∧ (∀ ex ey : ℤ, fexp1 ex < ex → fexp1 ey < ey →
+      fexp1 (ex - ey) ≤ ex - ey + 1 →
+      fexp2 (ex - ey) ≤ fexp1 ex - ey)
+  ∧ (∀ ex ey : ℤ, fexp1 ex < ex → fexp1 ey < ey →
+      fexp1 (ex - ey + 1) ≤ ex - ey + 1 + 1 →
+      fexp2 (ex - ey + 1) ≤ fexp1 ex - ey)
+  ∧ (∀ ex ey : ℤ, fexp1 ex < ex → fexp1 ey < ey →
+      fexp1 (ex - ey) ≤ ex - ey →
+      fexp2 (ex - ey) ≤ fexp1 (ex - ey) + fexp1 ey - ey)
+  ∧ (∀ ex ey : ℤ, fexp1 ex < ex → fexp1 ey < ey →
+      fexp1 (ex - ey) = ex - ey + 1 →
+      fexp2 (ex - ey) ≤ ex - ey - ey + fexp1 ey)
+
 end LeanFlocq
