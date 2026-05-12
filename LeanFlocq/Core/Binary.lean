@@ -24,6 +24,7 @@ import LeanFlocq.Core.FLT
 import LeanFlocq.Core.Digits
 import LeanFlocq.Core.Round_NE
 import LeanFlocq.Calc.Bracket
+import LeanFlocq.Calc.Round
 
 namespace LeanFlocq
 
@@ -1129,6 +1130,110 @@ theorem inbetween_shr (x : ℝ) (m e : ℤ) (l : location) (n : ℤ)
       (loc_of_shr_record (shr_record_of_loc m l))
     rw [m_shr_record_of_loc, loc_of_shr_record_of_loc]
     exact Hl
+
+/-- Round-trip: rebuilding a `shr_record` from its `m` and its decoded
+location gives back the original. -/
+theorem shr_record_of_loc_m_l (mrs : shr_record) :
+    shr_record_of_loc mrs.m (loc_of_shr_record mrs) = mrs := by
+  obtain ⟨_, r, s⟩ := mrs
+  cases r <;> cases s <;> rfl
+
+/-- `shr_fexp fexp m e l`: build a `shr_record` from `(m, l)` and shift it
+to the canonical exponent `fexp(Zdigits₂ m + e)`. This is the bridge between
+the location-bracketed form `(m, e, l)` and the IEEE-style round-and-sticky
+form used by `binary_round_aux`. -/
+noncomputable def shr_fexp (fexp : ℤ → ℤ) (m e : ℤ) (l : location) :
+    shr_record × ℤ :=
+  shr (shr_record_of_loc m l) e (fexp (Zdigits radix2 m + e) - e)
+
+/-- **`shr_truncate`**: the round-and-sticky form `shr_fexp` agrees with
+the `(m, e, l) → (m', e', l')` truncation from `Calc/Round.lean`, up to the
+location-encoding round trip. -/
+theorem shr_truncate (fexp : ℤ → ℤ) (hValid : Valid_exp fexp) (m e : ℤ)
+    (l : location) (Hm : 0 ≤ m) :
+    shr_fexp fexp m e l =
+      (shr_record_of_loc (truncate radix2 fexp (m, e, l)).1
+         (truncate radix2 fexp (m, e, l)).2.2,
+       (truncate radix2 fexp (m, e, l)).2.1) := by
+  -- The key quantity: how much we shift by.
+  set k : ℤ := fexp (Zdigits radix2 m + e) - e with hk_def
+  -- Unfold shr_fexp
+  show shr (shr_record_of_loc m l) e k =
+      (shr_record_of_loc (truncate radix2 fexp (m, e, l)).1
+         (truncate radix2 fexp (m, e, l)).2.2,
+       (truncate radix2 fexp (m, e, l)).2.1)
+  rcases lt_or_ge 0 k with hk_pos | hk_nonpos
+  · -- k > 0: both sides shift
+    -- LHS: shr (shr_record_of_loc m l) e k = (shr_1^[k.toNat] _, e + k)
+    have h_lhs : shr (shr_record_of_loc m l) e k
+        = (shr_1^[k.toNat] (shr_record_of_loc m l), e + k) := by
+      unfold shr; rw [if_pos hk_pos]
+    -- RHS: truncate goes through the if_pos branch
+    have h_rhs : truncate radix2 fexp (m, e, l) = truncate_aux radix2 k (m, e, l) := by
+      unfold truncate
+      show (if 0 < fexp (Zdigits radix2 (m, e, l).1 + (m, e, l).2.1) - (m, e, l).2.1
+            then truncate_aux radix2 _ (m, e, l) else (m, e, l))
+            = truncate_aux radix2 k (m, e, l)
+      rw [show ((m, e, l).1 : ℤ) = m from rfl, show ((m, e, l).2.1 : ℤ) = e from rfl,
+          show fexp (Zdigits radix2 m + e) - e = k from hk_def.symm]
+      rw [if_pos hk_pos]
+    -- Use inbetween_float_ex to obtain a witness x
+    obtain ⟨x, Hx⟩ := inbetween_float_ex (beta := radix2) m e l
+    -- 0 ≤ x: from inbetween_float_bounds and 0 ≤ m
+    have h_x_nonneg : 0 ≤ x := by
+      have ⟨h_lo, _⟩ := inbetween_float_bounds (beta := radix2) m e x l Hx
+      have h_F2R_nonneg : 0 ≤ F2R (beta := radix2) ⟨m, e⟩ := F2R_ge_0 ⟨m, e⟩ Hm
+      linarith
+    -- He: e ≤ fexp(Zdigits + e) (since k > 0)
+    have hHe : e ≤ fexp (Zdigits radix2 m + e) := by omega
+    -- Apply inbetween_shr on the LHS side
+    have h_inb_shr : let p := shr (shr_record_of_loc m l) e k
+                     inbetween_float radix2 p.1.m p.2 x (loc_of_shr_record p.1) :=
+      inbetween_shr x m e l k Hm Hx
+    rw [h_lhs] at h_inb_shr
+    -- Apply truncate_correct on the RHS side
+    have h_tc := truncate_correct radix2 fexp hValid h_x_nonneg Hx (Or.inl hHe)
+    -- h_tc.1 : inbetween_float radix2 t.1 t.2.1 x t.2.2  where t = truncate ...
+    have h_inb_tr : inbetween_float radix2
+        (truncate radix2 fexp (m, e, l)).1
+        (truncate radix2 fexp (m, e, l)).2.1
+        x
+        (truncate radix2 fexp (m, e, l)).2.2 := h_tc.1
+    -- The exponents match: e + k = (truncate ...).2.1
+    have h_exp_eq : (truncate radix2 fexp (m, e, l)).2.1 = e + k := by
+      rw [h_rhs]; show e + k = e + k; rfl
+    -- Combine: both inbetween_float at same exponent e + k
+    rw [h_exp_eq] at h_inb_tr
+    -- Uniqueness: m and l components match
+    obtain ⟨h_m_eq, h_l_eq⟩ := inbetween_float_unique (beta := radix2)
+      (e + k) _ _ _ _ x h_inb_shr h_inb_tr
+    -- Conclude
+    rw [h_lhs]
+    ext
+    · -- The shr_record component
+      show shr_1^[k.toNat] (shr_record_of_loc m l)
+        = shr_record_of_loc (truncate radix2 fexp (m, e, l)).1
+            (truncate radix2 fexp (m, e, l)).2.2
+      rw [← h_m_eq, ← h_l_eq]
+      exact (shr_record_of_loc_m_l _).symm
+    · -- The exponent component
+      show e + k = (truncate radix2 fexp (m, e, l)).2.1
+      exact h_exp_eq.symm
+  · -- k ≤ 0: neither side shifts
+    have h_not_pos : ¬ 0 < k := not_lt.mpr hk_nonpos
+    -- LHS: shr (shr_record_of_loc m l) e k = (shr_record_of_loc m l, e)
+    have h_lhs : shr (shr_record_of_loc m l) e k = (shr_record_of_loc m l, e) := by
+      unfold shr; rw [if_neg h_not_pos]
+    -- RHS: truncate = (m, e, l)
+    have h_rhs : truncate radix2 fexp (m, e, l) = (m, e, l) := by
+      unfold truncate
+      show (if 0 < fexp (Zdigits radix2 (m, e, l).1 + (m, e, l).2.1) - (m, e, l).2.1
+            then truncate_aux radix2 _ (m, e, l) else (m, e, l))
+            = (m, e, l)
+      rw [show ((m, e, l).1 : ℤ) = m from rfl, show ((m, e, l).2.1 : ℤ) = e from rfl,
+          show fexp (Zdigits radix2 m + e) - e = k from hk_def.symm]
+      rw [if_neg h_not_pos]
+    rw [h_lhs, h_rhs]
 
 end shr_record
 
