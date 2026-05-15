@@ -3327,6 +3327,143 @@ theorem Bsign_Bone (hp : 0 < prec) (hmax : prec < emax) :
   rw [Bsign_FF2B]
   exact (Bone_aux hp hmax).2.2
 
+/-! ## Bulp: unit in the last place -/
+
+/-- **`Bulp`** (Coq line 2436): the unit in the last place of `x`. Computed
+as `Bone · 2^(fexp e)` where `e = (Bfrexp x).2`. -/
+noncomputable def Bulp (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (x : binary_float prec emax) : binary_float prec emax :=
+  Bldexp hp hmax mode.mode_NE (Bone hp hmax)
+    (FLT_exp (3 - emax - prec) prec (Bfrexp hp hmax hemax x).2)
+
+/-- Internal helper: applying `Bldexp` to `Bone` with an exponent whose
+`bpow` is in format and bounded by `bpow emax` yields exactly `bpow e'`,
+preserving finiteness and the sign of `Bone`. -/
+private lemma Bldexp_Bone_eq (hp : 0 < prec) (hmax : prec < emax) (e' : ℤ)
+    (h_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec) (bpow radix2 e'))
+    (h_bnd : bpow radix2 e' < bpow radix2 emax) :
+    B2R (Bldexp hp hmax mode.mode_NE (Bone hp hmax) e' : binary_float prec emax)
+      = bpow radix2 e' ∧
+    is_finite (Bldexp hp hmax mode.mode_NE (Bone hp hmax) e' : binary_float prec emax)
+      = true ∧
+    Bsign (Bldexp hp hmax mode.mode_NE (Bone hp hmax) e' : binary_float prec emax)
+      = false := by
+  have h_bldexp := Bldexp_correct hp hmax mode.mode_NE (Bone hp hmax) e'
+  rw [Bone_correct hp hmax, one_mul] at h_bldexp
+  have h_round_eq : round radix2 (FLT_exp (3 - emax - prec) prec)
+      (round_mode mode.mode_NE) (bpow radix2 e') = bpow radix2 e' :=
+    round_generic radix2 _ _ h_fmt
+  rw [h_round_eq] at h_bldexp
+  have h_abs_bnd : |bpow radix2 e'| < bpow radix2 emax := by
+    rw [abs_of_pos (bpow_gt_0 _ _)]; exact h_bnd
+  rw [if_pos h_abs_bnd] at h_bldexp
+  obtain ⟨h_b2r, h_fin, h_sign⟩ := h_bldexp
+  refine ⟨h_b2r, ?_, ?_⟩
+  · rw [h_fin]; exact is_finite_Bone hp hmax
+  · rw [h_sign]; exact Bsign_Bone hp hmax
+
+/-- **`Bulp_correct`** (Coq line 2438): on finite floats,
+`B2R (Bulp x) = ulp (B2R x)`, plus finiteness and sign = false. -/
+theorem Bulp_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (x : binary_float prec emax) (hf : is_finite x = true) :
+    B2R (Bulp hp hmax hemax x)
+      = ulp radix2 (FLT_exp (3 - emax - prec) prec) (B2R x) ∧
+    is_finite (Bulp hp hmax hemax x) = true ∧
+    Bsign (Bulp hp hmax hemax x) = false := by
+  cases x with
+  | B754_infinity s => simp [is_finite] at hf
+  | B754_nan s pl pl_h => simp [is_finite] at hf
+  | B754_zero s =>
+    -- Bfrexp returns (B754_zero s, -2*emax - prec).
+    have h_Bfrexp_snd : (Bfrexp hp hmax hemax (B754_zero s : binary_float prec emax)).2
+        = -2 * emax - prec := rfl
+    -- fexp(-2*emax - prec) = 3 - emax - prec = emin.
+    have h_fexp_eq : FLT_exp (3 - emax - prec) prec (-2 * emax - prec) = 3 - emax - prec := by
+      unfold FLT_exp; apply max_eq_right; omega
+    unfold Bulp
+    rw [h_Bfrexp_snd, h_fexp_eq]
+    -- bpow(emin) in format.
+    have h_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+        (bpow radix2 (3 - emax - prec)) := by
+      apply generic_format_bpow' radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp)
+      unfold FLT_exp; apply max_le _ (le_refl _); omega
+    have h_bnd : bpow radix2 (3 - emax - prec) < bpow radix2 emax :=
+      bpow_lt radix2 (by omega)
+    obtain ⟨h_b2r, h_fin, h_sign⟩ := Bldexp_Bone_eq hp hmax (3 - emax - prec) h_fmt h_bnd
+    refine ⟨?_, h_fin, h_sign⟩
+    rw [h_b2r]
+    -- ulp(0) = bpow(emin) since negligible_exp witness n ≤ emin gives fexp n = emin.
+    show bpow radix2 (3 - emax - prec)
+        = ulp radix2 (FLT_exp (3 - emax - prec) prec)
+            (B2R (B754_zero s : binary_float prec emax))
+    have h_B2R_zero : B2R (B754_zero s : binary_float prec emax) = 0 := rfl
+    rw [h_B2R_zero]
+    unfold ulp
+    rw [if_pos rfl]
+    obtain ⟨n, h_neg, h_n_le⟩ := negligible_exp_FLT radix2 (3 - emax - prec) prec hp
+    rw [h_neg]
+    show bpow radix2 (3 - emax - prec)
+        = bpow radix2 (FLT_exp (3 - emax - prec) prec n)
+    have h_fexp_n : FLT_exp (3 - emax - prec) prec n = 3 - emax - prec := by
+      unfold FLT_exp; apply max_eq_right; omega
+    rw [h_fexp_n]
+  | B754_finite sx mx ex hb =>
+    -- B2R x = F2R⟨cond_Zopp sx mx, ex⟩ ≠ 0.
+    have h_mx_pos : 0 < mx := hb.1
+    have h_B2R_ne : B2R (B754_finite sx mx ex hb : binary_float prec emax) ≠ 0 := by
+      show F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩ ≠ 0
+      apply F2R_neq_0
+      show cond_Zopp sx mx ≠ 0
+      cases sx
+      · show mx ≠ 0; omega
+      · show -mx ≠ 0; omega
+    -- is_finite_strict.
+    have h_finite_strict : is_finite_strict
+        (B754_finite sx mx ex hb : binary_float prec emax) = true := rfl
+    -- (Bfrexp x).2 = mag (B2R x).
+    obtain ⟨_, _, h_mag_eq⟩ := Bfrexp_correct hp hmax hemax
+        (B754_finite sx mx ex hb : binary_float prec emax) h_finite_strict
+    -- Let e' = fexp((Bfrexp x).2) = fexp(mag (B2R x)) = cexp (B2R x).
+    set e' := FLT_exp (3 - emax - prec) prec
+      (Bfrexp hp hmax hemax (B754_finite sx mx ex hb : binary_float prec emax)).2 with he'_def
+    have h_e'_eq : e' = cexp radix2 (FLT_exp (3 - emax - prec) prec)
+        (B2R (B754_finite sx mx ex hb : binary_float prec emax)) := by
+      rw [he'_def, h_mag_eq]; rfl
+    -- bpow e' in format.
+    have h_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec) (bpow radix2 e') := by
+      apply generic_format_bpow' radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp)
+      rw [h_e'_eq]
+      -- fexp(cexp x) ≤ cexp x. This is small-regime stability or direct from Valid_exp.
+      show FLT_exp (3 - emax - prec) prec
+          (FLT_exp (3 - emax - prec) prec
+            (mag radix2 (B2R (B754_finite sx mx ex hb : binary_float prec emax))))
+        ≤ FLT_exp (3 - emax - prec) prec
+            (mag radix2 (B2R (B754_finite sx mx ex hb : binary_float prec emax)))
+      -- FLT_exp(FLT_exp k) ≤ FLT_exp k: FLT_exp k = max(k - prec, emin).
+      -- FLT_exp(max(k-prec, emin)) = max(max(k-prec, emin) - prec, emin).
+      -- ≤ max(k-prec, emin) iff max(k-prec, emin) - prec ≤ max(k-prec, emin), i.e., prec ≥ 0 ✓.
+      unfold FLT_exp; omega
+    -- |bpow e'| < bpow emax: need e' < emax.
+    have h_mag_le : mag radix2 (B2R (B754_finite sx mx ex hb : binary_float prec emax)) ≤ emax := by
+      apply mag_le_bpow radix2 h_B2R_ne
+      exact abs_B2R_lt_emax hp hmax _
+    have h_e'_lt : e' < emax := by
+      rw [h_e'_eq]
+      show FLT_exp (3 - emax - prec) prec _ < emax
+      unfold FLT_exp
+      have h1 : mag radix2 (B2R (B754_finite sx mx ex hb : binary_float prec emax)) - prec < emax := by
+        omega
+      have h2 : (3 - emax - prec) < emax := by omega
+      exact max_lt h1 h2
+    have h_bnd : bpow radix2 e' < bpow radix2 emax := bpow_lt radix2 h_e'_lt
+    unfold Bulp
+    rw [← he'_def]
+    obtain ⟨h_b2r, h_fin, h_sign⟩ := Bldexp_Bone_eq hp hmax e' h_fmt h_bnd
+    refine ⟨?_, h_fin, h_sign⟩
+    rw [h_b2r]
+    -- ulp(B2R x) = bpow(cexp(B2R x)) = bpow e' (since B2R x ≠ 0).
+    rw [ulp_neq_0 radix2 _ h_B2R_ne, ← h_e'_eq]
+
 end binary_float
 
 end LeanFlocq
