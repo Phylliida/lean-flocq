@@ -3464,6 +3464,30 @@ theorem Bulp_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
     -- ulp(B2R x) = bpow(cexp(B2R x)) = bpow e' (since B2R x ≠ 0).
     rw [ulp_neq_0 radix2 _ h_B2R_ne, ← h_e'_eq]
 
+/-! ## Bpred_pos: predecessor for positive finite floats -/
+
+/-- **`Bpred_pos`** (Coq line 2496): the predecessor of a positive finite float.
+
+For `B754_finite _ mx _ _`: if `2 · mx = 2^prec` (the float is exactly a power
+of two — `mx` is at its minimum value with the leading bit set), then the
+predecessor straddles an exponent boundary, so subtract `bpow(fexp(e-1))`
+where `e = (Bfrexp x).2`. Otherwise the predecessor is one ulp below `x`.
+Non-finite inputs are returned unchanged (only meaningful for positive finite). -/
+noncomputable def Bpred_pos (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (pred_pos_nan : binary_float prec emax →
+                      {z : binary_float prec emax // is_nan z = true})
+    (x : binary_float prec emax) : binary_float prec emax :=
+  match x with
+  | B754_finite _ mx _ _ =>
+    let d :=
+      if 2 * mx = 2 ^ prec.toNat then
+        Bldexp hp hmax mode.mode_NE (Bone hp hmax)
+          (FLT_exp (3 - emax - prec) prec ((Bfrexp hp hmax hemax x).2 - 1))
+      else
+        Bulp hp hmax hemax x
+    Bminus hp hmax (fun a _ => pred_pos_nan a) mode.mode_NE x d
+  | _ => x
+
 /-! ## Bmax_float: the largest representable finite -/
 
 /-- **`Bmax_float_valid`** (Coq `Bmax_float_proof`, line 2209): the float
