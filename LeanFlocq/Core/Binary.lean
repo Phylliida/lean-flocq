@@ -26,6 +26,7 @@ import LeanFlocq.Core.Round_NE
 import LeanFlocq.Calc.Bracket
 import LeanFlocq.Calc.Round
 import LeanFlocq.Calc.Operations
+import LeanFlocq.Calc.Div
 
 namespace LeanFlocq
 
@@ -4169,6 +4170,35 @@ theorem Bpred_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
       rfl
     | B754_nan _ _ _ => rw [hres] at h_succ; simp [B2FF] at h_succ
     | B754_finite _ _ _ _ => rw [hres] at h_succ; simp [B2FF] at h_succ
+
+/-! ## Bdiv: IEEE-754 binary division
+
+So far we have the kernel exponent picker `Fdiv_core_binary`. The next
+session can pick this up to prove `Bdiv_correct_aux`, then `Bdiv` +
+`Bdiv_correct` as small wrappers. The proof structure mirrors
+`Bmult_correct_aux` (xor sign, F2R relation, apply
+`binary_round_aux_correct'`), with one twist: the `e'` precondition
+
+  `e' ≤ cexp(x/y)`
+
+reduces via `e' = min(FLT_exp(D), ex-ey) ≤ FLT_exp(D)` and
+`FLT_exp_monotone` plus `mag_div_F2R`'s lower bound `D ≤ mag(x/y)`
+(where `D = Zdigits mx + ex - (Zdigits my + ey)`). The Lean
+`mag_div_F2R` returns a sandwich `D ≤ mag(x/y) ≤ D+1`; the lower bound
+is what's needed. -/
+
+/-- **`Fdiv_core_binary`** (Coq line 1844): pick the canonical exponent for
+the division `(m1·2^e1) / (m2·2^e2)` — the min of `fexp(Zdigits + (e1-e2))`
+(the format-suggested exponent) and `e1 - e2` (the natural exponent from
+the float arithmetic) — and apply `Fdiv_core` to get the bracketing
+mantissa and location. -/
+noncomputable def Fdiv_core_binary (prec emax : ℤ) (m1 e1 m2 e2 : ℤ) :
+    ℤ × ℤ × location :=
+  let d1 := Zdigits radix2 m1
+  let d2 := Zdigits radix2 m2
+  let e' := min (FLT_exp (3 - emax - prec) prec (d1 + e1 - (d2 + e2))) (e1 - e2)
+  let r := Fdiv_core radix2 m1 e1 m2 e2 e'
+  (r.1, e', r.2)
 
 end binary_float
 
