@@ -1663,6 +1663,52 @@ theorem binary_round_aux_correct' (hp : 0 < prec) (hmax : prec < emax)
         have h_emax_ge_2 : 2 ≤ emax := by linarith
         exact max_eq_left (by linarith)
 
+/-- **`binary_round_aux_correct`** (Coq lines 1156–1329): the positive-mantissa
+specialization of `binary_round_aux_correct'`.
+
+When `mx > 0` and `|x|` is bracketed by `[mx·2^ex, (mx+1)·2^ex)`, the result of
+`binary_round_aux` has the same correctness behavior as the generic primed
+version. The Zdigits-form precondition `ex ≤ FLT_exp(Zdigits mx + ex)` is
+equivalent to `ex ≤ cexp x` here (via `cexp_inbetween_float`), and `x ≠ 0` is
+derivable from the positive lower bound `F2R⟨mx, ex⟩ ≤ |x|`. -/
+theorem binary_round_aux_correct (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (x : ℝ) (mx ex : ℤ) (lx : location)
+    (hmx : 0 < mx)
+    (Bx : inbetween_float radix2 mx ex |x| lx)
+    (Ex : ex ≤ FLT_exp (3 - emax - prec) prec (Zdigits radix2 mx + ex)) :
+    let z := binary_round_aux prec emax m (decide (x < 0)) mx ex lx
+    valid_binary prec emax z ∧
+    (if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+        < bpow radix2 emax then
+      FF2R radix2 z = round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x ∧
+      is_finite_FF z = true ∧
+      sign_FF z = decide (x < 0)
+    else
+      z = binary_overflow prec emax m (decide (x < 0))) := by
+  intro z
+  let fexp : ℤ → ℤ := FLT_exp (3 - emax - prec) prec
+  have hValid : Valid_exp fexp := FLT_exp_valid (3 - emax - prec) prec hp
+  -- 0 < |x|: from F2R⟨mx, ex⟩ ≤ |x| and F2R⟨mx, ex⟩ > 0 (since mx > 0).
+  have h_abs_pos : 0 < |x| := by
+    have hbounds := inbetween_float_bounds (beta := radix2) mx ex |x| lx Bx
+    have h_F2R_pos : 0 < F2R (beta := radix2) ⟨mx, ex⟩ :=
+      F2R_gt_0 (⟨mx, ex⟩ : float radix2) hmx
+    linarith
+  -- Hence x ≠ 0.
+  have Px : x ≠ 0 := by
+    intro hx
+    rw [hx, abs_zero] at h_abs_pos
+    exact lt_irrefl _ h_abs_pos
+  -- Convert the Zdigits-form precondition to `ex ≤ cexp x` via
+  -- `cexp_inbetween_float` applied to `|x|`, then `cexp_abs`.
+  have h_cexp_abs : cexp radix2 fexp |x| = fexp (Zdigits radix2 mx + ex) :=
+    cexp_inbetween_float radix2 fexp hValid h_abs_pos Bx (Or.inr Ex)
+  have h_cexp_eq : cexp radix2 fexp x = fexp (Zdigits radix2 mx + ex) := by
+    rw [← cexp_abs radix2 fexp x]; exact h_cexp_abs
+  have Ex' : ex ≤ cexp radix2 fexp x := by rw [h_cexp_eq]; exact Ex
+  -- Apply the primed version.
+  exact binary_round_aux_correct' hp hmax m x mx ex lx Px Bx Ex'
+
 end binary_float
 
 end LeanFlocq
