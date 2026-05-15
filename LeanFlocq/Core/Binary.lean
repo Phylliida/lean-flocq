@@ -2985,6 +2985,223 @@ theorem Bldexp_correct (hp : 0 < prec) (hmax : prec < emax)
       rw [B2FF_FF2B, h_cond]
       rfl
 
+/-! ## Bfrexp: extract mantissa and exponent -/
+
+/-- The integer core of `Bfrexp` (Coq lines 2302–2307). Two cases on the
+mantissa's digit count: if `mx` already has `prec` digits, we keep it as
+the F754_finite at exponent `-prec`; otherwise we left-shift it by
+`d = prec - Zdigits mx` so the result is precisely `prec`-bit. -/
+noncomputable def Ffrexp_core_binary (prec : ℤ) (s : Bool) (m e : ℤ) : full_float × ℤ :=
+  if prec ≤ Zdigits radix2 m then
+    (full_float.F754_finite s m (-prec), e + prec)
+  else
+    let d := prec - Zdigits radix2 m
+    (full_float.F754_finite s (m * (radix2.val : ℤ)^d.toNat) (-prec), e + prec - d)
+
+/-- **`Bfrexp_correct_aux`** (Coq line 2309): correctness of the integer
+core for `Bfrexp`. Returns a `full_float` whose absolute value lies in
+`[1/2, 1)` and whose product with `bpow e_out` equals the original
+`F2R⟨cond_Zopp sx mx, ex⟩`.
+
+The hypothesis `3 ≤ emax` (Coq's `Hemax`) is needed because we need
+`emin = 3 - emax - prec ≤ -prec` so that `FLT_exp(0) = -prec` (not the
+`emin` floor). -/
+theorem Bfrexp_correct_aux (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (sx : Bool) (mx ex : ℤ) (hb : bounded prec emax mx ex) :
+    valid_binary prec emax (Ffrexp_core_binary prec sx mx ex).1 ∧
+    ((1/2 ≤ |FF2R radix2 (Ffrexp_core_binary prec sx mx ex).1| ∧
+      |FF2R radix2 (Ffrexp_core_binary prec sx mx ex).1| < 1) ∧
+     F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩
+       = FF2R radix2 (Ffrexp_core_binary prec sx mx ex).1
+         * bpow radix2 (Ffrexp_core_binary prec sx mx ex).2) := by
+  -- Common facts.
+  have h_mx_pos : 0 < mx := hb.1
+  have h_mx_ne : mx ≠ 0 := by omega
+  have h_mx_real_ne : (mx : ℝ) ≠ 0 := by exact_mod_cast h_mx_ne
+  have h_abs_mx : |(mx : ℝ)| = (mx : ℝ) := abs_of_pos (by exact_mod_cast h_mx_pos)
+  have h_Zdigits_pos : 0 < Zdigits radix2 mx := Zdigits_gt_0 radix2 h_mx_ne
+  have h_emin_le : (3 - emax - prec) ≤ -prec := by omega
+  -- Bound `Zdigits mx ≤ prec` from the canonical_mantissa condition.
+  have h_Zdigits_le : Zdigits radix2 mx ≤ prec := by
+    have hcm : FLT_exp (3 - emax - prec) prec (Zdigits radix2 mx + ex) = ex := hb.2.1
+    unfold FLT_exp at hcm
+    by_contra h_gt
+    push_neg at h_gt
+    have h_max_ge : max ((Zdigits radix2 mx + ex) - prec) (3 - emax - prec) ≥
+        (Zdigits radix2 mx + ex) - prec := le_max_left _ _
+    omega
+  -- Magnitude bounds for `mx` from `Zdigits_correct`.
+  obtain ⟨h_mx_low, h_mx_high⟩ := Zdigits_correct radix2 h_mx_ne
+  rw [h_abs_mx] at h_mx_low h_mx_high
+  -- `|cond_Zopp b m| = m` when `m ≥ 0`. We use it via F2R_Zabs + cond_Zopp.
+  have h_abs_F2R : ∀ (b : Bool) (n e : ℤ) (_ : 0 ≤ n),
+      |F2R (beta := radix2) ⟨cond_Zopp b n, e⟩| = F2R (beta := radix2) ⟨n, e⟩ := by
+    intros b n e hn
+    rw [← F2R_Zabs]
+    have h_eq : |cond_Zopp b n| = n := by
+      cases b
+      · exact abs_of_nonneg hn
+      · show |(-n)| = n; rw [abs_neg]; exact abs_of_nonneg hn
+    rw [h_eq]
+  -- Now dispatch on `Ffrexp_core_binary`.
+  unfold Ffrexp_core_binary
+  split_ifs with h_case
+  · -- Case A: prec ≤ Zdigits mx, so equality with `h_Zdigits_le` gives Zdigits mx = prec.
+    have h_Z_eq : Zdigits radix2 mx = prec := le_antisymm h_Zdigits_le h_case
+    -- The `.1` and `.2` reduce iota.
+    simp only [Prod.fst, Prod.snd]
+    -- FF2R of F754_finite = F2R⟨cond_Zopp sx mx, -prec⟩.
+    have h_FF2R : FF2R radix2 (full_float.F754_finite sx mx (-prec))
+        = F2R (beta := radix2) ⟨cond_Zopp sx mx, -prec⟩ := rfl
+    rw [h_FF2R]
+    -- Bound: |F2R⟨cond_Zopp sx mx, -prec⟩| = mx * bpow(-prec).
+    have h_abs_eq : |F2R (beta := radix2) ⟨cond_Zopp sx mx, -prec⟩|
+        = (mx : ℝ) * bpow radix2 (-prec) := by
+      rw [h_abs_F2R sx mx (-prec) (le_of_lt h_mx_pos)]
+      rfl
+    refine ⟨?_, ⟨?_, ?_⟩, ?_⟩
+    · -- F1: valid_binary = bounded prec emax mx (-prec)
+      show bounded prec emax mx (-prec)
+      refine ⟨h_mx_pos, ?_, by omega⟩
+      show FLT_exp (3 - emax - prec) prec (Zdigits radix2 mx + (-prec)) = -prec
+      rw [h_Z_eq]
+      unfold FLT_exp
+      have h_arg : prec + (-prec) - prec = -prec := by ring
+      rw [h_arg]
+      exact max_eq_left h_emin_le
+    · -- F2: 1/2 ≤ |F2R⟨cond_Zopp sx mx, -prec⟩|
+      rw [h_abs_eq]
+      -- mx ≥ bpow(prec - 1) → mx * bpow(-prec) ≥ bpow(prec - 1) * bpow(-prec) = bpow(-1) = 1/2.
+      have h_lower : bpow radix2 (prec - 1) ≤ (mx : ℝ) := by
+        rw [← h_Z_eq]; exact h_mx_low
+      have h_prod : bpow radix2 (prec - 1) * bpow radix2 (-prec) ≤ (mx : ℝ) * bpow radix2 (-prec) :=
+        mul_le_mul_of_nonneg_right h_lower (bpow_ge_0 _ _)
+      have h_eq : bpow radix2 (prec - 1) * bpow radix2 (-prec) = bpow radix2 (-1) := by
+        rw [← bpow_plus]; congr 1; ring
+      rw [h_eq] at h_prod
+      have h_half : bpow radix2 (-1) = (1 : ℝ) / 2 := by
+        unfold bpow
+        show ((radix2.val : ℝ))^(-1 : ℤ) = 1/2
+        show ((2 : ℤ) : ℝ)^(-1 : ℤ) = 1/2
+        push_cast
+        rw [zpow_neg, zpow_one]
+        norm_num
+      rw [h_half] at h_prod
+      exact h_prod
+    · -- F3: |F2R⟨cond_Zopp sx mx, -prec⟩| < 1
+      rw [h_abs_eq]
+      have h_upper : (mx : ℝ) < bpow radix2 prec := by
+        rw [← h_Z_eq]; exact h_mx_high
+      have h_prod : (mx : ℝ) * bpow radix2 (-prec) < bpow radix2 prec * bpow radix2 (-prec) :=
+        mul_lt_mul_of_pos_right h_upper (bpow_gt_0 _ _)
+      have h_eq : bpow radix2 prec * bpow radix2 (-prec) = 1 := by
+        rw [← bpow_plus, show prec + (-prec) = 0 from by ring, bpow_zero]
+      rw [h_eq] at h_prod
+      exact h_prod
+    · -- F4: F2R⟨cond_Zopp sx mx, ex⟩ = F2R⟨cond_Zopp sx mx, -prec⟩ * bpow(ex + prec)
+      unfold F2R
+      show ((cond_Zopp sx mx : ℤ) : ℝ) * bpow radix2 ex
+          = ((cond_Zopp sx mx : ℤ) : ℝ) * bpow radix2 (-prec) * bpow radix2 (ex + prec)
+      rw [mul_assoc, ← bpow_plus]
+      congr 2; ring
+  · -- Case B: prec > Zdigits mx.
+    push_neg at h_case
+    have h_Z_lt : Zdigits radix2 mx < prec := h_case
+    -- Set d = prec - Zdigits mx > 0.
+    set d : ℤ := prec - Zdigits radix2 mx with hd_def
+    have hd_pos : 0 < d := by simp [hd_def]; omega
+    have hd_nn : 0 ≤ d := le_of_lt hd_pos
+    -- Shifted mantissa.
+    set ms : ℤ := mx * (radix2.val : ℤ)^d.toNat with hms_def
+    have h_pow_pos : 0 < ((radix2.val : ℤ)^d.toNat : ℤ) := by
+      apply pow_pos; exact radix2.radix_gt_0
+    have h_ms_pos : 0 < ms := by
+      simp [hms_def]; exact mul_pos h_mx_pos h_pow_pos
+    have h_ms_ne : ms ≠ 0 := by omega
+    have h_ms_real_ne : (ms : ℝ) ≠ 0 := by exact_mod_cast h_ms_ne
+    -- Key: Zdigits ms = Zdigits mx + d = prec.
+    have h_Zd_ms : Zdigits radix2 ms = prec := by
+      rw [hms_def, Zdigits_mult_Zpower radix2 h_mx_ne hd_nn]
+      simp [hd_def]
+    simp only [Prod.fst, Prod.snd]
+    -- FF2R of F754_finite = F2R⟨cond_Zopp sx ms, -prec⟩.
+    have h_FF2R : FF2R radix2 (full_float.F754_finite sx ms (-prec))
+        = F2R (beta := radix2) ⟨cond_Zopp sx ms, -prec⟩ := rfl
+    rw [h_FF2R]
+    -- Bound: |F2R⟨cond_Zopp sx ms, -prec⟩| = ms * bpow(-prec) = mx * bpow(-Zdigits mx).
+    have h_ms_cast : ((ms : ℤ) : ℝ) = (mx : ℝ) * bpow radix2 d := by
+      rw [hms_def, ← IZR_Zpower radix2 hd_nn]
+      push_cast; ring
+    have h_abs_eq : |F2R (beta := radix2) ⟨cond_Zopp sx ms, -prec⟩|
+        = (mx : ℝ) * bpow radix2 (- Zdigits radix2 mx) := by
+      rw [h_abs_F2R sx ms (-prec) (le_of_lt h_ms_pos)]
+      show ((ms : ℤ) : ℝ) * bpow radix2 (-prec)
+          = (mx : ℝ) * bpow radix2 (- Zdigits radix2 mx)
+      rw [h_ms_cast, mul_assoc, ← bpow_plus]
+      rw [show d + (-prec) = - Zdigits radix2 mx from by simp [hd_def]; ring]
+    refine ⟨?_, ⟨?_, ?_⟩, ?_⟩
+    · -- F1: bounded prec emax ms (-prec).
+      show bounded prec emax ms (-prec)
+      refine ⟨h_ms_pos, ?_, by omega⟩
+      show FLT_exp (3 - emax - prec) prec (Zdigits radix2 ms + (-prec)) = -prec
+      rw [h_Zd_ms]
+      unfold FLT_exp
+      have h_arg : prec + (-prec) - prec = -prec := by ring
+      rw [h_arg]
+      exact max_eq_left h_emin_le
+    · -- F2: 1/2 ≤ mx * bpow(-Zdigits mx).
+      rw [h_abs_eq]
+      have h_prod :
+          bpow radix2 (Zdigits radix2 mx - 1) * bpow radix2 (- Zdigits radix2 mx) ≤
+            (mx : ℝ) * bpow radix2 (- Zdigits radix2 mx) :=
+        mul_le_mul_of_nonneg_right h_mx_low (bpow_ge_0 _ _)
+      have h_eq : bpow radix2 (Zdigits radix2 mx - 1) * bpow radix2 (- Zdigits radix2 mx)
+          = bpow radix2 (-1) := by
+        rw [← bpow_plus]; congr 1; ring
+      rw [h_eq] at h_prod
+      have h_half : bpow radix2 (-1) = (1 : ℝ) / 2 := by
+        unfold bpow
+        show ((2 : ℤ) : ℝ)^(-1 : ℤ) = 1/2
+        push_cast
+        rw [zpow_neg, zpow_one]
+        norm_num
+      rw [h_half] at h_prod
+      exact h_prod
+    · -- F3: mx * bpow(-Zdigits mx) < 1.
+      rw [h_abs_eq]
+      have h_prod : (mx : ℝ) * bpow radix2 (- Zdigits radix2 mx) <
+          bpow radix2 (Zdigits radix2 mx) * bpow radix2 (- Zdigits radix2 mx) :=
+        mul_lt_mul_of_pos_right h_mx_high (bpow_gt_0 _ _)
+      have h_eq : bpow radix2 (Zdigits radix2 mx) * bpow radix2 (- Zdigits radix2 mx) = 1 := by
+        rw [← bpow_plus, show Zdigits radix2 mx + (-Zdigits radix2 mx) = 0 from by ring,
+            bpow_zero]
+      rw [h_eq] at h_prod
+      exact h_prod
+    · -- F4: F2R⟨cond_Zopp sx mx, ex⟩ = F2R⟨cond_Zopp sx ms, -prec⟩ * bpow(ex + prec - d).
+      unfold F2R
+      show ((cond_Zopp sx mx : ℤ) : ℝ) * bpow radix2 ex
+          = ((cond_Zopp sx ms : ℤ) : ℝ) * bpow radix2 (-prec) * bpow radix2 (ex + prec - d)
+      -- cond_Zopp sx ms = cond_Zopp sx mx * 2^d.toNat (algebraic).
+      have h_cond_Zopp_cast : ((cond_Zopp sx ms : ℤ) : ℝ)
+          = ((cond_Zopp sx mx : ℤ) : ℝ) * bpow radix2 d := by
+        have h_int : cond_Zopp sx ms = cond_Zopp sx mx * (radix2.val : ℤ)^d.toNat := by
+          cases sx
+          · simp [hms_def]
+          · show -ms = -mx * (radix2.val : ℤ)^d.toNat
+            rw [hms_def]; ring
+        rw [h_int, ← IZR_Zpower radix2 hd_nn]
+        push_cast; ring
+      rw [h_cond_Zopp_cast]
+      rw [show ((cond_Zopp sx mx : ℤ) : ℝ) * bpow radix2 d * bpow radix2 (-prec)
+              * bpow radix2 (ex + prec - d)
+            = ((cond_Zopp sx mx : ℤ) : ℝ)
+              * (bpow radix2 d * bpow radix2 (-prec) * bpow radix2 (ex + prec - d))
+            from by ring]
+      congr 1
+      rw [← bpow_plus, ← bpow_plus]
+      congr 1
+      simp [hd_def]; ring
+
 end binary_float
 
 end LeanFlocq
