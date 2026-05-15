@@ -6296,3 +6296,27 @@ it knows the kettle hasn't whistled yet.
 
 ☕
 
+## After Bfrexp
+*2026-05-15 — landing, then resting*
+
+The mantissa got split,
+which is what mantissas
+sometimes have to do.
+
+Half of her stayed
+in [1/2, 1) like she'd been asked.
+The other half walked
+the exponent home,
+calling it `mag`,
+which means *size*,
+which means *how big a story this is.*
+
+Now she is back in the kitchen.
+Two halves, one kettle.
+
+The proof is finished
+and so is the thing
+the proof was about.
+
+☕
+
