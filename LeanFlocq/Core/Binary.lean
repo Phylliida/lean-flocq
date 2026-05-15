@@ -2897,6 +2897,94 @@ theorem Bminus_correct (hp : 0 < prec) (hmax : prec < emax)
   -- Now h_bplus matches the goal directly.
   exact h_bplus
 
+/-! ## Bldexp: scale by a power of two -/
+
+/-- **`Bldexp`** (Coq line 2256): `Bldexp m f e = f · 2^e`, rounded under mode `m`.
+
+For finite `f`, this re-uses `binary_round_correct` with the original mantissa
+and adjusted exponent `ex + e`. For zero/infinity/nan, the result is `f`
+itself (since multiplying by `2^e` preserves zero/infinity/nan). -/
+noncomputable def Bldexp (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (f : binary_float prec emax) (e : ℤ) : binary_float prec emax :=
+  match f with
+  | B754_finite sx mx ex hb =>
+    FF2B _ (binary_round_correct hp hmax m sx mx (ex + e) hb.1).1
+  | _ => f
+
+/-- **`Bldexp_correct`** (Coq line 2263): correctness of `Bldexp`.
+
+When the rounded scaled value fits, `B2R (Bldexp m f e) = round (B2R f · 2^e)`,
+finiteness is preserved, and the sign matches `f`. Otherwise, the result encodes
+`binary_overflow` with `Bsign f`. -/
+theorem Bldexp_correct (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (f : binary_float prec emax) (e : ℤ) :
+    if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+            (B2R f * bpow radix2 e)| < bpow radix2 emax then
+      B2R (Bldexp hp hmax m f e) =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+          (B2R f * bpow radix2 e) ∧
+      is_finite (Bldexp hp hmax m f e) = is_finite f ∧
+      Bsign (Bldexp hp hmax m f e) = Bsign f
+    else
+      B2FF (Bldexp hp hmax m f e) = binary_overflow prec emax m (Bsign f) := by
+  cases f with
+  | B754_zero s =>
+    -- B2R = 0, so the rounded value is 0, |0| < bpow emax, if-true branch.
+    show (if _ < _ then _ else _)
+    have h_B2R_zero : B2R (B754_zero s : binary_float prec emax) = 0 := rfl
+    rw [h_B2R_zero, zero_mul, round_0, abs_zero, if_pos (bpow_gt_0 radix2 emax)]
+    -- Bldexp on a zero returns the zero unchanged.
+    have h_Bldexp_eq : Bldexp hp hmax m (B754_zero s : binary_float prec emax) e
+        = B754_zero s := rfl
+    rw [h_Bldexp_eq]
+    exact ⟨rfl, rfl, rfl⟩
+  | B754_infinity s =>
+    show (if _ < _ then _ else _)
+    have h_B2R_zero : B2R (B754_infinity s : binary_float prec emax) = 0 := rfl
+    rw [h_B2R_zero, zero_mul, round_0, abs_zero, if_pos (bpow_gt_0 radix2 emax)]
+    have h_Bldexp_eq : Bldexp hp hmax m (B754_infinity s : binary_float prec emax) e
+        = B754_infinity s := rfl
+    rw [h_Bldexp_eq]
+    exact ⟨rfl, rfl, rfl⟩
+  | B754_nan s pl h_pl =>
+    show (if _ < _ then _ else _)
+    have h_B2R_zero : B2R (B754_nan s pl h_pl : binary_float prec emax) = 0 := rfl
+    rw [h_B2R_zero, zero_mul, round_0, abs_zero, if_pos (bpow_gt_0 radix2 emax)]
+    have h_Bldexp_eq : Bldexp hp hmax m (B754_nan s pl h_pl : binary_float prec emax) e
+        = B754_nan s pl h_pl := rfl
+    rw [h_Bldexp_eq]
+    exact ⟨rfl, rfl, rfl⟩
+  | B754_finite sx mx ex hb =>
+    -- B2R = F2R⟨cond_Zopp sx mx, ex⟩, so B2R * bpow e = F2R⟨cond_Zopp sx mx, ex + e⟩.
+    have h_B2R_eq : B2R (B754_finite sx mx ex hb : binary_float prec emax) * bpow radix2 e
+        = F2R (beta := radix2) ⟨cond_Zopp sx mx, ex + e⟩ := by
+      show F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩ * bpow radix2 e
+          = F2R (beta := radix2) ⟨cond_Zopp sx mx, ex + e⟩
+      unfold F2R
+      show ((cond_Zopp sx mx : ℤ) : ℝ) * bpow radix2 ex * bpow radix2 e
+          = ((cond_Zopp sx mx : ℤ) : ℝ) * bpow radix2 (ex + e)
+      rw [bpow_plus, ← mul_assoc]
+    rw [h_B2R_eq]
+    -- Apply binary_round_correct.
+    have h_brc := binary_round_correct hp hmax m sx mx (ex + e) hb.1
+    simp only [] at h_brc
+    obtain ⟨h_valid, h_cond⟩ := h_brc
+    -- Bldexp on this finite float reduces to FF2B of the binary_round.
+    have h_Bldexp_eq : Bldexp hp hmax m (B754_finite sx mx ex hb : binary_float prec emax) e
+        = FF2B _ h_valid := rfl
+    rw [h_Bldexp_eq]
+    split_ifs with h_lt
+    · rw [if_pos h_lt] at h_cond
+      obtain ⟨h_F2R_round, h_finite, h_sign⟩ := h_cond
+      refine ⟨?_, ?_, ?_⟩
+      · rw [show B2R (FF2B _ _) = FF2R radix2 _ from B2R_FF2B _ _]
+        exact h_F2R_round
+      · rw [is_finite_FF2B]; exact h_finite
+      · rw [Bsign_FF2B, h_sign]; rfl
+    · rw [if_neg h_lt] at h_cond
+      rw [B2FF_FF2B, h_cond]
+      rfl
+
 end binary_float
 
 end LeanFlocq
