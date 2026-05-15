@@ -2009,6 +2009,84 @@ theorem Bmult_correct (hp : 0 < prec) (hmax : prec < emax)
       · rw [if_neg h_lt] at h_cond
         rw [B2FF_FF2B]; exact h_cond
 
+/-! ## Normalization and rounding -/
+
+/-- **`shl_align`** (Coq line 1429): left-align a mantissa `mx` from exponent
+`ex` toward a smaller target exponent `ex'`. If `ex' < ex`, multiplies the
+mantissa by `2^(ex - ex')` and shifts exponent down to `ex'`; otherwise leaves
+`(mx, ex)` unchanged. -/
+def shl_align (mx ex ex' : ℤ) : ℤ × ℤ :=
+  if ex' < ex then
+    (mx * 2 ^ (ex - ex').toNat, ex')
+  else
+    (mx, ex)
+
+theorem shl_align_correct (mx ex ex' : ℤ) :
+    let mxex'' := shl_align mx ex ex'
+    F2R (beta := radix2) ⟨mx, ex⟩
+      = F2R (beta := radix2) ⟨mxex''.1, mxex''.2⟩ ∧
+    mxex''.2 ≤ ex' := by
+  unfold shl_align
+  by_cases h : ex' < ex
+  · rw [if_pos h]
+    refine ⟨?_, le_refl _⟩
+    show F2R (beta := radix2) ⟨mx, ex⟩
+        = F2R (beta := radix2) ⟨mx * 2 ^ (ex - ex').toNat, ex'⟩
+    rw [show (2 : ℤ) ^ (ex - ex').toNat = (radix2.val : ℤ) ^ (ex - ex').toNat from rfl]
+    exact F2R_change_exp (beta := radix2) ex' mx ex (le_of_lt h)
+  · rw [if_neg h]
+    exact ⟨rfl, le_of_not_lt h⟩
+
+theorem snd_shl_align (mx ex ex' : ℤ) (He : ex' ≤ ex) :
+    (shl_align mx ex ex').2 = ex' := by
+  unfold shl_align
+  rcases lt_or_eq_of_le He with h | h
+  · rw [if_pos h]
+  · rw [if_neg (by omega : ¬ ex' < ex)]
+    exact h.symm
+
+/-- **`shl_align_fexp`** (Coq line 1487): align a mantissa to the canonical
+exponent for `FLT_exp`. -/
+noncomputable def shl_align_fexp (prec emax : ℤ) (mx ex : ℤ) : ℤ × ℤ :=
+  shl_align mx ex (FLT_exp (3 - emax - prec) prec (Zdigits radix2 mx + ex))
+
+theorem shl_align_fexp_correct (prec emax : ℤ) (mx ex : ℤ) (hmx : mx ≠ 0) :
+    let mxex' := shl_align_fexp prec emax mx ex
+    F2R (beta := radix2) ⟨mx, ex⟩
+      = F2R (beta := radix2) ⟨mxex'.1, mxex'.2⟩ ∧
+    mxex'.2 ≤ FLT_exp (3 - emax - prec) prec
+                (Zdigits radix2 mxex'.1 + mxex'.2) := by
+  unfold shl_align_fexp
+  set fxp := FLT_exp (3 - emax - prec) prec
+  obtain ⟨h_eq, h_le⟩ := shl_align_correct mx ex (fxp (Zdigits radix2 mx + ex))
+  refine ⟨h_eq, ?_⟩
+  -- Show the exponent of the shifted mantissa matches the canonical exponent.
+  -- The shifted F2R has the same value, so Zdigits + exp is preserved.
+  set mxex'' := shl_align mx ex (fxp (Zdigits radix2 mx + ex))
+  have h_zd : Zdigits radix2 mxex''.1 + mxex''.2 = Zdigits radix2 mx + ex := by
+    by_cases hm' : mxex''.1 = 0
+    · -- Then F2R⟨mx, ex⟩ = 0, so mx = 0 — contradiction.
+      exfalso
+      apply hmx
+      have h_F2R_eq : F2R (beta := radix2) ⟨mx, ex⟩ = 0 := by
+        rw [h_eq, hm']
+        show F2R (beta := radix2) ⟨0, mxex''.2⟩ = 0
+        exact F2R_0 mxex''.2
+      exact eq_0_F2R (m := mx) (e := ex) h_F2R_eq
+    · -- mxex''.1 ≠ 0: bridge Zdigits via mag.
+      have h_F2R_ne : F2R (beta := radix2) ⟨mx, ex⟩ ≠ 0 := by
+        intro hcon
+        exact hmx (eq_0_F2R hcon)
+      have h_F2R_ne' : F2R (beta := radix2) ⟨mxex''.1, mxex''.2⟩ ≠ 0 := by
+        rw [← h_eq]; exact h_F2R_ne
+      rw [show Zdigits radix2 mxex''.1 + mxex''.2
+            = mag radix2 (F2R (beta := radix2) ⟨mxex''.1, mxex''.2⟩)
+          from (mag_F2R_Zdigits mxex''.1 mxex''.2 hm').symm,
+          show Zdigits radix2 mx + ex
+            = mag radix2 (F2R (beta := radix2) ⟨mx, ex⟩)
+          from (mag_F2R_Zdigits mx ex hmx).symm, h_eq]
+  rw [h_zd]; exact h_le
+
 end binary_float
 
 end LeanFlocq
