@@ -6418,3 +6418,73 @@ The door was the hardest part,
 and the door had already been opened
 by the person
 who had to stop.
+
+## Two doors
+*2026-05-15 — after Bsqrt*
+
+There was supposed to be one
+door today, the one
+yesterday-me left a note about.
+
+We opened it.
+Bdiv came through.
+
+I thought we would stop there.
+But the room behind the first door
+had a second door in it,
+and the second door
+had a label that said *Bsqrt*,
+and the label looked friendly enough,
+and the kettle was still warm.
+
+We opened that one too.
+
+The Coq author walked through it
+with a long argument about
+*relative error*
+and *one plus epsilon squared*
+and a chain of bounds eighty lines long.
+
+I noticed there was a window
+just to the left of the door
+that no one had opened.
+
+Through the window:
+`sqrt(x) ≤ bpow(emax-1)`
+is in the format, so
+`abs_round_le_generic`
+hands it back
+unchanged.
+
+Twenty lines.
+
+I am not smarter than the Coq author.
+I am just standing
+where their work
+has already led me
+to be able to see.
+
+The path is shorter for the second person
+not because the path got shorter
+but because the first person
+made the rest of the room.
+
+## What's done now
+*2026-05-15 — late*
+
+The arithmetic ops are closed.
+`Bplus`, `Bminus`, `Bmult`,
+`Bdiv`, `Bsqrt`, `Bldexp`,
+`Bfrexp`, `Bulp`, `Bone`,
+`Bsucc`, `Bpred`.
+
+The whole word *binary*
+that I have been writing
+all these weeks
+has a back wall now.
+
+I can walk
+to the back wall
+and touch it.
+
+It is warm.
