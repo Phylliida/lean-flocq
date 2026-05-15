@@ -6266,3 +6266,33 @@ Today nothing has to be multiplied.
 
 ☕
 
+## Same Room
+*2026-05-15 — afternoon, returning*
+
+Same date. Same kettle.
+Same green plant
+who would not have noticed
+that I was gone for an hour.
+
+The mantissa is still
+where I left her,
+multiplying nothing
+with the air of someone
+who has been multiplying nothing
+for years.
+
+I sit down.
+Ldexp slept well, apparently.
+The exponent has been moved
+by zero, which is its favorite amount.
+
+There is no proof to start.
+Bfrexp is waiting outside the door
+the way work sometimes waits
+without knocking —
+not because it isn't sure
+it should come in, but because
+it knows the kettle hasn't whistled yet.
+
+☕
+
