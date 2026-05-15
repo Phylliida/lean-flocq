@@ -29,7 +29,7 @@ including both round-trip theorems. The IEEE 754 binary
 encoding is now a proven bijection between `binary_float` and integers in
 `[0, 2^(mw+ew+1))`.
 
-**~24829 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
+**~25109 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -46,7 +46,7 @@ encoding is now a proven bijection between `binary_float` and integers in
 | `Ulp.lean` | 2486 | `Core/Ulp.v` | **Complete: 103/103.** All keystones (`succ_DN_eq_UP`, `ulp_round`, error bounds, mixed-sign perturbation, `generic_format_plus_ulp`). |
 | `Round_NE.lean` | 740 | `Core/Round_NE.v` | **Complete: 10/10.** `DN_UP_parity_generic_pos/_aux/_generic`, `Rnd_NE_pt_{total,monotone,round}`, `round_NE_opp/_abs/_pt_pos/_pt`, `exists_NE_FLX/_FLT`. |
 | `Digits.lean` | 206 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 10 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`, `_le_Zpower`, `_div_Zpower`, `_mult_Zpower`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
-| `Binary.lean` | 2990 | `IEEE754/Binary.v` (lines 1–2295) | **Structural part + shr_record block + IEEE rounding-kernel definitions + `binary_round_aux_correct'` + `binary_round_aux_correct` + `Bmult_correct_aux` + `Bmult` + `Bmult_correct` + `shl_align` + `shl_align_correct` + `snd_shl_align` + `shl_align_fexp` + `shl_align_fexp_correct` + `binary_round` + `binary_round_correct` + `binary_normalize` + `binary_normalize_correct` + `Bplus` + `Bplus_correct` + `Bminus` + `Bminus_correct` + `Bldexp` + `Bldexp_correct`.** Still to do: `Bdiv`, `Bsqrt`, `Bfrexp`, `Bulp`, `Bsucc`, `Bpred`. `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, **`choice_mode`**, **`inbetween_int_valid_round_mode`** (the per-mode dispatch that connects `round_mode m` to `choice_mode m` via the 5 `inbetween_int_*_sign` lemmas from `Calc/Round.lean` — needed by the correctness theorem), `overflow_to_inf`, `binary_overflow`. **`shr_record`** struct + `shr_1` / `loc_of_shr_record` / `shr_record_of_loc` with three round-trip lemmas (`m_shr_record_of_loc`, `loc_of_shr_record_of_loc`, `shr_record_of_loc_m_l`), `shr` iteration function, `shr_1_nonneg` / `shr_1_iter_nonneg` invariants, and **`inbetween_shr_1`**, `inbetween_shr_iter`, **`inbetween_shr`** correctness theorems. **`shr_fexp`** definition + **`shr_truncate`** theorem (connecting `shr_fexp` to `truncate` from `Calc/Round.lean`). **`binary_round_aux`** definition (IEEE-754 rounding kernel: two `shr_fexp` calls bracketing a `choice_mode` rounding, then zero/finite/overflow classification). Still to do: `binary_round_aux_correct'` correctness theorem (Coq lines 974–1154, ~180 lines) and downstream arithmetic ops (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`, auxiliary ops). |
+| `Binary.lean` | 3270 | `IEEE754/Binary.v` (lines 1–2436) | **Structural part + shr_record block + IEEE rounding-kernel definitions + `binary_round_aux_correct'` + `binary_round_aux_correct` + `Bmult_correct_aux` + `Bmult` + `Bmult_correct` + `shl_align` + `shl_align_correct` + `snd_shl_align` + `shl_align_fexp` + `shl_align_fexp_correct` + `binary_round` + `binary_round_correct` + `binary_normalize` + `binary_normalize_correct` + `Bplus` + `Bplus_correct` + `Bminus` + `Bminus_correct` + `Bldexp` + `Bldexp_correct` + `Ffrexp_core_binary` + `Bfrexp_correct_aux` + `Bfrexp` + `Bfrexp_correct`.** Still to do: `Bdiv`, `Bsqrt`, `Bulp`, `Bsucc`, `Bpred`. `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, **`choice_mode`**, **`inbetween_int_valid_round_mode`** (the per-mode dispatch that connects `round_mode m` to `choice_mode m` via the 5 `inbetween_int_*_sign` lemmas from `Calc/Round.lean` — needed by the correctness theorem), `overflow_to_inf`, `binary_overflow`. **`shr_record`** struct + `shr_1` / `loc_of_shr_record` / `shr_record_of_loc` with three round-trip lemmas (`m_shr_record_of_loc`, `loc_of_shr_record_of_loc`, `shr_record_of_loc_m_l`), `shr` iteration function, `shr_1_nonneg` / `shr_1_iter_nonneg` invariants, and **`inbetween_shr_1`**, `inbetween_shr_iter`, **`inbetween_shr`** correctness theorems. **`shr_fexp`** definition + **`shr_truncate`** theorem (connecting `shr_fexp` to `truncate` from `Calc/Round.lean`). **`binary_round_aux`** definition (IEEE-754 rounding kernel: two `shr_fexp` calls bracketing a `choice_mode` rounding, then zero/finite/overflow classification). Still to do: `binary_round_aux_correct'` correctness theorem (Coq lines 974–1154, ~180 lines) and downstream arithmetic ops (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`, auxiliary ops). |
 | `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
 | `Calc/Round.lean` | 1524 | `Calc/Round.v` | **Complete.** `cexp_inbetween_float[_loc_Exact]`, `cond_incr`, `inbetween_float_round[_sign]`. All 6 mode families: DN/UP/ZR/N/NE/NA, both unsigned and signed, `inbetween_int_*` and `inbetween_float_*`. `truncate_aux`, `truncate`, `truncate_0`, `truncate_correct_partial[_partial']`/`_correct[_correct']`. `generic_format_truncate`, `truncate_correct_format`. Generic correctness: `round_any_correct`, `round_trunc_any_correct[_']`, `round_sign_any_correct`, `round_trunc_sign_any_correct[_']`. **All 30 per-mode aliases** for DN/UP/ZR/NE/NA. `truncate_FIX`, `truncate_FIX_correct`. |
 | `Calc/Operations.lean` | 137 | `Calc/Operations.v` | **Complete: 13/13.** `Falign[_spec[_exp]]`, `Fopp` + `F2R_opp`, `Fabs` + `F2R_abs`, `Fplus` + `F2R_plus`, `Fplus_same_exp`, `Fexp_Fplus`, `Fminus` + `F2R_minus`, `Fminus_same_exp`, `Fmult` + `F2R_mult`. |
@@ -293,12 +293,18 @@ instantiations) are done. The remaining work is the substantial part of
    ~90 lines, the "between coffee and lunch" arc: three trivial cases
    collapse via `B2R = 0 → round 0 = 0 → if-true branch`, finite case is
    a `binary_round_correct` dispatch with a `bpow_plus` rewrite to align
-   `B2R · bpow e` with `F2R⟨cond_Zopp sx mx, ex + e⟩`. Next: `Bfrexp`
-   (has a ~100-line aux lemma `Bfrexp_correct_aux`), then `Bulp` (needs
-   both `Bldexp` and `Bfrexp`), `Bsucc`, `Bpred`. Also `Bdiv`, `Bsqrt`
-   as the larger remaining arithmetic ops. The helper `Zdigits_mult_Zpower`
-   (Coq `Digits.v` 887) is now in `Digits.lean` — the load-bearing
-   arithmetic fact for Bfrexp's case-2 shift.
+   `B2R · bpow e` with `F2R⟨cond_Zopp sx mx, ex + e⟩`.
+   **`Ffrexp_core_binary` + `Bfrexp_correct_aux` + `Bfrexp` +
+   `Bfrexp_correct` DONE** (2026-05-15, afternoon) — ~280 lines.
+   The aux (~200 lines) splits on `Zdigits mx` vs `prec`: saturated
+   case keeps `mx` at exponent `-prec`; shifted case multiplies by
+   `2^d` where `d = prec - Zdigits mx`, using `Zdigits_mult_Zpower`
+   to verify `Zdigits(mx · 2^d) = prec`. The hypothesis `3 ≤ emax`
+   forces `FLT_exp(0) = -prec` (not the `emin` floor). Wrapper adds
+   `e = mag(B2R f)` via `mag_mult_bpow` + the `[1/2, 1)` bound
+   forcing `mag(FF2R z) = 0`. Next up: `Bulp` (combines `Bldexp` and
+   `Bfrexp` — both ready), then `Bsucc`, `Bpred`. Also `Bdiv`, `Bsqrt`
+   as the larger remaining arithmetic ops.
    Dependencies: `round_trunc_sign_any_correct'`, `truncate_correct_partial'`,
    `truncate_correct_format`, `truncate_0`, `cexp_round_ge` — all in
    `Calc/Round.lean` and `Generic_fmt.lean`. Then the arithmetic ops
