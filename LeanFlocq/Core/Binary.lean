@@ -1833,6 +1833,182 @@ noncomputable def Bmult (hp : 0 < prec) (hmax : prec < emax)
   | B754_finite sx mx ex Hx, B754_finite sy my ey Hy =>
     FF2B _ (Bmult_correct_aux hp hmax m sx mx ex Hx sy my ey Hy).1
 
+/-- A unified statement of the "degenerate (non-finite-finite) cases" of
+`Bmult_correct`: the if-true branch holds with `B2R(result) = 0`, the
+finiteness as the and of inputs, and the conditional sign. -/
+private theorem Bmult_correct_degenerate (hp : 0 < prec) (hmax : prec < emax)
+    (mult_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax)
+    (hxy_zero : B2R x * B2R y = 0)
+    (h_B2R : B2R (Bmult hp hmax mult_nan m x y) = 0)
+    (h_finite : is_finite (Bmult hp hmax mult_nan m x y) = (is_finite x && is_finite y))
+    (h_sign : is_nan (Bmult hp hmax mult_nan m x y) = false →
+        Bsign (Bmult hp hmax mult_nan m x y) = xor (Bsign x) (Bsign y)) :
+    if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+            (B2R x * B2R y)| < bpow radix2 emax then
+      B2R (Bmult hp hmax mult_nan m x y) =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) (B2R x * B2R y) ∧
+      is_finite (Bmult hp hmax mult_nan m x y) = (is_finite x && is_finite y) ∧
+      (is_nan (Bmult hp hmax mult_nan m x y) = false →
+        Bsign (Bmult hp hmax mult_nan m x y) = xor (Bsign x) (Bsign y))
+    else
+      B2FF (Bmult hp hmax mult_nan m x y) =
+        binary_overflow prec emax m (xor (Bsign x) (Bsign y)) := by
+  rw [hxy_zero, round_0, abs_zero, if_pos (bpow_gt_0 radix2 emax)]
+  exact ⟨h_B2R, h_finite, h_sign⟩
+
+/-- **`Bmult_correct`** (Coq line 1401): IEEE-754 multiplication correctness.
+
+When the rounded product fits, `B2R (Bmult x y) = round(B2R x * B2R y)`, the
+result is finite iff both inputs are finite, and the sign (when not NaN) is the
+xor of input signs. Otherwise, the result has `B2FF = binary_overflow`. -/
+theorem Bmult_correct (hp : 0 < prec) (hmax : prec < emax)
+    (mult_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax) :
+    if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+            (B2R x * B2R y)| < bpow radix2 emax then
+      B2R (Bmult hp hmax mult_nan m x y) =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+          (B2R x * B2R y) ∧
+      is_finite (Bmult hp hmax mult_nan m x y) = (is_finite x && is_finite y) ∧
+      (is_nan (Bmult hp hmax mult_nan m x y) = false →
+        Bsign (Bmult hp hmax mult_nan m x y) = xor (Bsign x) (Bsign y))
+    else
+      B2FF (Bmult hp hmax mult_nan m x y) =
+        binary_overflow prec emax m (xor (Bsign x) (Bsign y)) := by
+  -- Degenerate-case helper: given that the result is build_nan, the four
+  -- obligations follow from B2R_build_nan, is_finite_build_nan, is_nan_build_nan.
+  -- We'll instantiate `Bmult_correct_degenerate` per case.
+  cases x with
+  | B754_nan sx plx hx =>
+    cases y with
+    | B754_nan sy ply hy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+    | B754_zero sy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+    | B754_infinity sy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+    | B754_finite sy my ey hy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+  | B754_infinity sx =>
+    cases y with
+    | B754_nan sy ply hy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+    | B754_zero sy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+    | B754_infinity sy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · rfl
+      · rfl
+      · intro _; rfl
+    | B754_finite sy my ey hy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · rfl
+      · rfl
+      · intro _; rfl
+  | B754_zero sx =>
+    cases y with
+    | B754_nan sy ply hy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+    | B754_zero sy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · rfl
+      · rfl
+      · intro _; rfl
+    | B754_infinity sy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+    | B754_finite sy my ey hy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · rfl
+      · rfl
+      · intro _; rfl
+  | B754_finite sx mx ex hx =>
+    cases y with
+    | B754_nan sy ply hy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · show B2R (build_nan _) = 0; rw [B2R_build_nan]
+      · show is_finite (build_nan _) = _; rw [is_finite_build_nan]; rfl
+      · intro h; exfalso; revert h
+        show is_nan (build_nan _) = false → _
+        rw [is_nan_build_nan]; intro hcon; exact Bool.noConfusion hcon
+    | B754_zero sy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · rfl
+      · rfl
+      · intro _; rfl
+    | B754_infinity sy =>
+      apply Bmult_correct_degenerate hp hmax mult_nan m _ _ (by simp [B2R])
+      · rfl
+      · rfl
+      · intro _; rfl
+    | B754_finite sy my ey hy =>
+      -- The non-trivial case: apply Bmult_correct_aux.
+      have h_aux := Bmult_correct_aux hp hmax m sx mx ex hx sy my ey hy
+      -- Unwrap the `let`-bound `z` to its actual form.
+      simp only [] at h_aux
+      obtain ⟨h_valid, h_cond⟩ := h_aux
+      have hBx : B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx)
+                = F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩ := rfl
+      have hBy : B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy)
+                = F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩ := rfl
+      rw [hBx, hBy]
+      -- Bmult result for (finite, finite) unfolds to FF2B.
+      have h_Bmult_eq : Bmult hp hmax mult_nan m
+            (B754_finite sx mx ex hx) (B754_finite sy my ey hy)
+          = FF2B _ (Bmult_correct_aux hp hmax m sx mx ex hx sy my ey hy).1 := rfl
+      rw [h_Bmult_eq]
+      split_ifs with h_lt
+      · rw [if_pos h_lt] at h_cond
+        obtain ⟨h_F2R, h_finite, h_sign⟩ := h_cond
+        refine ⟨?_, ?_, ?_⟩
+        · rw [B2R_FF2B]; exact h_F2R
+        · rw [is_finite_FF2B, h_finite]; rfl
+        · intro _; rw [Bsign_FF2B]; exact h_sign
+      · rw [if_neg h_lt] at h_cond
+        rw [B2FF_FF2B]; exact h_cond
+
 end binary_float
 
 end LeanFlocq
