@@ -207,4 +207,18 @@ theorem Zdigits_div_Zpower (beta : radix) {m e : ℤ}
       (IZR_Zpower beta (by omega)).symm
     rw [h_eq]; exact_mod_cast h_q_lt
 
+/-- `Zdigits (m · β^e) = Zdigits m + e` for `m ≠ 0` and `0 ≤ e`.
+Coq: `Zdigits_mult_Zpower`. -/
+theorem Zdigits_mult_Zpower (beta : radix) {m e : ℤ} (hm : m ≠ 0) (he : 0 ≤ e) :
+    Zdigits beta (m * (beta.val : ℤ) ^ e.toNat) = Zdigits beta m + e := by
+  unfold Zdigits
+  -- ((m * β^e.toNat : ℤ) : ℝ) = (m : ℝ) * bpow β e
+  have h_cast : ((m * (beta.val : ℤ) ^ e.toNat : ℤ) : ℝ) = (m : ℝ) * bpow beta e := by
+    push_cast
+    rw [← IZR_Zpower beta he]
+    push_cast
+    ring
+  rw [h_cast]
+  exact mag_mult_bpow beta (by exact_mod_cast hm : (m : ℝ) ≠ 0) e
+
 end LeanFlocq
