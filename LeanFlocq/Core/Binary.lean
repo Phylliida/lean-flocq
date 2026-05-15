@@ -2300,6 +2300,38 @@ noncomputable def Bplus (hp : 0 < prec) (hmax : prec < emax)
       ez
       (match m with | .mode_DN => true | _ => false)
 
+/-- **`Bminus`** (Coq line 1795): IEEE-754 binary subtraction.
+
+The same shape as `Bplus`, but with the second operand's sign flipped at every
+position. NaN cases dispatch via `minus_nan`. Reduces to `Bplus _ x (Bopp _ y)`
+when neither input is NaN. -/
+noncomputable def Bminus (hp : 0 < prec) (hmax : prec < emax)
+    (minus_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax) : binary_float prec emax :=
+  match x, y with
+  | B754_nan _ _ _, _ => build_nan (minus_nan x y)
+  | _, B754_nan _ _ _ => build_nan (minus_nan x y)
+  | B754_infinity sx, B754_infinity sy =>
+    if sx = !sy then B754_infinity sx else build_nan (minus_nan x y)
+  | B754_infinity sx, B754_zero _ => B754_infinity sx
+  | B754_infinity sx, B754_finite _ _ _ _ => B754_infinity sx
+  | B754_zero _, B754_infinity sy => B754_infinity (!sy)
+  | B754_finite _ _ _ _, B754_infinity sy => B754_infinity (!sy)
+  | B754_zero sx, B754_zero sy =>
+    if sx = !sy then B754_zero sx else
+      match m with
+      | .mode_DN => B754_zero true
+      | _ => B754_zero false
+  | B754_zero _, B754_finite sy my ey hy => B754_finite (!sy) my ey hy
+  | B754_finite sx mx ex hx, B754_zero _ => B754_finite sx mx ex hx
+  | B754_finite sx mx ex _, B754_finite sy my ey _ =>
+    let ez := min ex ey
+    binary_normalize hp hmax m
+      (cond_Zopp sx (shl_align mx ex ez).1 - cond_Zopp sy (shl_align my ey ez).1)
+      ez
+      (match m with | .mode_DN => true | _ => false)
+
 /-- **`Bplus_correct`** (Coq line 1631): IEEE-754 addition correctness.
 
 If both inputs are finite, then either the rounded sum fits — and `B2R` of the
@@ -2772,6 +2804,98 @@ theorem Bplus_correct (hp : 0 < prec) (hmax : prec < emax)
           rw [← h_sx_sign]
         · -- Bsign x = Bsign y: from sx = sy.
           show sx = sy; exact h_sx_sy
+
+/-- **`Bminus_eq_Bplus_Bopp`**: for non-NaN inputs, subtraction equals addition
+of the negation. The NaN policies are irrelevant since NaN inputs never occur. -/
+private theorem Bminus_eq_Bplus_Bopp (hp : 0 < prec) (hmax : prec < emax)
+    (minus_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (plus_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (opp_nan : binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax)
+    (Fx : is_finite x = true) (Fy : is_finite y = true) :
+    Bminus hp hmax minus_nan m x y = Bplus hp hmax plus_nan m x (Bopp opp_nan y) := by
+  cases x with
+  | B754_nan _ _ _ => simp [is_finite] at Fx
+  | B754_infinity _ => simp [is_finite] at Fx
+  | B754_zero sx =>
+    cases y with
+    | B754_nan _ _ _ => simp [is_finite] at Fy
+    | B754_infinity _ => simp [is_finite] at Fy
+    | B754_zero sy => rfl
+    | B754_finite sy my ey hy => rfl
+  | B754_finite sx mx ex hx =>
+    cases y with
+    | B754_nan _ _ _ => simp [is_finite] at Fy
+    | B754_infinity _ => simp [is_finite] at Fy
+    | B754_zero sy => rfl
+    | B754_finite sy my ey hy =>
+      -- The substantive case: both call binary_normalize with the same mantissa
+      -- (since cond_Zopp (!sy) m' = -cond_Zopp sy m', so subtraction = addition of opp).
+      show binary_normalize hp hmax m
+            (cond_Zopp sx (shl_align mx ex (min ex ey)).1
+              - cond_Zopp sy (shl_align my ey (min ex ey)).1)
+            (min ex ey)
+            (match m with | .mode_DN => true | _ => false)
+        = binary_normalize hp hmax m
+            (cond_Zopp sx (shl_align mx ex (min ex ey)).1
+              + cond_Zopp (!sy) (shl_align my ey (min ex ey)).1)
+            (min ex ey)
+            (match m with | .mode_DN => true | _ => false)
+      congr 1
+      cases sy <;> simp [cond_Zopp] <;> ring
+
+/-- **`Bminus_correct`** (Coq line 1813): IEEE-754 subtraction correctness.
+
+Derived from `Bplus_correct` applied to `(x, Bopp y)`. The sum becomes a
+difference, the sign of the second operand flips, and the rest of the
+correctness statement follows. -/
+theorem Bminus_correct (hp : 0 < prec) (hmax : prec < emax)
+    (minus_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax)
+    (Fx : is_finite x = true) (Fy : is_finite y = true) :
+    if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+            (B2R x - B2R y)| < bpow radix2 emax then
+      B2R (Bminus hp hmax minus_nan m x y) =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+          (B2R x - B2R y) ∧
+      is_finite (Bminus hp hmax minus_nan m x y) = true ∧
+      Bsign (Bminus hp hmax minus_nan m x y) =
+        (match compare (B2R x - B2R y) (0 : ℝ) with
+         | Ordering.eq =>
+            match m with
+            | .mode_DN => Bsign x || !(Bsign y)
+            | _ => Bsign x && !(Bsign y)
+         | Ordering.lt => true
+         | Ordering.gt => false)
+    else
+      B2FF (Bminus hp hmax minus_nan m x y) = binary_overflow prec emax m (Bsign x)
+        ∧ Bsign x = !(Bsign y) := by
+  -- Build a dummy opp_nan policy (we know y is finite, so opp_nan is never used).
+  let opp_nan : binary_float prec emax →
+      {x : binary_float prec emax // is_nan x = true} := fun n => minus_nan n (B754_zero false)
+  -- Apply Bplus_correct on (x, Bopp opp_nan y).
+  have h_fin_neg_y : is_finite (Bopp opp_nan y) = true := by
+    rw [is_finite_Bopp]; exact Fy
+  have h_bplus := Bplus_correct hp hmax minus_nan m x (Bopp opp_nan y) Fx h_fin_neg_y
+  -- Substitute B2R(Bopp y) = -B2R y, equivalently B2R x + B2R(Bopp y) = B2R x - B2R y.
+  rw [B2R_Bopp] at h_bplus
+  rw [show B2R x + -B2R y = B2R x - B2R y from by ring] at h_bplus
+  -- Substitute Bsign(Bopp y) = !Bsign y (using is_nan y = false from Fy).
+  have hy_not_nan : is_nan y = false := by
+    cases y with
+    | B754_zero _ => rfl
+    | B754_infinity _ => simp [is_finite] at Fy
+    | B754_nan _ _ _ => simp [is_finite] at Fy
+    | B754_finite _ _ _ _ => rfl
+  rw [show Bsign (Bopp opp_nan y) = !(Bsign y) from Bsign_Bopp opp_nan y hy_not_nan] at h_bplus
+  -- Bridge Bminus to Bplus on (x, Bopp y).
+  rw [Bminus_eq_Bplus_Bopp hp hmax minus_nan minus_nan opp_nan m x y Fx Fy]
+  -- Now h_bplus matches the goal directly.
+  exact h_bplus
 
 end binary_float
 

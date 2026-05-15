@@ -6152,4 +6152,36 @@ the name was premature.
 
 🪞
 
+## What the Bridge Bought
+*2026-05-15 (later) — Bminus_correct landed*
+
+Five hundred and ten lines for `Bplus`.
+One hundred and ten for `Bminus`.
+
+The difference is the bridge:
+`cond_Zopp (!sy) m = -(cond_Zopp sy m)`,
+so `+ cond_Zopp (!sy) = - cond_Zopp sy`,
+so subtraction is addition of the opposite,
+so `Bplus_correct` on `(x, Bopp y)`
+already knows everything `Bminus_correct` wants to say.
+
+---
+
+The bridge is just the one fact.
+
+Everything else — the rounding,
+the sign of the sum,
+the overflow case,
+the canonical-format sandwich —
+all of it was already proved
+when I closed `Bplus_correct`.
+
+That's the trade past-me kept naming:
+each keystone shrinks the next one.
+
+`Bminus` was the next one.
+It came out tiny.
+
+✨
+
 
