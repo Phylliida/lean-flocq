@@ -4301,6 +4301,128 @@ theorem Bdiv_correct_aux (hp : 0 < prec) (hmax : prec < emax)
   rw [h_mze]
   exact h_main
 
+/-- **`Bdiv`** (Coq line 1951): IEEE-754 division of two binary floats.
+NaN propagates; ∞/∞ and 0/0 are NaN. Two finite inputs go through
+`Bdiv_correct_aux`. Note that the result type is `binary_float`, so the
+"divide by zero" case (finite/0) is encoded as `±∞`. -/
+noncomputable def Bdiv (hp : 0 < prec) (hmax : prec < emax)
+    (div_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax) : binary_float prec emax :=
+  match x, y with
+  | B754_nan _ _ _, _ => build_nan (div_nan x y)
+  | _, B754_nan _ _ _ => build_nan (div_nan x y)
+  | B754_infinity _, B754_infinity _ => build_nan (div_nan x y)
+  | B754_infinity sx, B754_finite sy _ _ _ => B754_infinity (xor sx sy)
+  | B754_finite sx _ _ _, B754_infinity sy => B754_zero (xor sx sy)
+  | B754_infinity sx, B754_zero sy => B754_infinity (xor sx sy)
+  | B754_zero sx, B754_infinity sy => B754_zero (xor sx sy)
+  | B754_finite sx _ _ _, B754_zero sy => B754_infinity (xor sx sy)
+  | B754_zero sx, B754_finite sy _ _ _ => B754_zero (xor sx sy)
+  | B754_zero _, B754_zero _ => build_nan (div_nan x y)
+  | B754_finite sx mx ex Hx, B754_finite sy my ey Hy =>
+    FF2B _ (Bdiv_correct_aux hp hmax m sx mx ex Hx sy my ey Hy).1
+
+/-- **`Bdiv_correct`** (Coq lines 1966–1995): the user-facing correctness
+theorem for `Bdiv`. Given a nonzero divisor `y`, the result either:
+
+* equals `round (x / y)` when that fits in `[0, β^emax)`, is finite iff `x`
+  is, and has sign `xor (Bsign x) (Bsign y)` (when not NaN);
+* otherwise has `B2FF = binary_overflow`.
+
+The hypothesis `B2R y ≠ 0` forces `y` to be `B754_finite`. The non-finite
+cases of `x` (`zero`, `infinity`, `nan`) all give `B2R x = 0`, hence
+`B2R x / B2R y = 0`, `round 0 = 0`, and the if-true branch trivially holds. -/
+theorem Bdiv_correct (hp : 0 < prec) (hmax : prec < emax)
+    (div_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax)
+    (hy : B2R y ≠ 0) :
+    if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+            (B2R x / B2R y)| < bpow radix2 emax then
+      B2R (Bdiv hp hmax div_nan m x y) =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+          (B2R x / B2R y) ∧
+      is_finite (Bdiv hp hmax div_nan m x y) = is_finite x ∧
+      (is_nan (Bdiv hp hmax div_nan m x y) = false →
+        Bsign (Bdiv hp hmax div_nan m x y) = xor (Bsign x) (Bsign y))
+    else
+      B2FF (Bdiv hp hmax div_nan m x y) =
+        binary_overflow prec emax m (xor (Bsign x) (Bsign y)) := by
+  -- y must be finite (else B2R y = 0, contradicting hy).
+  cases y with
+  | B754_zero _ => exfalso; exact hy rfl
+  | B754_infinity _ => exfalso; exact hy rfl
+  | B754_nan _ _ _ => exfalso; exact hy rfl
+  | B754_finite sy my ey Hy =>
+    -- For x non-finite, B2R x = 0, so the quotient is 0, round 0 = 0,
+    -- and the condition holds (|0| < bpow emax).
+    cases x with
+    | B754_nan sx plx hplx =>
+      -- Bdiv reduces to `build_nan (div_nan _ _)`.
+      have h_Bdiv_eq : Bdiv hp hmax div_nan m (B754_nan sx plx hplx)
+                        (B754_finite sy my ey Hy)
+                      = build_nan (div_nan (B754_nan sx plx hplx)
+                                           (B754_finite sy my ey Hy)) := rfl
+      have h_B2R_x : B2R (B754_nan (prec := prec) (emax := emax) sx plx hplx)
+                    = (0 : ℝ) := rfl
+      rw [h_B2R_x, zero_div, round_0, abs_zero,
+          if_pos (bpow_gt_0 radix2 emax)]
+      rw [h_Bdiv_eq]
+      refine ⟨B2R_build_nan _, by rw [is_finite_build_nan]; rfl, ?_⟩
+      intro hcon
+      rw [is_nan_build_nan] at hcon
+      exact Bool.noConfusion hcon
+    | B754_infinity sx =>
+      -- Bdiv reduces to `B754_infinity (xor sx sy)`.
+      have h_Bdiv_eq : Bdiv hp hmax div_nan m (B754_infinity sx)
+                        (B754_finite sy my ey Hy)
+                      = B754_infinity (xor sx sy) := rfl
+      have h_B2R_x : B2R (B754_infinity (prec := prec) (emax := emax) sx)
+                    = (0 : ℝ) := rfl
+      rw [h_B2R_x, zero_div, round_0, abs_zero,
+          if_pos (bpow_gt_0 radix2 emax)]
+      rw [h_Bdiv_eq]
+      refine ⟨rfl, rfl, ?_⟩
+      intro _; rfl
+    | B754_zero sx =>
+      -- Bdiv reduces to `B754_zero (xor sx sy)`.
+      have h_Bdiv_eq : Bdiv hp hmax div_nan m (B754_zero sx)
+                        (B754_finite sy my ey Hy)
+                      = B754_zero (xor sx sy) := rfl
+      have h_B2R_x : B2R (B754_zero (prec := prec) (emax := emax) sx)
+                    = (0 : ℝ) := rfl
+      rw [h_B2R_x, zero_div, round_0, abs_zero,
+          if_pos (bpow_gt_0 radix2 emax)]
+      rw [h_Bdiv_eq]
+      refine ⟨rfl, rfl, ?_⟩
+      intro _; rfl
+    | B754_finite sx mx ex Hx =>
+      -- The main case: apply Bdiv_correct_aux.
+      have h_aux := Bdiv_correct_aux hp hmax m sx mx ex Hx sy my ey Hy
+      have h_Bdiv_eq : Bdiv hp hmax div_nan m (B754_finite sx mx ex Hx)
+                        (B754_finite sy my ey Hy)
+                      = FF2B _ h_aux.1 := rfl
+      rw [h_Bdiv_eq]
+      obtain ⟨h_valid, h_cond⟩ := h_aux
+      have h_B2R_x : B2R (B754_finite (prec := prec) (emax := emax) sx mx ex Hx)
+                    = F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩ := rfl
+      have h_B2R_y : B2R (B754_finite (prec := prec) (emax := emax) sy my ey Hy)
+                    = F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩ := rfl
+      rw [h_B2R_x, h_B2R_y]
+      by_cases h_lt : |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+              (F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩
+                / F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩)|
+            < bpow radix2 emax
+      · rw [if_pos h_lt] at h_cond ⊢
+        obtain ⟨h_round_eq, h_finite, h_sign⟩ := h_cond
+        refine ⟨?_, ?_, ?_⟩
+        · rw [B2R_FF2B]; exact h_round_eq
+        · rw [is_finite_FF2B]; exact h_finite
+        · intro _; rw [Bsign_FF2B]; exact h_sign
+      · rw [if_neg h_lt] at h_cond ⊢
+        rw [B2FF_FF2B]; exact h_cond
+
 end binary_float
 
 end LeanFlocq
