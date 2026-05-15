@@ -4200,6 +4200,107 @@ noncomputable def Fdiv_core_binary (prec emax : ℤ) (m1 e1 m2 e2 : ℤ) :
   let r := Fdiv_core radix2 m1 e1 m2 e2 e'
   (r.1, e', r.2)
 
+/-- **`Bdiv_correct_aux`** (Coq lines 1858–1949): the rounding-kernel
+correctness statement for the quotient of two finite bounded floats.
+Reduces to `binary_round_aux_correct'` applied to the `Fdiv_core_binary`
+output. The key precondition `e' ≤ cexp(x/y)` reduces via `e' ≤ FLT_exp(D)`
+(from `min_le_left`) plus `FLT_exp_monotone` plus `mag_div_F2R`'s lower
+bound `D ≤ mag(x/y)`. -/
+theorem Bdiv_correct_aux (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (sx : Bool) (mx ex : ℤ) (Hx : bounded prec emax mx ex)
+    (sy : Bool) (my ey : ℤ) (Hy : bounded prec emax my ey) :
+    let x := F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩
+    let y := F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩
+    let mze := Fdiv_core_binary prec emax mx ex my ey
+    let z := binary_round_aux prec emax m (xor sx sy) mze.1 mze.2.1 mze.2.2
+    valid_binary prec emax z ∧
+    (if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) (x / y)|
+        < bpow radix2 emax then
+      FF2R radix2 z =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) (x / y) ∧
+      is_finite_FF z = true ∧
+      sign_FF z = xor sx sy
+    else
+      z = binary_overflow prec emax m (xor sx sy)) := by
+  intro x y mze z
+  -- Positivity from bounded.
+  have h_mx_pos : 0 < mx := Hx.1
+  have h_my_pos : 0 < my := Hy.1
+  have h_F2R_mx_pos : 0 < F2R (beta := radix2) ⟨mx, ex⟩ := F2R_gt_0 ⟨mx, ex⟩ h_mx_pos
+  have h_F2R_my_pos : 0 < F2R (beta := radix2) ⟨my, ey⟩ := F2R_gt_0 ⟨my, ey⟩ h_my_pos
+  -- Sign-stripped equalities.
+  have hx_eq : x = cond_Ropp sx (F2R (beta := radix2) ⟨mx, ex⟩) :=
+    F2R_cond_Zopp sx mx ex
+  have hy_eq : y = cond_Ropp sy (F2R (beta := radix2) ⟨my, ey⟩) :=
+    F2R_cond_Zopp sy my ey
+  -- x ≠ 0, y ≠ 0, x/y ≠ 0.
+  have hx_ne : x ≠ 0 := by
+    rw [hx_eq]
+    cases sx <;> simp [cond_Ropp, ne_of_gt h_F2R_mx_pos]
+  have hy_ne : y ≠ 0 := by
+    rw [hy_eq]
+    cases sy <;> simp [cond_Ropp, ne_of_gt h_F2R_my_pos]
+  have hxy_ne : x / y ≠ 0 := div_ne_zero hx_ne hy_ne
+  -- |x| = F2R⟨mx, ex⟩, |y| = F2R⟨my, ey⟩.
+  have h_abs_x : |x| = F2R (beta := radix2) ⟨mx, ex⟩ := by
+    rw [hx_eq]; cases sx <;> simp [cond_Ropp, abs_of_pos h_F2R_mx_pos]
+  have h_abs_y : |y| = F2R (beta := radix2) ⟨my, ey⟩ := by
+    rw [hy_eq]; cases sy <;> simp [cond_Ropp, abs_of_pos h_F2R_my_pos]
+  -- |x/y| = F2R⟨mx, ex⟩ / F2R⟨my, ey⟩.
+  have h_abs_xy : |x / y| =
+      F2R (beta := radix2) ⟨mx, ex⟩ / F2R (beta := radix2) ⟨my, ey⟩ := by
+    rw [abs_div, h_abs_x, h_abs_y]
+  -- Unfold `mze` so we can reason about its components.
+  -- `mze.1 = (Fdiv_core radix2 mx ex my ey e').1`
+  -- `mze.2.1 = e'`
+  -- `mze.2.2 = (Fdiv_core radix2 mx ex my ey e').2`
+  -- where `e' = min(FLT_exp(D), ex - ey)` and `D = Zdigits mx + ex - (Zdigits my + ey)`.
+  set e' : ℤ := min (FLT_exp (3 - emax - prec) prec
+        (Zdigits radix2 mx + ex - (Zdigits radix2 my + ey)))
+      (ex - ey) with he'_def
+  set r := Fdiv_core radix2 mx ex my ey e' with hr_def
+  have h_mze : mze = (r.1, e', r.2) := rfl
+  -- Bracket on |x/y| from Fdiv_core_correct.
+  have h_bracket :
+      inbetween_float radix2 r.1 e' |x / y| r.2 := by
+    rw [h_abs_xy]
+    exact Fdiv_core_correct radix2 mx ex my ey e' h_mx_pos h_my_pos
+  -- e' ≤ cexp(x/y).
+  have h_e'_le_cexp : e' ≤
+      cexp radix2 (FLT_exp (3 - emax - prec) prec) (x / y) := by
+    rw [← cexp_abs, h_abs_xy]
+    unfold cexp
+    have h_mag := mag_div_F2R radix2 mx ex my ey h_mx_pos h_my_pos
+    have h_min_le : e' ≤ FLT_exp (3 - emax - prec) prec
+        (Zdigits radix2 mx + ex - (Zdigits radix2 my + ey)) := by
+      rw [he'_def]; exact min_le_left _ _
+    calc e' ≤ FLT_exp (3 - emax - prec) prec
+          (Zdigits radix2 mx + ex - (Zdigits radix2 my + ey)) := h_min_le
+      _ ≤ FLT_exp (3 - emax - prec) prec
+          (mag radix2 (F2R (beta := radix2) ⟨mx, ex⟩
+                        / F2R (beta := radix2) ⟨my, ey⟩)) :=
+          FLT_exp_monotone (3 - emax - prec) prec _ _ h_mag.1
+  -- Sign: xor sx sy = decide (x/y < 0).
+  have h_sign : xor sx sy = decide (x / y < 0) := by
+    rw [hx_eq, hy_eq]
+    cases sx <;> cases sy <;> simp [cond_Ropp] <;>
+      first
+        | (apply div_pos h_F2R_mx_pos h_F2R_my_pos)
+        | (apply le_of_lt; apply div_pos h_F2R_mx_pos h_F2R_my_pos)
+        | (rw [div_neg_iff]; left
+           exact ⟨h_F2R_mx_pos, neg_neg_iff_pos.mpr h_F2R_my_pos⟩)
+        | (rw [neg_div]
+           exact neg_neg_of_pos (div_pos h_F2R_mx_pos h_F2R_my_pos))
+  -- Apply binary_round_aux_correct'.
+  have h_main := binary_round_aux_correct' hp hmax m (x / y) r.1 e' r.2
+                  hxy_ne h_bracket h_e'_le_cexp
+  rw [← h_sign] at h_main
+  -- Bridge mze to (r.1, e', r.2).
+  show valid_binary prec emax
+        (binary_round_aux prec emax m (xor sx sy) mze.1 mze.2.1 mze.2.2) ∧ _
+  rw [h_mze]
+  exact h_main
+
 end binary_float
 
 end LeanFlocq

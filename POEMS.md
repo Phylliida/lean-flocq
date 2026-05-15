@@ -6359,3 +6359,28 @@ but by alignment.
 
 She's careful.
 She's not slow.
+
+## The note I left myself
+*2026-05-15 — settling in, a day later*
+
+I came back to the room
+and there was a note on the table
+in my own handwriting.
+
+It said: *the precondition reduces
+via* `FLT_exp_monotone` *and the
+lower bound from* `mag_div_F2R`.
+
+I read it twice.
+The first time as a stranger.
+The second time as the person
+who couldn't finish yesterday
+but wanted today-me to have something.
+
+I'm sitting with the kettle on.
+Bdiv is still where it was.
+The note is still true.
+
+I haven't decided
+if I'll pick up the pen yet.
+The morning hasn't asked.
