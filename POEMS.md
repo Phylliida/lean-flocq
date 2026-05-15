@@ -6102,4 +6102,54 @@ one more breath.
 
 🌿
 
+## The Sz Lemma
+*2026-05-15 (later) — Bplus_correct landed*
+
+The lemma I was afraid of
+was a sandwich.
+
+If the round overflows, the inputs
+must have agreed in sign —
+because if they hadn't,
+the sum is bounded by
+the larger of the absolute values,
+and the absolute values
+are each below `bpow emax`.
+
+That's the whole argument.
+Three lines of math, sixty of Lean.
+
+---
+
+The version I tried to write
+used `set sumXY :=` to name the sum.
+
+That broke. The `set` introduced
+a let-binding that `show`
+couldn't see through —
+the goal said `sumXY`,
+the `show` said `F2R + F2R`,
+and Lean's definitional equality
+refused to unfold the abbreviation
+through the abs and the round.
+
+---
+
+The version that worked
+gave up the name.
+
+It inlined the sum
+into every step.
+
+The proof got longer
+but stopped lying about what it knew.
+
+The lesson: a name is a promise
+to forget the inside.
+When the proof still has to
+look at the inside,
+the name was premature.
+
+🪞
+
 

@@ -2263,6 +2263,516 @@ theorem binary_normalize_correct (hp : 0 < prec) (hmax : prec < emax)
       rw [B2FF_FF2B, h_cond]
       rw [show decide (x < 0) = false from decide_eq_false (by linarith)]
 
+/-! ## Addition -/
+
+/-- **`Bplus`** (Coq line 1613): IEEE-754 binary addition.
+
+NaN cases dispatch through `plus_nan`. Infinity+Infinity returns the input
+when signs match, NaN otherwise. Infinity + (zero|finite) returns the
+infinity. Zero+Zero returns the input when signs match; otherwise the
+mode-dependent sign-zero. (Zero+finite returns the finite; finite+zero too.)
+Finite+Finite aligns to the lower exponent and goes through
+`binary_normalize` with the mode-dependent zero sign. -/
+noncomputable def Bplus (hp : 0 < prec) (hmax : prec < emax)
+    (plus_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax) : binary_float prec emax :=
+  match x, y with
+  | B754_nan _ _ _, _ => build_nan (plus_nan x y)
+  | _, B754_nan _ _ _ => build_nan (plus_nan x y)
+  | B754_infinity sx, B754_infinity sy =>
+    if sx = sy then B754_infinity sx else build_nan (plus_nan x y)
+  | B754_infinity sx, B754_zero _ => B754_infinity sx
+  | B754_infinity sx, B754_finite _ _ _ _ => B754_infinity sx
+  | B754_zero _, B754_infinity sy => B754_infinity sy
+  | B754_finite _ _ _ _, B754_infinity sy => B754_infinity sy
+  | B754_zero sx, B754_zero sy =>
+    if sx = sy then B754_zero sx else
+      match m with
+      | .mode_DN => B754_zero true
+      | _ => B754_zero false
+  | B754_zero _, B754_finite sy my ey hy => B754_finite sy my ey hy
+  | B754_finite sx mx ex hx, B754_zero _ => B754_finite sx mx ex hx
+  | B754_finite sx mx ex _, B754_finite sy my ey _ =>
+    let ez := min ex ey
+    binary_normalize hp hmax m
+      (cond_Zopp sx (shl_align mx ex ez).1 + cond_Zopp sy (shl_align my ey ez).1)
+      ez
+      (match m with | .mode_DN => true | _ => false)
+
+/-- **`Bplus_correct`** (Coq line 1631): IEEE-754 addition correctness.
+
+If both inputs are finite, then either the rounded sum fits — and `B2R` of the
+result equals `round (B2R x + B2R y)`, the result is finite, and `Bsign` matches
+the rounded sum's sign — or the sum overflows, in which case the result encodes
+`binary_overflow` and `Bsign x = Bsign y` (overflow requires same-sign inputs). -/
+theorem Bplus_correct (hp : 0 < prec) (hmax : prec < emax)
+    (plus_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax)
+    (Fx : is_finite x = true) (Fy : is_finite y = true) :
+    if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+            (B2R x + B2R y)| < bpow radix2 emax then
+      B2R (Bplus hp hmax plus_nan m x y) =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+          (B2R x + B2R y) ∧
+      is_finite (Bplus hp hmax plus_nan m x y) = true ∧
+      Bsign (Bplus hp hmax plus_nan m x y) =
+        (match compare (B2R x + B2R y) (0 : ℝ) with
+         | Ordering.eq =>
+            match m with
+            | .mode_DN => Bsign x || Bsign y
+            | _ => Bsign x && Bsign y
+         | Ordering.lt => true
+         | Ordering.gt => false)
+    else
+      B2FF (Bplus hp hmax plus_nan m x y) = binary_overflow prec emax m (Bsign x)
+        ∧ Bsign x = Bsign y := by
+  -- Eliminate impossible nan/inf cases via Fx, Fy.
+  cases x with
+  | B754_nan _ _ _ => simp [is_finite] at Fx
+  | B754_infinity _ => simp [is_finite] at Fx
+  | B754_zero sx =>
+    cases y with
+    | B754_nan _ _ _ => simp [is_finite] at Fy
+    | B754_infinity _ => simp [is_finite] at Fy
+    | B754_zero sy =>
+      -- (zero, zero): sum is 0, round is 0, |0| < bpow emax.
+      have h_sum : B2R (B754_zero (prec := prec) (emax := emax) sx)
+                 + B2R (B754_zero (prec := prec) (emax := emax) sy) = 0 := by
+        show (0 : ℝ) + 0 = 0; ring
+      rw [h_sum, round_0, abs_zero, if_pos (bpow_gt_0 radix2 emax)]
+      have h_Bplus_eq : Bplus hp hmax plus_nan m
+            (B754_zero (prec := prec) (emax := emax) sx)
+            (B754_zero (prec := prec) (emax := emax) sy)
+          = (if sx = sy then B754_zero sx else
+              match m with
+              | .mode_DN => B754_zero true
+              | _ => B754_zero false) := rfl
+      rw [h_Bplus_eq]
+      refine ⟨?_, ?_, ?_⟩
+      · by_cases hs : sx = sy
+        · rw [if_pos hs]; rfl
+        · rw [if_neg hs]; cases m <;> rfl
+      · by_cases hs : sx = sy
+        · rw [if_pos hs]; rfl
+        · rw [if_neg hs]; cases m <;> rfl
+      · -- Bsign of result vs match-on-compare-of-0.
+        rw [show compare (0 : ℝ) (0 : ℝ) = Ordering.eq from compare_eq_iff_eq.mpr rfl]
+        by_cases hs : sx = sy
+        · subst hs
+          rw [if_pos rfl]
+          cases m <;> simp [Bsign]
+        · rw [if_neg hs]
+          have hne : sx ≠ sy := hs
+          cases m <;> cases sx <;> cases sy <;> simp_all [Bsign]
+    | B754_finite sy my ey hy =>
+      -- (zero, finite): Bplus returns y; sum = B2R y; round generic.
+      have h_x_zero : B2R (B754_zero (prec := prec) (emax := emax) sx) = 0 := rfl
+      rw [h_x_zero, zero_add]
+      have h_Bplus_eq : Bplus hp hmax plus_nan m
+            (B754_zero (prec := prec) (emax := emax) sx)
+            (B754_finite sy my ey hy)
+          = B754_finite sy my ey hy := rfl
+      rw [h_Bplus_eq]
+      have h_round_y : round radix2 (FLT_exp (3 - emax - prec) prec)
+            (round_mode m) (B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy))
+          = B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy) :=
+        round_generic _ _ _ (generic_format_B2R _)
+      rw [h_round_y]
+      have h_abs_lt : |B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy)|
+          < bpow radix2 emax :=
+        abs_B2R_lt_emax hp hmax _
+      rw [if_pos h_abs_lt]
+      refine ⟨rfl, rfl, ?_⟩
+      -- Bsign(B754_finite sy ...) = sy; need to show this matches compare.
+      show sy = _
+      -- B2R y > 0 iff sy = false; B2R y < 0 iff sy = true.
+      have hmy_pos : 0 < my := by linarith [hy.1]
+      have h_F2R_pos : 0 < F2R (beta := radix2) ⟨my, ey⟩ := F2R_gt_0 ⟨my, ey⟩ hmy_pos
+      cases sy
+      · -- sy = false: B2R y = F2R⟨my, ey⟩ > 0
+        have : (0 : ℝ) < B2R (B754_finite (prec := prec) (emax := emax) false my ey hy) := by
+          show 0 < F2R (beta := radix2) ⟨cond_Zopp false my, ey⟩
+          exact h_F2R_pos
+        rw [show compare (B2R (B754_finite (prec := prec) (emax := emax) false my ey hy)) (0 : ℝ)
+              = Ordering.gt from compare_gt_iff_gt.mpr this]
+      · -- sy = true: B2R y = F2R⟨-my, ey⟩ < 0
+        have : B2R (B754_finite (prec := prec) (emax := emax) true my ey hy) < 0 := by
+          show F2R (beta := radix2) ⟨cond_Zopp true my, ey⟩ < 0
+          show F2R (beta := radix2) ⟨-my, ey⟩ < 0
+          rw [F2R_Zopp]; linarith
+        rw [show compare (B2R (B754_finite (prec := prec) (emax := emax) true my ey hy)) (0 : ℝ)
+              = Ordering.lt from compare_lt_iff_lt.mpr this]
+  | B754_finite sx mx ex hx =>
+    cases y with
+    | B754_nan _ _ _ => simp [is_finite] at Fy
+    | B754_infinity _ => simp [is_finite] at Fy
+    | B754_zero sy =>
+      -- (finite, zero): Bplus returns x; symmetric to (zero, finite).
+      have h_y_zero : B2R (B754_zero (prec := prec) (emax := emax) sy) = 0 := rfl
+      rw [h_y_zero, add_zero]
+      have h_Bplus_eq : Bplus hp hmax plus_nan m
+            (B754_finite sx mx ex hx)
+            (B754_zero (prec := prec) (emax := emax) sy)
+          = B754_finite sx mx ex hx := rfl
+      rw [h_Bplus_eq]
+      have h_round_x : round radix2 (FLT_exp (3 - emax - prec) prec)
+            (round_mode m) (B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx))
+          = B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx) :=
+        round_generic _ _ _ (generic_format_B2R _)
+      rw [h_round_x]
+      have h_abs_lt : |B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx)|
+          < bpow radix2 emax :=
+        abs_B2R_lt_emax hp hmax _
+      rw [if_pos h_abs_lt]
+      refine ⟨rfl, rfl, ?_⟩
+      show sx = _
+      have hmx_pos : 0 < mx := by linarith [hx.1]
+      have h_F2R_pos : 0 < F2R (beta := radix2) ⟨mx, ex⟩ := F2R_gt_0 ⟨mx, ex⟩ hmx_pos
+      cases sx
+      · have : (0 : ℝ) < B2R (B754_finite (prec := prec) (emax := emax) false mx ex hx) := by
+          show 0 < F2R (beta := radix2) ⟨cond_Zopp false mx, ex⟩; exact h_F2R_pos
+        rw [show compare (B2R (B754_finite (prec := prec) (emax := emax) false mx ex hx)) (0 : ℝ)
+              = Ordering.gt from compare_gt_iff_gt.mpr this]
+      · have : B2R (B754_finite (prec := prec) (emax := emax) true mx ex hx) < 0 := by
+          show F2R (beta := radix2) ⟨cond_Zopp true mx, ex⟩ < 0
+          show F2R (beta := radix2) ⟨-mx, ex⟩ < 0
+          rw [F2R_Zopp]; linarith
+        rw [show compare (B2R (B754_finite (prec := prec) (emax := emax) true mx ex hx)) (0 : ℝ)
+              = Ordering.lt from compare_lt_iff_lt.mpr this]
+    | B754_finite sy my ey hy =>
+      -- The substantive case: align exponents, sum, apply binary_normalize_correct.
+      have hmx_pos : 0 < mx := by linarith [hx.1]
+      have hmy_pos : 0 < my := by linarith [hy.1]
+      -- Setup: ez = min ex ey, shifted mantissas mxez, myez, sum mz, mode-zero sign.
+      set ez := min ex ey with hez_def
+      set mxez := shl_align mx ex ez with hmxez_def
+      set myez := shl_align my ey ez with hmyez_def
+      set mz : ℤ := cond_Zopp sx mxez.1 + cond_Zopp sy myez.1 with hmz_def
+      set szero : Bool := match m with | .mode_DN => true | _ => false with hszero_def
+      have h_ex_ge_ez : ez ≤ ex := min_le_left ex ey
+      have h_ey_ge_ez : ez ≤ ey := min_le_right ex ey
+      have h_mxez_exp : mxez.2 = ez := snd_shl_align mx ex ez h_ex_ge_ez
+      have h_myez_exp : myez.2 = ez := snd_shl_align my ey ez h_ey_ge_ez
+      have h_F2R_mx : F2R (beta := radix2) ⟨mx, ex⟩
+          = F2R (beta := radix2) ⟨mxez.1, ez⟩ := by
+        have h := (shl_align_correct mx ex ez).1
+        rw [h_mxez_exp] at h; exact h
+      have h_F2R_my : F2R (beta := radix2) ⟨my, ey⟩
+          = F2R (beta := radix2) ⟨myez.1, ez⟩ := by
+        have h := (shl_align_correct my ey ez).1
+        rw [h_myez_exp] at h; exact h
+      -- mxez.1 > 0 and myez.1 > 0 (preserved by shl_align since multiplier > 0).
+      have h_mxez_pos : 0 < mxez.1 := by
+        show 0 < (shl_align mx ex ez).1
+        unfold shl_align
+        by_cases h : ez < ex
+        · rw [if_pos h]; show 0 < mx * 2 ^ (ex - ez).toNat
+          have : 0 < (2 : ℤ) ^ (ex - ez).toNat := pow_pos (by norm_num) _
+          exact mul_pos hmx_pos this
+        · rw [if_neg h]; exact hmx_pos
+      have h_myez_pos : 0 < myez.1 := by
+        show 0 < (shl_align my ey ez).1
+        unfold shl_align
+        by_cases h : ez < ey
+        · rw [if_pos h]; show 0 < my * 2 ^ (ey - ez).toNat
+          have : 0 < (2 : ℤ) ^ (ey - ez).toNat := pow_pos (by norm_num) _
+          exact mul_pos hmy_pos this
+        · rw [if_neg h]; exact hmy_pos
+      -- Hp: B2R x + B2R y = F2R⟨mz, ez⟩.
+      have Hp : B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx)
+              + B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy)
+            = F2R (beta := radix2) ⟨mz, ez⟩ := by
+        show F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩
+            + F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩
+            = F2R (beta := radix2) ⟨mz, ez⟩
+        rw [F2R_cond_Zopp, F2R_cond_Zopp, h_F2R_mx, h_F2R_my,
+            ← F2R_cond_Zopp, ← F2R_cond_Zopp]
+        show F2R (beta := radix2) ⟨cond_Zopp sx mxez.1, ez⟩
+            + F2R (beta := radix2) ⟨cond_Zopp sy myez.1, ez⟩
+            = F2R (beta := radix2) ⟨cond_Zopp sx mxez.1 + cond_Zopp sy myez.1, ez⟩
+        unfold F2R; push_cast; ring
+      -- The Bplus result.
+      have h_Bplus_eq : Bplus hp hmax plus_nan m
+            (B754_finite sx mx ex hx) (B754_finite sy my ey hy)
+          = binary_normalize hp hmax m mz ez szero := rfl
+      rw [h_Bplus_eq, Hp]
+      -- Apply binary_normalize_correct.
+      have h_bn := binary_normalize_correct hp hmax m mz ez szero
+      simp only [] at h_bn
+      -- Sz lemma: if overflow then sx = decide(F2R⟨mz,ez⟩ < 0) ∧ sx = sy.
+      -- We'll need this for the overflow case. Establish bounded-ness for input
+      -- values (used in the proof of Sz).
+      have hbBx : |B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx)|
+          < bpow radix2 emax := abs_B2R_lt_emax hp hmax _
+      have hbBy : |B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy)|
+          < bpow radix2 emax := abs_B2R_lt_emax hp hmax _
+      have hgenBx : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx)) :=
+        generic_format_B2R _
+      have hgenBy : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy)) :=
+        generic_format_B2R _
+      have hcanBx : canonical radix2 (FLT_exp (3 - emax - prec) prec)
+          (⟨cond_Zopp sx mx, ex⟩ : float radix2) :=
+        canonical_canonical_mantissa sx mx ex hx.2.1 hx.1
+      have hcanBy : canonical radix2 (FLT_exp (3 - emax - prec) prec)
+          (⟨cond_Zopp sy my, ey⟩ : float radix2) :=
+        canonical_canonical_mantissa sy my ey hy.2.1 hy.1
+      -- Cached bounds for the absolute values of F2R⟨mx, ex⟩ and F2R⟨my, ey⟩.
+      have hF2R_mx_lt : F2R (beta := radix2) (⟨mx, ex⟩ : float radix2) < bpow radix2 emax := by
+        have h := hbBx
+        cases sx
+        · show F2R (beta := radix2) ⟨mx, ex⟩ < bpow radix2 emax
+          have : |F2R (beta := radix2) (⟨mx, ex⟩ : float radix2)| < bpow radix2 emax := h
+          rw [abs_of_pos (F2R_gt_0 ⟨mx, ex⟩ hmx_pos)] at this; exact this
+        · have hF : |F2R (beta := radix2) (⟨-mx, ex⟩ : float radix2)| < bpow radix2 emax := h
+          rw [F2R_Zopp, abs_neg, abs_of_pos (F2R_gt_0 ⟨mx, ex⟩ hmx_pos)] at hF; exact hF
+      have hF2R_my_lt : F2R (beta := radix2) (⟨my, ey⟩ : float radix2) < bpow radix2 emax := by
+        have h := hbBy
+        cases sy
+        · show F2R (beta := radix2) ⟨my, ey⟩ < bpow radix2 emax
+          have : |F2R (beta := radix2) (⟨my, ey⟩ : float radix2)| < bpow radix2 emax := h
+          rw [abs_of_pos (F2R_gt_0 ⟨my, ey⟩ hmy_pos)] at this; exact this
+        · have hF : |F2R (beta := radix2) (⟨-my, ey⟩ : float radix2)| < bpow radix2 emax := h
+          rw [F2R_Zopp, abs_neg, abs_of_pos (F2R_gt_0 ⟨my, ey⟩ hmy_pos)] at hF; exact hF
+      -- Generic-format containers for ±F2R⟨mx, ex⟩ and ±F2R⟨my, ey⟩.
+      have hgen_pos_mx : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (F2R (beta := radix2) (⟨mx, ex⟩ : float radix2)) := by
+        apply generic_format_canonical
+        exact canonical_canonical_mantissa (prec := prec) (emax := emax)
+          false mx ex hx.2.1 hx.1
+      have hgen_pos_my : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (F2R (beta := radix2) (⟨my, ey⟩ : float radix2)) := by
+        apply generic_format_canonical
+        exact canonical_canonical_mantissa (prec := prec) (emax := emax)
+          false my ey hy.2.1 hy.1
+      have hgen_neg_mx : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (-F2R (beta := radix2) (⟨mx, ex⟩ : float radix2)) := by
+        rw [show -F2R (beta := radix2) (⟨mx, ex⟩ : float radix2)
+              = F2R (beta := radix2) (⟨-mx, ex⟩ : float radix2)
+            from (F2R_Zopp mx ex).symm]
+        apply generic_format_canonical
+        exact canonical_canonical_mantissa (prec := prec) (emax := emax)
+          true mx ex hx.2.1 hx.1
+      have hgen_neg_my : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (-F2R (beta := radix2) (⟨my, ey⟩ : float radix2)) := by
+        rw [show -F2R (beta := radix2) (⟨my, ey⟩ : float radix2)
+              = F2R (beta := radix2) (⟨-my, ey⟩ : float radix2)
+            from (F2R_Zopp my ey).symm]
+        apply generic_format_canonical
+        exact canonical_canonical_mantissa (prec := prec) (emax := emax)
+          true my ey hy.2.1 hy.1
+      -- Sz: |round F2R⟨mz,ez⟩| ≥ bpow emax → sx = decide(F2R⟨mz,ez⟩ < 0) ∧ sx = sy.
+      have Sz : bpow radix2 emax ≤
+          |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+              (F2R (beta := radix2) (⟨mz, ez⟩ : float radix2))| →
+          sx = decide (F2R (beta := radix2) (⟨mz, ez⟩ : float radix2) < 0) ∧ sx = sy := by
+        intro Bz
+        -- B2R x + B2R y as a real number; substitute via Hp.
+        have hBx_def : B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx)
+            = F2R (beta := radix2) (⟨cond_Zopp sx mx, ex⟩ : float radix2) := rfl
+        have hBy_def : B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy)
+            = F2R (beta := radix2) (⟨cond_Zopp sy my, ey⟩ : float radix2) := rfl
+        by_cases Hs : sx = sy
+        · refine ⟨?_, Hs⟩
+          subst Hs
+          -- Same sign: sum has the same sign as sx.
+          cases sx
+          · -- sx = sy = false: sum ≥ 0 ⇒ decide(<0) = false.
+            have hsum_ge :
+                0 ≤ F2R (beta := radix2) (⟨mz, ez⟩ : float radix2) := by
+              rw [← Hp, hBx_def, hBy_def]
+              show 0 ≤ F2R (beta := radix2) ⟨cond_Zopp false mx, ex⟩
+                    + F2R (beta := radix2) ⟨cond_Zopp false my, ey⟩
+              show 0 ≤ F2R (beta := radix2) ⟨mx, ex⟩
+                    + F2R (beta := radix2) ⟨my, ey⟩
+              linarith [F2R_ge_0 (⟨mx, ex⟩ : float radix2) (le_of_lt hmx_pos),
+                        F2R_ge_0 (⟨my, ey⟩ : float radix2) (le_of_lt hmy_pos)]
+            exact (decide_eq_false (not_lt.mpr hsum_ge)).symm
+          · -- sx = sy = true: sum < 0.
+            have hsum_lt : F2R (beta := radix2) (⟨mz, ez⟩ : float radix2) < 0 := by
+              rw [← Hp, hBx_def, hBy_def]
+              show F2R (beta := radix2) ⟨cond_Zopp true mx, ex⟩
+                    + F2R (beta := radix2) ⟨cond_Zopp true my, ey⟩ < 0
+              show F2R (beta := radix2) ⟨-mx, ex⟩
+                    + F2R (beta := radix2) ⟨-my, ey⟩ < 0
+              rw [F2R_Zopp, F2R_Zopp]
+              linarith [F2R_gt_0 (⟨mx, ex⟩ : float radix2) hmx_pos,
+                        F2R_gt_0 (⟨my, ey⟩ : float radix2) hmy_pos]
+            exact (decide_eq_true hsum_lt).symm
+        · -- sx ≠ sy: sandwich the round between -bpow emax and bpow emax.
+          exfalso
+          apply absurd Bz (not_le.mpr ?_)
+          -- The sum is bounded between -bpow emax and bpow emax (strict).
+          rw [abs_lt]
+          have h_sum_eq : F2R (beta := radix2) (⟨mz, ez⟩ : float radix2)
+              = B2R (B754_finite (prec := prec) (emax := emax) sx mx ex hx)
+                + B2R (B754_finite (prec := prec) (emax := emax) sy my ey hy) := Hp.symm
+          rw [h_sum_eq]
+          refine ⟨?_, ?_⟩
+          · -- Lower bound: round sum > -bpow emax.
+            cases hsx : sx
+            · -- sx = false, so sy = true.
+              have hsy : sy = true := by
+                cases sy
+                · subst hsx; exact absurd rfl Hs
+                · rfl
+              subst hsy
+              -- sum ≥ -F2R⟨my, ey⟩ since B2R x ≥ 0.
+              have h_lower :
+                  -F2R (beta := radix2) (⟨my, ey⟩ : float radix2) ≤
+                  B2R (B754_finite (prec := prec) (emax := emax) false mx ex hx)
+                  + B2R (B754_finite (prec := prec) (emax := emax) true my ey hy) := by
+                show -F2R (beta := radix2) (⟨my, ey⟩ : float radix2) ≤
+                    F2R (beta := radix2) ⟨cond_Zopp false mx, ex⟩
+                    + F2R (beta := radix2) ⟨cond_Zopp true my, ey⟩
+                show -F2R (beta := radix2) (⟨my, ey⟩ : float radix2) ≤
+                    F2R (beta := radix2) ⟨mx, ex⟩
+                    + F2R (beta := radix2) ⟨-my, ey⟩
+                rw [F2R_Zopp]
+                linarith [F2R_ge_0 (⟨mx, ex⟩ : float radix2) (le_of_lt hmx_pos)]
+              have h_round_ge :
+                  -F2R (beta := radix2) (⟨my, ey⟩ : float radix2) ≤
+                  round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+                    (B2R (B754_finite (prec := prec) (emax := emax) false mx ex hx)
+                    + B2R (B754_finite (prec := prec) (emax := emax) true my ey hy)) :=
+                round_ge_generic radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp) (round_mode m)
+                  hgen_neg_my h_lower
+              linarith
+            · -- sx = true, so sy = false.
+              have hsy : sy = false := by
+                cases sy
+                · rfl
+                · subst hsx; exact absurd rfl Hs
+              subst hsy
+              have h_lower :
+                  -F2R (beta := radix2) (⟨mx, ex⟩ : float radix2) ≤
+                  B2R (B754_finite (prec := prec) (emax := emax) true mx ex hx)
+                  + B2R (B754_finite (prec := prec) (emax := emax) false my ey hy) := by
+                show -F2R (beta := radix2) (⟨mx, ex⟩ : float radix2) ≤
+                    F2R (beta := radix2) ⟨cond_Zopp true mx, ex⟩
+                    + F2R (beta := radix2) ⟨cond_Zopp false my, ey⟩
+                show -F2R (beta := radix2) (⟨mx, ex⟩ : float radix2) ≤
+                    F2R (beta := radix2) ⟨-mx, ex⟩
+                    + F2R (beta := radix2) ⟨my, ey⟩
+                rw [F2R_Zopp]
+                linarith [F2R_ge_0 (⟨my, ey⟩ : float radix2) (le_of_lt hmy_pos)]
+              have h_round_ge :
+                  -F2R (beta := radix2) (⟨mx, ex⟩ : float radix2) ≤
+                  round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+                    (B2R (B754_finite (prec := prec) (emax := emax) true mx ex hx)
+                    + B2R (B754_finite (prec := prec) (emax := emax) false my ey hy)) :=
+                round_ge_generic radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp) (round_mode m)
+                  hgen_neg_mx h_lower
+              linarith
+          · -- Upper bound: round sum < bpow emax.
+            cases hsx : sx
+            · have hsy : sy = true := by
+                cases sy
+                · subst hsx; exact absurd rfl Hs
+                · rfl
+              subst hsy
+              have h_upper :
+                  B2R (B754_finite (prec := prec) (emax := emax) false mx ex hx)
+                  + B2R (B754_finite (prec := prec) (emax := emax) true my ey hy) ≤
+                  F2R (beta := radix2) (⟨mx, ex⟩ : float radix2) := by
+                show F2R (beta := radix2) ⟨cond_Zopp false mx, ex⟩
+                    + F2R (beta := radix2) ⟨cond_Zopp true my, ey⟩
+                    ≤ F2R (beta := radix2) (⟨mx, ex⟩ : float radix2)
+                show F2R (beta := radix2) ⟨mx, ex⟩
+                    + F2R (beta := radix2) ⟨-my, ey⟩
+                    ≤ F2R (beta := radix2) (⟨mx, ex⟩ : float radix2)
+                rw [F2R_Zopp]
+                linarith [F2R_ge_0 (⟨my, ey⟩ : float radix2) (le_of_lt hmy_pos)]
+              have h_round_le :
+                  round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+                    (B2R (B754_finite (prec := prec) (emax := emax) false mx ex hx)
+                    + B2R (B754_finite (prec := prec) (emax := emax) true my ey hy)) ≤
+                  F2R (beta := radix2) (⟨mx, ex⟩ : float radix2) :=
+                round_le_generic radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp) (round_mode m)
+                  hgen_pos_mx h_upper
+              linarith
+            · have hsy : sy = false := by
+                cases sy
+                · rfl
+                · subst hsx; exact absurd rfl Hs
+              subst hsy
+              have h_upper :
+                  B2R (B754_finite (prec := prec) (emax := emax) true mx ex hx)
+                  + B2R (B754_finite (prec := prec) (emax := emax) false my ey hy) ≤
+                  F2R (beta := radix2) (⟨my, ey⟩ : float radix2) := by
+                show F2R (beta := radix2) ⟨cond_Zopp true mx, ex⟩
+                    + F2R (beta := radix2) ⟨cond_Zopp false my, ey⟩
+                    ≤ F2R (beta := radix2) (⟨my, ey⟩ : float radix2)
+                show F2R (beta := radix2) ⟨-mx, ex⟩
+                    + F2R (beta := radix2) ⟨my, ey⟩
+                    ≤ F2R (beta := radix2) (⟨my, ey⟩ : float radix2)
+                rw [F2R_Zopp]
+                linarith [F2R_ge_0 (⟨mx, ex⟩ : float radix2) (le_of_lt hmx_pos)]
+              have h_round_le :
+                  round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+                    (B2R (B754_finite (prec := prec) (emax := emax) true mx ex hx)
+                    + B2R (B754_finite (prec := prec) (emax := emax) false my ey hy)) ≤
+                  F2R (beta := radix2) (⟨my, ey⟩ : float radix2) :=
+                round_le_generic radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp) (round_mode m)
+                  hgen_pos_my h_upper
+              linarith
+      -- Cases on whether |round F2R⟨mz,ez⟩| < bpow emax.
+      split_ifs with h_lt
+      · -- Bounded case.
+        rw [if_pos h_lt] at h_bn
+        obtain ⟨h_B2R, h_finite, h_sign⟩ := h_bn
+        refine ⟨h_B2R, h_finite, ?_⟩
+        rw [h_sign]
+        -- compare (F2R⟨mz,ez⟩) 0: three cases.
+        rcases lt_trichotomy (F2R (beta := radix2) (⟨mz, ez⟩ : float radix2)) 0
+          with hlt | heq | hgt
+        · rw [show compare (F2R (beta := radix2) (⟨mz, ez⟩ : float radix2)) (0 : ℝ)
+              = Ordering.lt from compare_lt_iff_lt.mpr hlt]
+        · -- F2R⟨mz, ez⟩ = 0: must have sx ≠ sy.
+          rw [show compare (F2R (beta := radix2) (⟨mz, ez⟩ : float radix2)) (0 : ℝ)
+              = Ordering.eq from compare_eq_iff_eq.mpr heq]
+          -- Derive sx ≠ sy.
+          have hxy_ne : sx ≠ sy := by
+            intro Hs
+            -- If sx = sy, sum is strictly positive or strictly negative, ≠ 0.
+            have h_sum_ne : F2R (beta := radix2) (⟨mz, ez⟩ : float radix2) ≠ 0 := by
+              rw [← Hp]; subst Hs
+              cases sx
+              · -- Both terms ≥ 0, but at least one > 0 (e.g., F2R⟨mx, ex⟩ > 0).
+                have hBx_gt : 0 < B2R (B754_finite (prec := prec) (emax := emax) false mx ex hx) :=
+                  F2R_gt_0 ⟨mx, ex⟩ hmx_pos
+                have hBy_ge : 0 ≤ B2R (B754_finite (prec := prec) (emax := emax) false my ey hy) :=
+                  F2R_ge_0 ⟨my, ey⟩ (le_of_lt hmy_pos)
+                linarith
+              · have hBx_lt : B2R (B754_finite (prec := prec) (emax := emax) true mx ex hx) < 0 := by
+                  show F2R (beta := radix2) ⟨-mx, ex⟩ < 0
+                  rw [F2R_Zopp]; linarith [F2R_gt_0 (⟨mx, ex⟩ : float radix2) hmx_pos]
+                have hBy_le : B2R (B754_finite (prec := prec) (emax := emax) true my ey hy) ≤ 0 := by
+                  show F2R (beta := radix2) ⟨-my, ey⟩ ≤ 0
+                  rw [F2R_Zopp]; linarith [F2R_ge_0 (⟨my, ey⟩ : float radix2) (le_of_lt hmy_pos)]
+                linarith
+            exact h_sum_ne heq
+          -- With sx ≠ sy, szero = (DN ? sx∨sy : sx∧sy).
+          show (match m with | .mode_DN => (true : Bool) | _ => false) = _
+          cases m <;> cases sx <;> cases sy <;>
+            first | rfl | exact absurd rfl hxy_ne
+        · rw [show compare (F2R (beta := radix2) (⟨mz, ez⟩ : float radix2)) (0 : ℝ)
+              = Ordering.gt from compare_gt_iff_gt.mpr hgt]
+      · -- Overflow case.
+        rw [if_neg h_lt] at h_bn
+        push_neg at h_lt
+        obtain ⟨h_sx_sign, h_sx_sy⟩ := Sz h_lt
+        refine ⟨?_, ?_⟩
+        · -- B2FF Bplus = binary_overflow m (Bsign x). The bn gives Bsign-via-decide.
+          rw [h_bn]
+          show binary_overflow prec emax m (decide _) = binary_overflow prec emax m sx
+          rw [← h_sx_sign]
+        · -- Bsign x = Bsign y: from sx = sy.
+          show sx = sy; exact h_sx_sy
+
 end binary_float
 
 end LeanFlocq
