@@ -27,6 +27,7 @@ import LeanFlocq.Calc.Bracket
 import LeanFlocq.Calc.Round
 import LeanFlocq.Calc.Operations
 import LeanFlocq.Calc.Div
+import LeanFlocq.Calc.Sqrt
 
 namespace LeanFlocq
 
@@ -4323,6 +4324,129 @@ noncomputable def Bdiv (hp : 0 < prec) (hmax : prec < emax)
   | B754_finite sx mx ex Hx, B754_finite sy my ey Hy =>
     FF2B _ (Bdiv_correct_aux hp hmax m sx mx ex Hx sy my ey Hy).1
 
+/-! ## Bsqrt: IEEE-754 binary square root
+
+Square root of a non-negative finite float. The exponent picker
+`Fsqrt_core_binary` ensures `2·e' ≤ ex` so that `Fsqrt_core` brackets
+the real square root at exponent `e'`. The proof of correctness uses
+`binary_round_aux_correct'` (primed: location is not Exact), with the
+precondition `e' ≤ cexp(√x)` reducing via `e' ≤ FLT_exp((d+e+1)/2)` from
+`min_le_left` plus `FLT_exp_monotone` plus `mag_sqrt_F2R`.
+
+Unlike division, sqrt of a bounded float never overflows: `sqrt x ≤
+sqrt(bpow emax) < bpow emax` since `emax ≥ 1`, and the rounding error
+stays controlled. This means `Bsqrt_correct_aux` strengthens the
+`binary_round_aux_correct'` conditional to an unconditional finite-result. -/
+
+/-- **`Fsqrt_core_binary`** (Coq line 1999): pick the canonical exponent
+for `sqrt(m · 2^e)` — the min of `fexp((d + e + 1)/2)` (the format-suggested
+exponent) and `e/2` (the natural exponent from `sqrt`) — and apply
+`Fsqrt_core` to get the bracketing mantissa and location. -/
+noncomputable def Fsqrt_core_binary (prec emax : ℤ) (m e : ℤ) :
+    ℤ × ℤ × location :=
+  let d := Zdigits radix2 m
+  let e' := min (FLT_exp (3 - emax - prec) prec ((d + e + 1) / 2)) (e / 2)
+  let r := Fsqrt_core radix2 m e e'
+  (r.1, e', r.2)
+
+/-- **`Bsqrt_correct_aux`** (Coq lines 2015–2123): the rounding-kernel
+correctness for `sqrt` of a bounded float. Strengthens
+`binary_round_aux_correct'` to unconditional finite-result by proving
+no-overflow: `sqrt x ≤ bpow(emax - 1)` (in FLT format), hence
+`|round (sqrt x)| ≤ bpow(emax - 1) < bpow emax`. -/
+theorem Bsqrt_correct_aux (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (mx ex : ℤ) (Hx : bounded prec emax mx ex) :
+    let x := F2R (beta := radix2) ⟨mx, ex⟩
+    let mze := Fsqrt_core_binary prec emax mx ex
+    let z := binary_round_aux prec emax m false mze.1 mze.2.1 mze.2.2
+    valid_binary prec emax z ∧
+    FF2R radix2 z =
+      round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) (Real.sqrt x) ∧
+    is_finite_FF z = true ∧
+    sign_FF z = false := by
+  intro x mze z
+  -- Setup: x > 0, sqrt x > 0.
+  have h_mx_pos : 0 < mx := Hx.1
+  have h_x_pos : 0 < x := F2R_gt_0 ⟨mx, ex⟩ h_mx_pos
+  have h_x_nonneg : 0 ≤ x := le_of_lt h_x_pos
+  have h_sqrt_pos : 0 < Real.sqrt x := Real.sqrt_pos.mpr h_x_pos
+  have h_sqrt_nonneg : 0 ≤ Real.sqrt x := le_of_lt h_sqrt_pos
+  have h_sqrt_ne : Real.sqrt x ≠ 0 := ne_of_gt h_sqrt_pos
+  have h_abs_sqrt : |Real.sqrt x| = Real.sqrt x := abs_of_nonneg h_sqrt_nonneg
+  -- Unpack mze: mze = (r.1, e', r.2).
+  set e' : ℤ := min (FLT_exp (3 - emax - prec) prec
+                ((Zdigits radix2 mx + ex + 1) / 2)) (ex / 2) with he'_def
+  set r := Fsqrt_core radix2 mx ex e' with hr_def
+  have h_mze : mze = (r.1, e', r.2) := rfl
+  -- 2 * e' ≤ ex from e' ≤ ex / 2.
+  have h_2e'_le_ex : 2 * e' ≤ ex := by
+    have h_le_div2 : e' ≤ ex / 2 := by rw [he'_def]; exact min_le_right _ _
+    omega
+  -- Bracket from Fsqrt_core_correct.
+  have h_bracket :
+      inbetween_float radix2 r.1 e' (Real.sqrt x) r.2 :=
+    Fsqrt_core_correct radix2 mx ex e' h_mx_pos h_2e'_le_ex
+  have h_bracket_abs :
+      inbetween_float radix2 r.1 e' |Real.sqrt x| r.2 := by
+    rw [h_abs_sqrt]; exact h_bracket
+  -- e' ≤ cexp(sqrt x).
+  have h_e'_le_cexp : e' ≤
+      cexp radix2 (FLT_exp (3 - emax - prec) prec) (Real.sqrt x) := by
+    unfold cexp
+    rw [mag_sqrt_F2R radix2 mx ex h_mx_pos]
+    rw [he'_def]; exact min_le_left _ _
+  -- decide(sqrt x < 0) = false.
+  have h_sign : decide (Real.sqrt x < 0) = false := by
+    simp [not_lt.mpr h_sqrt_nonneg]
+  -- Apply binary_round_aux_correct'.
+  have h_main := binary_round_aux_correct' hp hmax m (Real.sqrt x) r.1 e' r.2
+                  h_sqrt_ne h_bracket_abs h_e'_le_cexp
+  rw [h_sign] at h_main
+  -- No-overflow: |round (sqrt x)| ≤ bpow(emax - 1) < bpow emax.
+  have h_emax_ge_2 : 2 ≤ emax := by linarith
+  have h_emax_minus_1_ge_emin : 3 - emax - prec ≤ emax - 1 := by linarith
+  have h_x_lt : x < bpow radix2 emax := bounded_lt_emax hp hmax mx ex Hx
+  have h_K_nonneg : 0 ≤ bpow radix2 (emax - 1) := bpow_ge_0 _ _
+  have h_K_sq : (bpow radix2 (emax - 1))^2 = bpow radix2 (2 * emax - 2) := by
+    rw [sq, ← bpow_plus]; congr 1; ring
+  -- x ≤ bpow(2 * emax - 2).
+  have h_x_le_K_sq : x ≤ bpow radix2 (2 * emax - 2) := by
+    have h_bound : emax ≤ 2 * emax - 2 := by linarith
+    calc x ≤ bpow radix2 emax := le_of_lt h_x_lt
+      _ ≤ bpow radix2 (2 * emax - 2) := bpow_le radix2 h_bound
+  -- sqrt x ≤ bpow(emax - 1).
+  have h_sqrt_le_K : Real.sqrt x ≤ bpow radix2 (emax - 1) := by
+    have h_sqrt_le : Real.sqrt x ≤ Real.sqrt ((bpow radix2 (emax - 1))^2) := by
+      rw [h_K_sq]; exact Real.sqrt_le_sqrt h_x_le_K_sq
+    rw [Real.sqrt_sq h_K_nonneg] at h_sqrt_le
+    exact h_sqrt_le
+  -- bpow(emax - 1) is in FLT format.
+  have h_K_format :
+      generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+        (bpow radix2 (emax - 1)) := by
+    apply generic_format_bpow' radix2 _
+      (FLT_exp_valid (3 - emax - prec) prec hp) (emax - 1)
+    unfold FLT_exp
+    simp only [max_def]; split_ifs <;> linarith
+  -- |round (sqrt x)| ≤ bpow(emax - 1).
+  have h_round_abs_le :
+      |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) (Real.sqrt x)|
+        ≤ bpow radix2 (emax - 1) := by
+    apply abs_round_le_generic radix2 _
+      (FLT_exp_valid (3 - emax - prec) prec hp) (round_mode m) h_K_format
+    rw [h_abs_sqrt]; exact h_sqrt_le_K
+  -- bpow(emax - 1) < bpow emax.
+  have h_K_lt_emax : bpow radix2 (emax - 1) < bpow radix2 emax := by
+    apply bpow_lt; linarith
+  have h_round_lt : |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+                      (Real.sqrt x)| < bpow radix2 emax :=
+    lt_of_le_of_lt h_round_abs_le h_K_lt_emax
+  -- Extract the if-true branch.
+  obtain ⟨h_valid, h_cond⟩ := h_main
+  rw [if_pos h_round_lt] at h_cond
+  obtain ⟨h_round_eq, h_finite, h_sign_eq⟩ := h_cond
+  exact ⟨h_valid, h_round_eq, h_finite, h_sign_eq⟩
+
 /-- **`Bdiv_correct`** (Coq lines 1966–1995): the user-facing correctness
 theorem for `Bdiv`. Given a nonzero divisor `y`, the result either:
 
@@ -4422,6 +4546,122 @@ theorem Bdiv_correct (hp : 0 < prec) (hmax : prec < emax)
         · intro _; rw [Bsign_FF2B]; exact h_sign
       · rw [if_neg h_lt] at h_cond ⊢
         rw [B2FF_FF2B]; exact h_cond
+
+/-- **`Bsqrt`** (Coq line 2125): IEEE-754 square root.
+NaN propagates; `+∞ → +∞`, `-∞ → NaN`, `±0 → ±0`, negative finite → NaN,
+positive finite via `Bsqrt_correct_aux`. -/
+noncomputable def Bsqrt (hp : 0 < prec) (hmax : prec < emax)
+    (sqrt_nan : binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x : binary_float prec emax) : binary_float prec emax :=
+  match x with
+  | B754_nan _ _ _ => build_nan (sqrt_nan x)
+  | B754_infinity false => B754_infinity false
+  | B754_infinity true => build_nan (sqrt_nan x)
+  | B754_zero sx => B754_zero sx
+  | B754_finite true _ _ _ => build_nan (sqrt_nan x)
+  | B754_finite false mx ex Hx =>
+    FF2B _ (Bsqrt_correct_aux hp hmax m mx ex Hx).1
+
+/-- **`Bsqrt_correct`** (Coq lines 2136–2179): the user-facing correctness
+for `Bsqrt`. The result `B2R = round(sqrt(B2R x))` unconditionally,
+`is_finite` matches the structural condition (zero or positive finite),
+and (when not NaN) the sign is preserved. -/
+theorem Bsqrt_correct (hp : 0 < prec) (hmax : prec < emax)
+    (sqrt_nan : binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x : binary_float prec emax) :
+    B2R (Bsqrt hp hmax sqrt_nan m x) =
+      round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m)
+        (Real.sqrt (B2R x)) ∧
+    is_finite (Bsqrt hp hmax sqrt_nan m x) =
+      (match x with
+       | B754_zero _ => true
+       | B754_finite false _ _ _ => true
+       | _ => false) ∧
+    (is_nan (Bsqrt hp hmax sqrt_nan m x) = false →
+      Bsign (Bsqrt hp hmax sqrt_nan m x) = Bsign x) := by
+  cases x with
+  | B754_nan sx plx hplx =>
+    have h_Bsqrt_eq : Bsqrt hp hmax sqrt_nan m (B754_nan sx plx hplx)
+                    = build_nan (sqrt_nan (B754_nan sx plx hplx)) := rfl
+    rw [h_Bsqrt_eq]
+    have h_B2R_x : B2R (B754_nan (prec := prec) (emax := emax) sx plx hplx)
+                  = (0 : ℝ) := rfl
+    rw [h_B2R_x, Real.sqrt_zero, round_0]
+    refine ⟨B2R_build_nan _, ?_, ?_⟩
+    · rw [is_finite_build_nan]
+    · intro hcon
+      rw [is_nan_build_nan] at hcon
+      exact Bool.noConfusion hcon
+  | B754_infinity sx =>
+    cases sx with
+    | false =>
+      have h_Bsqrt_eq : Bsqrt hp hmax sqrt_nan m (B754_infinity (prec := prec) (emax := emax) false)
+                      = B754_infinity false := rfl
+      rw [h_Bsqrt_eq]
+      have h_B2R_x : B2R (B754_infinity (prec := prec) (emax := emax) false)
+                    = (0 : ℝ) := rfl
+      rw [h_B2R_x, Real.sqrt_zero, round_0]
+      refine ⟨rfl, rfl, ?_⟩
+      intro _; rfl
+    | true =>
+      have h_Bsqrt_eq : Bsqrt hp hmax sqrt_nan m (B754_infinity (prec := prec) (emax := emax) true)
+                      = build_nan (sqrt_nan (B754_infinity true)) := rfl
+      rw [h_Bsqrt_eq]
+      have h_B2R_x : B2R (B754_infinity (prec := prec) (emax := emax) true)
+                    = (0 : ℝ) := rfl
+      rw [h_B2R_x, Real.sqrt_zero, round_0]
+      refine ⟨B2R_build_nan _, ?_, ?_⟩
+      · rw [is_finite_build_nan]
+      · intro hcon
+        rw [is_nan_build_nan] at hcon
+        exact Bool.noConfusion hcon
+  | B754_zero sx =>
+    have h_Bsqrt_eq : Bsqrt hp hmax sqrt_nan m (B754_zero (prec := prec) (emax := emax) sx)
+                    = B754_zero sx := rfl
+    rw [h_Bsqrt_eq]
+    have h_B2R_x : B2R (B754_zero (prec := prec) (emax := emax) sx)
+                  = (0 : ℝ) := rfl
+    rw [h_B2R_x, Real.sqrt_zero, round_0]
+    refine ⟨rfl, rfl, ?_⟩
+    intro _; rfl
+  | B754_finite sx mx ex Hx =>
+    cases sx with
+    | true =>
+      -- Negative finite → build_nan. sqrt of negative = 0 in Real.
+      have h_Bsqrt_eq : Bsqrt hp hmax sqrt_nan m (B754_finite true mx ex Hx)
+                      = build_nan (sqrt_nan (B754_finite true mx ex Hx)) := rfl
+      rw [h_Bsqrt_eq]
+      have h_B2R_x : B2R (B754_finite (prec := prec) (emax := emax) true mx ex Hx)
+                  = F2R (beta := radix2) ⟨cond_Zopp true mx, ex⟩ := rfl
+      have h_mx_pos : 0 < mx := Hx.1
+      have h_F2R_neg : F2R (beta := radix2) ⟨cond_Zopp true mx, ex⟩ < 0 := by
+        show ((cond_Zopp true mx : ℤ) : ℝ) * bpow radix2 ex < 0
+        have h_neg : ((cond_Zopp true mx : ℤ) : ℝ) < 0 := by
+          show ((-mx : ℤ) : ℝ) < 0
+          exact_mod_cast (by linarith : (-mx : ℤ) < 0)
+        have h_bpow_pos : 0 < bpow radix2 ex := bpow_gt_0 _ _
+        nlinarith
+      rw [h_B2R_x, Real.sqrt_eq_zero'.mpr (le_of_lt h_F2R_neg), round_0]
+      refine ⟨B2R_build_nan _, ?_, ?_⟩
+      · rw [is_finite_build_nan]
+      · intro hcon
+        rw [is_nan_build_nan] at hcon
+        exact Bool.noConfusion hcon
+    | false =>
+      -- Positive finite: apply Bsqrt_correct_aux.
+      have h_aux := Bsqrt_correct_aux hp hmax m mx ex Hx
+      have h_Bsqrt_eq : Bsqrt hp hmax sqrt_nan m (B754_finite false mx ex Hx)
+                      = FF2B _ h_aux.1 := rfl
+      rw [h_Bsqrt_eq]
+      obtain ⟨h_valid, h_round_eq, h_finite, h_sign⟩ := h_aux
+      have h_B2R_x : B2R (B754_finite (prec := prec) (emax := emax) false mx ex Hx)
+                  = F2R (beta := radix2) ⟨mx, ex⟩ := rfl
+      refine ⟨?_, ?_, ?_⟩
+      · rw [B2R_FF2B, h_B2R_x]; exact h_round_eq
+      · rw [is_finite_FF2B]; exact h_finite
+      · intro _; rw [Bsign_FF2B]; exact h_sign
 
 end binary_float
 
