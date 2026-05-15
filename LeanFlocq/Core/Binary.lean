@@ -3265,6 +3265,68 @@ theorem Bfrexp_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
       rw [h_eq, mag_mult_bpow radix2 h_z_ne, h_mag_z]
       ring
 
+/-! ## Bone: the constant 1 -/
+
+/-- Internal helper: the three facts about `binary_round ... false 1 0`
+that the `Bone_*` lemmas all rely on. Established by `binary_round_correct`
+combined with `round_generic` (since `1` is already in `FLT` format). -/
+private lemma Bone_aux (hp : 0 < prec) (hmax : prec < emax) :
+    FF2R radix2 (binary_round prec emax mode.mode_NE false 1 0) = 1 ∧
+    is_finite_FF (binary_round prec emax mode.mode_NE false 1 0) = true ∧
+    sign_FF (binary_round prec emax mode.mode_NE false 1 0) = false := by
+  have h_brc := binary_round_correct hp hmax mode.mode_NE false 1 0 Int.one_pos
+  simp only [cond_Zopp_false] at h_brc
+  obtain ⟨_, h_cond⟩ := h_brc
+  have h_F2R_1 : F2R (beta := radix2) ⟨(1 : ℤ), 0⟩ = (1 : ℝ) := by
+    show ((1 : ℤ) : ℝ) * bpow radix2 0 = 1
+    rw [bpow_zero]; norm_num
+  have h_1_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec) 1 := by
+    rw [← h_F2R_1]
+    apply generic_format_F2R radix2 (FLT_exp (3 - emax - prec) prec) 1 0
+    intro _
+    rw [h_F2R_1]
+    show FLT_exp (3 - emax - prec) prec (mag radix2 1) ≤ 0
+    rw [mag_1]
+    unfold FLT_exp
+    omega
+  have h_round_1 : round radix2 (FLT_exp (3 - emax - prec) prec)
+      (round_mode mode.mode_NE) 1 = 1 :=
+    round_generic radix2 _ _ h_1_fmt
+  have h_abs_1 : |(1 : ℝ)| < bpow radix2 emax := by
+    rw [abs_one]
+    have h_pos : bpow radix2 0 < bpow radix2 emax :=
+      bpow_lt radix2 (by omega : (0 : ℤ) < emax)
+    rwa [bpow_zero] at h_pos
+  rw [h_F2R_1, h_round_1] at h_cond
+  rw [if_pos h_abs_1] at h_cond
+  exact h_cond
+
+/-- **`Bone`** (Coq line 2170): the IEEE float representing `1`. -/
+noncomputable def Bone (hp : 0 < prec) (hmax : prec < emax) : binary_float prec emax :=
+  FF2B (binary_round prec emax mode.mode_NE false 1 0)
+    (binary_round_correct hp hmax mode.mode_NE false 1 0 Int.one_pos).1
+
+/-- **`Bone_correct`** (Coq line 2172): `B2R Bone = 1`. -/
+theorem Bone_correct (hp : 0 < prec) (hmax : prec < emax) :
+    B2R (Bone hp hmax : binary_float prec emax) = 1 := by
+  unfold Bone
+  rw [B2R_FF2B]
+  exact (Bone_aux hp hmax).1
+
+/-- **`is_finite_Bone`** (Coq line 2192): `Bone` is finite. -/
+theorem is_finite_Bone (hp : 0 < prec) (hmax : prec < emax) :
+    is_finite (Bone hp hmax : binary_float prec emax) = true := by
+  unfold Bone
+  rw [is_finite_FF2B]
+  exact (Bone_aux hp hmax).2.1
+
+/-- **`Bsign_Bone`** (Coq line 2198): `Bsign Bone = false`. -/
+theorem Bsign_Bone (hp : 0 < prec) (hmax : prec < emax) :
+    Bsign (Bone hp hmax : binary_float prec emax) = false := by
+  unfold Bone
+  rw [Bsign_FF2B]
+  exact (Bone_aux hp hmax).2.2
+
 end binary_float
 
 end LeanFlocq
