@@ -3488,6 +3488,310 @@ noncomputable def Bpred_pos (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ 
     Bminus hp hmax (fun a _ => pred_pos_nan a) mode.mode_NE x d
   | _ => x
 
+/-- **`Bpred_pos_correct`** (Coq line 2508): on a positive finite float,
+`Bpred_pos` computes the predecessor in the FLT format, is finite, and
+has positive sign.
+
+The conclusion `B2R = pred_pos` splits four ways on `(2·mx = 2^prec, Hd)` and
+`(B2R x = bpow(mag-1), Hpred)`:
+- `(Hd, Hpred)`: `d = bpow(fexp(mag-1))` and `x = bpow(mag-1)`. Match by
+  `generic_format_pred_pos`.
+- `(Hd, ¬Hpred)`: impossible — `Hd` forces `mx = 2^(prec-1)`, hence
+  `x = bpow(prec-1+ex) = bpow(mag-1)`.
+- `(¬Hd, Hpred)`: `d = ulp(x)` and `x = bpow(mag-1)`. The trick: in this
+  subcase `mag(x) ≤ emin + prec`, so `fexp(mag) = fexp(mag-1) = emin`,
+  and `ulp(x) = bpow(fexp(mag-1))`.
+- `(¬Hd, ¬Hpred)`: `d = ulp(x)` and `pred_pos = x - ulp(x)`. Direct. -/
+theorem Bpred_pos_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (pred_pos_nan : binary_float prec emax →
+                      {z : binary_float prec emax // is_nan z = true})
+    (x : binary_float prec emax) (hpos : 0 < B2R x) :
+    B2R (Bpred_pos hp hmax hemax pred_pos_nan x)
+      = pred_pos radix2 (FLT_exp (3 - emax - prec) prec) (B2R x) ∧
+    is_finite (Bpred_pos hp hmax hemax pred_pos_nan x) = true ∧
+    Bsign (Bpred_pos hp hmax hemax pred_pos_nan x) = false := by
+  -- The three non-finite cases have B2R = 0, contradicting hpos.
+  cases x with
+  | B754_zero s =>
+    have h_b2r : B2R (B754_zero s : binary_float prec emax) = 0 := rfl
+    linarith
+  | B754_infinity s =>
+    have h_b2r : B2R (B754_infinity s : binary_float prec emax) = 0 := rfl
+    linarith
+  | B754_nan s pl hpl =>
+    have h_b2r : B2R (B754_nan s pl hpl : binary_float prec emax) = 0 := rfl
+    linarith
+  | B754_finite sx mx ex hb =>
+    -- Derive sx = false from 0 < B2R.
+    have h_sx : sx = false := by
+      cases sx
+      · rfl
+      · exfalso
+        have h_neg : B2R (B754_finite true mx ex hb : binary_float prec emax) ≤ 0 := by
+          show F2R (beta := radix2) ⟨cond_Zopp true mx, ex⟩ ≤ 0
+          show ((cond_Zopp true mx : ℤ) : ℝ) * bpow radix2 ex ≤ 0
+          have h_cz : (cond_Zopp true mx : ℤ) = -mx := rfl
+          rw [h_cz]
+          have hmx_pos : (0 : ℤ) ≤ mx := by linarith [hb.1]
+          have h_mx_real_nn : (0 : ℝ) ≤ (mx : ℝ) := by exact_mod_cast hmx_pos
+          have h_neg_mx : ((-mx : ℤ) : ℝ) ≤ 0 := by push_cast; linarith
+          exact mul_nonpos_of_nonpos_of_nonneg h_neg_mx (le_of_lt (bpow_gt_0 _ _))
+        linarith
+    subst h_sx
+    -- Abbreviations and base facts.
+    set x' := (B754_finite false mx ex hb : binary_float prec emax) with hx'_def
+    have h_x'_fin_strict : is_finite_strict x' = true := rfl
+    have h_x'_fin : is_finite x' = true := rfl
+    have hpos_x' : 0 < B2R x' := hpos
+    have h_B2R_ne : B2R x' ≠ 0 := ne_of_gt hpos_x'
+    have h_x'_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec) (B2R x') :=
+      generic_format_B2R x'
+    -- Bfrexp_correct: (Bfrexp x').2 = mag(B2R x').
+    obtain ⟨_, _, h_mag_eq⟩ := Bfrexp_correct hp hmax hemax x' h_x'_fin_strict
+    -- Set e = (Bfrexp x').2 = mag(B2R x').
+    set e := (Bfrexp hp hmax hemax x').2 with he_def
+    have h_e_mag : e = mag radix2 (B2R x') := h_mag_eq
+    -- abs_B2R_lt_emax: |B2R x'| < bpow emax, so mag(B2R x') ≤ emax.
+    have h_mag_le_emax : mag radix2 (B2R x') ≤ emax :=
+      mag_le_bpow radix2 h_B2R_ne (abs_B2R_lt_emax hp hmax x')
+    -- abs_B2R_ge_emin + mag_ge_bpow: emin + 1 ≤ mag(B2R x'), i.e., emin ≤ mag - 1.
+    have h_emin_le_mag : (3 - emax - prec) + 1 ≤ mag radix2 (B2R x') := by
+      apply mag_ge_bpow radix2
+      have h_eq : (3 - emax - prec) + 1 - 1 = 3 - emax - prec := by ring
+      rw [h_eq]
+      exact abs_B2R_ge_emin hp x' h_x'_fin_strict
+    -- Let fexp_em1 := FLT_exp(e - 1). It's the exponent for the "boundary" branch.
+    set fexp_em1 := FLT_exp (3 - emax - prec) prec (e - 1) with hfexp_em1_def
+    -- fexp_em1 ≤ e - 1: both arguments of max are ≤ e - 1.
+    have h_fexp_em1_le : fexp_em1 ≤ e - 1 := by
+      rw [hfexp_em1_def, h_e_mag]
+      unfold FLT_exp
+      have h1 : mag radix2 (B2R x') - 1 - prec ≤ mag radix2 (B2R x') - 1 := by linarith
+      have h2 : (3 - emax - prec) ≤ mag radix2 (B2R x') - 1 := by linarith
+      exact max_le h1 h2
+    -- bpow(fexp_em1) is in format.
+    have h_fmt_bpow : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+        (bpow radix2 fexp_em1) := by
+      apply generic_format_bpow' radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp)
+      rw [hfexp_em1_def]; unfold FLT_exp; omega
+    -- round(bpow(fexp_em1)) = bpow(fexp_em1) (in format), and bpow < bpow emax.
+    have h_bpow_lt_emax : bpow radix2 fexp_em1 < bpow radix2 emax := by
+      apply bpow_lt
+      rw [hfexp_em1_def, h_e_mag]
+      unfold FLT_exp
+      have h1 : mag radix2 (B2R x') - 1 - prec < emax := by linarith
+      have h2 : 3 - emax - prec < emax := by linarith
+      exact max_lt h1 h2
+    have h_round_bpow_lt : |round radix2 (FLT_exp (3 - emax - prec) prec)
+        (round_mode mode.mode_NE) (bpow radix2 fexp_em1)| < bpow radix2 emax := by
+      rw [round_generic _ _ _ h_fmt_bpow, abs_of_pos (bpow_gt_0 _ _)]
+      exact h_bpow_lt_emax
+    -- Bldexp(Bone, fexp_em1) is well-defined.
+    have h_bldexp := Bldexp_correct hp hmax mode.mode_NE (Bone hp hmax) fexp_em1
+    rw [Bone_correct, one_mul, if_pos h_round_bpow_lt] at h_bldexp
+    obtain ⟨h_bldexp_b2r, h_bldexp_fin_eq, h_bldexp_sign_eq⟩ := h_bldexp
+    have h_bldexp_b2r' : B2R (Bldexp hp hmax mode.mode_NE (Bone hp hmax) fexp_em1
+                                : binary_float prec emax) = bpow radix2 fexp_em1 := by
+      rw [h_bldexp_b2r, round_generic _ _ _ h_fmt_bpow]
+    have h_bldexp_fin : is_finite (Bldexp hp hmax mode.mode_NE (Bone hp hmax) fexp_em1
+                                    : binary_float prec emax) = true := by
+      rw [h_bldexp_fin_eq]; exact is_finite_Bone hp hmax
+    -- Bulp_correct.
+    obtain ⟨h_bulp_b2r, h_bulp_fin, _⟩ := Bulp_correct hp hmax hemax x' h_x'_fin
+    -- Set d.
+    set d := (if 2 * mx = 2 ^ prec.toNat then
+                Bldexp hp hmax mode.mode_NE (Bone hp hmax) fexp_em1
+              else
+                Bulp hp hmax hemax x' : binary_float prec emax) with hd_def
+    -- is_finite d.
+    have h_d_fin : is_finite d = true := by
+      rw [hd_def]; split_ifs
+      · exact h_bldexp_fin
+      · exact h_bulp_fin
+    -- 0 ≤ B2R d.
+    have h_d_nonneg : 0 ≤ B2R d := by
+      rw [hd_def]; split_ifs
+      · rw [h_bldexp_b2r']; exact le_of_lt (bpow_gt_0 _ _)
+      · rw [h_bulp_b2r]; exact ulp_ge_0 radix2 _ _
+    -- B2R d ≤ B2R x'.
+    have h_d_le_x : B2R d ≤ B2R x' := by
+      rw [hd_def]; split_ifs
+      · -- Bldexp case: B2R d = bpow(fexp_em1) ≤ bpow(e - 1) ≤ B2R x'.
+        rw [h_bldexp_b2r']
+        calc bpow radix2 fexp_em1
+            ≤ bpow radix2 (e - 1) := bpow_le radix2 h_fexp_em1_le
+          _ = bpow radix2 (mag radix2 (B2R x') - 1) := by rw [h_e_mag]
+          _ ≤ |B2R x'| := bpow_mag_le radix2 h_B2R_ne
+          _ = B2R x' := abs_of_pos hpos_x'
+      · -- Bulp case: B2R d = ulp(x') ≤ x' since x' > 0 and x' ∈ format.
+        rw [h_bulp_b2r]
+        exact ulp_le_id radix2 _ hpos_x' h_x'_fmt
+    -- |round (B2R x' - B2R d)| < bpow emax. Used to fire Bminus_correct's if-true.
+    have h_x_minus_d_nonneg : 0 ≤ B2R x' - B2R d := by linarith
+    have h_round_xmd_lt : |round radix2 (FLT_exp (3 - emax - prec) prec)
+        (round_mode mode.mode_NE) (B2R x' - B2R d)| < bpow radix2 emax := by
+      rw [abs_of_nonneg]
+      · -- round(B2R x' - B2R d) ≤ B2R x' < bpow emax.
+        calc round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode mode.mode_NE)
+                  (B2R x' - B2R d)
+            ≤ B2R x' := round_le_generic radix2 _
+                (FLT_exp_valid (3 - emax - prec) prec hp) _ h_x'_fmt (by linarith)
+          _ ≤ |B2R x'| := le_abs_self _
+          _ < bpow radix2 emax := abs_B2R_lt_emax hp hmax x'
+      · -- 0 ≤ round (B2R x' - B2R d).
+        rw [show (0 : ℝ) = round radix2 (FLT_exp (3 - emax - prec) prec)
+            (round_mode mode.mode_NE) 0 from
+          (round_0 radix2 _ _).symm]
+        exact round_le radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp) _
+          h_x_minus_d_nonneg
+    -- Apply Bminus_correct.
+    have h_bminus := Bminus_correct hp hmax (fun a _ => pred_pos_nan a)
+      mode.mode_NE x' d h_x'_fin h_d_fin
+    rw [if_pos h_round_xmd_lt] at h_bminus
+    obtain ⟨h_bminus_b2r, h_bminus_fin, h_bminus_sign⟩ := h_bminus
+    -- Now unfold Bpred_pos to expose the Bminus call.
+    show B2R (Bminus hp hmax (fun a _ => pred_pos_nan a) mode.mode_NE x' d) =
+        pred_pos radix2 (FLT_exp (3 - emax - prec) prec) (B2R x') ∧
+        is_finite (Bminus hp hmax (fun a _ => pred_pos_nan a) mode.mode_NE x' d)
+          = true ∧
+        Bsign (Bminus hp hmax (fun a _ => pred_pos_nan a) mode.mode_NE x' d)
+          = false
+    refine ⟨?_, h_bminus_fin, ?_⟩
+    · -- B2R = pred_pos. Use the four-case dispatch.
+      rw [h_bminus_b2r]
+      -- round(B2R x' - B2R d) = B2R x' - B2R d since B2R x' - B2R d ∈ format.
+      -- We'll show this by establishing that B2R x' - B2R d = pred_pos x'
+      -- (which is in format by generic_format_pred_pos).
+      have h_diff_eq_pred_pos : B2R x' - B2R d
+          = pred_pos radix2 (FLT_exp (3 - emax - prec) prec) (B2R x') := by
+        rw [hd_def]
+        unfold pred_pos
+        split_ifs with h_d h_pred h_pred
+        · -- Hd=true, Hpred=true: d = Bldexp ⟹ B2R d = bpow(fexp_em1); pred_pos uses bpow(fexp(mag-1)).
+          rw [h_bldexp_b2r', hfexp_em1_def, h_e_mag]
+        · -- Hd=true, Hpred=false: contradiction.
+          exfalso; apply h_pred
+          -- mx = 2^(prec-1) from Hd, so B2R x' = bpow(prec - 1 + ex), mag = prec + ex.
+          have h_prec_toNat : 1 ≤ prec.toNat := by omega
+          have h_prec_nn : 0 ≤ prec - 1 := by linarith
+          have h_2_pm1 : (2 : ℤ) * 2 ^ (prec - 1).toNat = 2 ^ prec.toNat := by
+            have h_pn : prec.toNat = (prec - 1).toNat + 1 := by omega
+            rw [h_pn, pow_succ]; ring
+          have h_mx_eq : mx = (2 : ℤ) ^ (prec - 1).toNat := by linarith
+          have h_pow_cast : (((2 : ℤ) ^ (prec - 1).toNat : ℤ) : ℝ) = bpow radix2 (prec - 1) := by
+            show ((radix2.val ^ (prec - 1).toNat : ℤ) : ℝ) = _
+            exact IZR_Zpower radix2 h_prec_nn
+          have h_B2R_eq : B2R x' = bpow radix2 (prec - 1 + ex) := by
+            show ((cond_Zopp false mx : ℤ) : ℝ) * bpow radix2 ex = _
+            rw [cond_Zopp_false, h_mx_eq, h_pow_cast, ← bpow_plus]
+          have h_mag_x : mag radix2 (B2R x') = prec + ex := by
+            rw [h_B2R_eq, mag_bpow]; ring
+          calc B2R x' = bpow radix2 (prec - 1 + ex) := h_B2R_eq
+            _ = bpow radix2 (mag radix2 (B2R x') - 1) := by
+                rw [h_mag_x]; congr 1; ring
+        · -- Hd=false, Hpred=true: d = Bulp ⟹ B2R d = ulp(x'); pred_pos uses bpow(fexp(mag-1)).
+          -- Need: x' - ulp(x') = x' - bpow(fexp(mag-1)), i.e., ulp(x') = bpow(fexp(mag-1)).
+          -- Key fact: in this subcase, mag(x') ≤ emin + prec.
+          rw [h_bulp_b2r]
+          -- ulp(x') = bpow(cexp x') = bpow(fexp(mag x')) since x' ≠ 0.
+          rw [ulp_neq_0 radix2 _ h_B2R_ne]
+          -- Need: bpow(fexp(mag x')) = bpow(fexp(mag x' - 1)).
+          -- This holds when both arguments saturate to emin.
+          -- Claim: mag(x') ≤ emin + prec (proof by contradiction from h_d, h_pred).
+          have h_mag_le : mag radix2 (B2R x') ≤ (3 - emax - prec) + prec := by
+            by_contra h_not_le
+            push_neg at h_not_le
+            -- Derive 2*mx = 2^prec, contradicting h_d.
+            have h_canon : canonical_mantissa prec emax mx ex := hb.2.1
+            have h_fexp_mag : FLT_exp (3 - emax - prec) prec (mag radix2 (B2R x'))
+                = mag radix2 (B2R x') - prec := by
+              unfold FLT_exp; apply max_eq_left; linarith
+            have h_mx_ne : (mx : ℤ) ≠ 0 := by linarith [hb.1]
+            have h_mag_eq_2 : mag radix2 (B2R x') = Zdigits radix2 mx + ex := by
+              show mag radix2 (F2R (beta := radix2) ⟨cond_Zopp false mx, ex⟩) = _
+              rw [mag_F2R_Zdigits (cond_Zopp false mx) ex
+                (by show cond_Zopp false mx ≠ 0; exact h_mx_ne)]
+              rfl
+            have h_ex_eq : ex = mag radix2 (B2R x') - prec := by
+              have h1 : FLT_exp (3 - emax - prec) prec (Zdigits radix2 mx + ex) = ex :=
+                h_canon
+              rw [← h_mag_eq_2] at h1
+              linarith [h1.symm, h_fexp_mag]
+            -- B2R x' = bpow(mag - 1) (from h_pred) and B2R x' = mx · bpow(ex).
+            -- So mx · bpow(ex) = bpow(mag - 1), i.e., mx = bpow(mag - 1 - ex) = bpow(prec - 1).
+            have h_B2R_pow : B2R x' = bpow radix2 (mag radix2 (B2R x') - 1) := h_pred
+            have h_step : (mx : ℝ) * bpow radix2 ex
+                = bpow radix2 (mag radix2 (B2R x') - 1) := by
+              have h_b2r_eq : B2R x' = (mx : ℝ) * bpow radix2 ex := by
+                show ((cond_Zopp false mx : ℤ) : ℝ) * bpow radix2 ex = _
+                rw [cond_Zopp_false]
+              rw [← h_b2r_eq]; exact h_B2R_pow
+            -- Substitute ex = mag - prec: mx · bpow(mag - prec) = bpow(mag - 1).
+            -- Multiply both sides by bpow(-(mag - prec)) = bpow(prec - mag):
+            -- mx = bpow(mag - 1 - (mag - prec)) = bpow(prec - 1).
+            have h_prec_nn : 0 ≤ prec - 1 := by linarith
+            have h_mx_real : (mx : ℝ) = bpow radix2 (prec - 1) := by
+              have h_step' : (mx : ℝ) * bpow radix2 (mag radix2 (B2R x') - prec)
+                  = bpow radix2 (mag radix2 (B2R x') - 1) := by
+                rw [← h_ex_eq]; exact h_step
+              have h_bp_ne : bpow radix2 (mag radix2 (B2R x') - prec) ≠ 0 :=
+                (bpow_gt_0 _ _).ne'
+              have h_div_eq : (mx : ℝ) = bpow radix2 (mag radix2 (B2R x') - 1)
+                  / bpow radix2 (mag radix2 (B2R x') - prec) := by
+                rw [eq_div_iff h_bp_ne]; exact h_step'
+              rw [h_div_eq,
+                show mag radix2 (B2R x') - 1
+                  = (prec - 1) + (mag radix2 (B2R x') - prec) from by ring,
+                bpow_plus]
+              field_simp
+            have h_pow_cast : (((2 : ℤ) ^ (prec - 1).toNat : ℤ) : ℝ)
+                = bpow radix2 (prec - 1) := by
+              show ((radix2.val ^ (prec - 1).toNat : ℤ) : ℝ) = _
+              exact IZR_Zpower radix2 h_prec_nn
+            have h_mx_int : mx = (2 : ℤ) ^ (prec - 1).toNat := by
+              have h_cast : ((mx : ℤ) : ℝ) = (((2 : ℤ) ^ (prec - 1).toNat : ℤ) : ℝ) := by
+                rw [h_mx_real, ← h_pow_cast]
+              exact_mod_cast h_cast
+            have h_2mx : 2 * mx = 2 ^ prec.toNat := by
+              rw [h_mx_int]
+              have h_pn : prec.toNat = (prec - 1).toNat + 1 := by omega
+              rw [h_pn, pow_succ]; ring
+            exact h_d h_2mx
+          -- Now use h_mag_le to conclude fexp(mag) = fexp(mag-1) = emin.
+          have h_fexp_mag : FLT_exp (3 - emax - prec) prec (mag radix2 (B2R x'))
+              = 3 - emax - prec := by
+            unfold FLT_exp; apply max_eq_right; linarith
+          have h_fexp_mag1 : FLT_exp (3 - emax - prec) prec (mag radix2 (B2R x') - 1)
+              = 3 - emax - prec := by
+            unfold FLT_exp; apply max_eq_right; linarith
+          show B2R x' - bpow radix2 (cexp radix2 (FLT_exp (3 - emax - prec) prec) (B2R x'))
+            = B2R x' - bpow radix2 (FLT_exp (3 - emax - prec) prec
+                (mag radix2 (B2R x') - 1))
+          congr 1
+          congr 1
+          show FLT_exp (3 - emax - prec) prec (mag radix2 (B2R x'))
+            = FLT_exp (3 - emax - prec) prec (mag radix2 (B2R x') - 1)
+          rw [h_fexp_mag, h_fexp_mag1]
+        · -- Hd=false, Hpred=false: d = Bulp ⟹ B2R d = ulp(x'); pred_pos = x' - ulp(x').
+          rw [h_bulp_b2r]
+      -- The pred_pos result is in format, so rounding is identity.
+      have h_pred_pos_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (pred_pos radix2 (FLT_exp (3 - emax - prec) prec) (B2R x')) :=
+        generic_format_pred_pos radix2 _ (FLT_exp_valid _ _ hp) h_x'_fmt hpos_x'
+      rw [h_diff_eq_pred_pos]
+      exact round_generic _ _ _ h_pred_pos_fmt
+    · -- Bsign = false.
+      rw [h_bminus_sign]
+      have h_sign_eq : Bsign x' = false := rfl
+      rcases lt_trichotomy (B2R x' - B2R d) 0 with h_lt | h_eq | h_gt
+      · linarith
+      · have h_cmp : compare (B2R x' - B2R d) (0 : ℝ) = Ordering.eq :=
+          compare_eq_iff_eq.mpr h_eq
+        rw [h_cmp]; simp [h_sign_eq]
+      · have h_cmp : compare (B2R x' - B2R d) (0 : ℝ) = Ordering.gt :=
+          compare_gt_iff_gt.mpr h_gt
+        rw [h_cmp]
+
 /-! ## Bmax_float: the largest representable finite -/
 
 /-- **`Bmax_float_valid`** (Coq `Bmax_float_proof`, line 2209): the float
