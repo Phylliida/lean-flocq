@@ -1564,7 +1564,104 @@ theorem binary_round_aux_correct' (hp : 0 < prec) (hmax : prec < emax)
         = round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x
       rw [Hround, ← hk, F2R_cond_Zopp, F2R_cond_Zopp, H3]
     · -- ===== Overflow sub-case (|round x| ≥ bpow emax) =====
-      sorry
+      rw [if_neg h_e2_le]
+      -- The match arm becomes `binary_overflow prec emax m sx`.
+      -- The outer `if |round x| < bpow emax` lands on the FALSE branch,
+      -- because if it were true, `bounded_canonical_lt_emax` would give
+      -- us `bounded m2 e2`, whose third conjunct is `e2 ≤ emax - prec` —
+      -- contradicting our case.
+      have h_abs_ge :
+          ¬ |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+              < bpow radix2 emax := by
+        intro h_lt
+        have h_F2R_lt : F2R (beta := radix2) ⟨m2, e2⟩ < bpow radix2 emax := by
+          rw [← H3, ← h_abs_round]; exact h_lt
+        have h_canon : canonical radix2 (FLT_exp (3 - emax - prec) prec)
+            (⟨m2, e2⟩ : float radix2) := by
+          show e2 = cexp radix2 (FLT_exp (3 - emax - prec) prec)
+              (F2R (beta := radix2) ⟨m2, e2⟩)
+          show e2 = FLT_exp (3 - emax - prec) prec
+              (mag radix2 (F2R (beta := radix2) ⟨m2, e2⟩))
+          rw [h_mag2]; exact h_canonical_eq.symm
+        have h_bnd_m2 : bounded prec emax m2 e2 :=
+          bounded_canonical_lt_emax hp hmax m2 e2 h_m2_pos h_canon h_F2R_lt
+        exact h_e2_le h_bnd_m2.2.2
+      rw [if_neg h_abs_ge]
+      refine ⟨?_, rfl⟩
+      -- valid_binary (binary_overflow) — case on overflow_to_inf.
+      unfold binary_overflow
+      by_cases h_oti : overflow_to_inf m (decide (x < 0)) = true
+      · -- True: F754_infinity, valid_binary = True.
+        rw [if_pos h_oti]; trivial
+      · -- False: F754_finite sx (2^prec - 1) (emax - prec) — need bounded.
+        rw [if_neg h_oti]
+        show bounded prec emax (2 ^ prec.toNat - 1) (emax - prec)
+        -- Useful fact: prec.toNat ≥ 1 (since 0 < prec).
+        have h_prec_toNat : 1 ≤ prec.toNat := by omega
+        -- (2 : ℤ) ^ prec.toNat ≥ 2
+        have h_pow_ge_2 : (2 : ℤ) ≤ 2 ^ prec.toNat := by
+          calc (2 : ℤ) = 2 ^ 1 := by norm_num
+            _ ≤ 2 ^ prec.toNat :=
+              pow_le_pow_right₀ (by norm_num : (1 : ℤ) ≤ 2) h_prec_toNat
+        -- (2 : ℤ) ^ prec.toNat - 1 ≥ 1
+        have h_mant_ge_1 : 1 ≤ (2 : ℤ) ^ prec.toNat - 1 := by linarith
+        -- Zdigits radix2 (2^prec - 1) = prec, via Zdigits_unique.
+        have h_zd : Zdigits radix2 (2 ^ prec.toNat - 1) = prec := by
+          apply Zdigits_unique radix2
+          · -- bpow (prec - 1) ≤ |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
+            -- |x| = x since x ≥ 1 > 0
+            have h_abs : |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
+                      = ((2 ^ prec.toNat - 1 : ℤ) : ℝ) := by
+              apply abs_of_pos
+              exact_mod_cast (by linarith : (0 : ℤ) < 2 ^ prec.toNat - 1)
+            rw [h_abs]
+            -- bpow radix2 (prec - 1) = ((2 ^ (prec - 1).toNat : ℤ) : ℝ)
+            have h_prec_sub_nn : 0 ≤ prec - 1 := by
+              have : 1 ≤ prec := hp
+              linarith
+            rw [show bpow radix2 (prec - 1)
+                = ((2 ^ (prec - 1).toNat : ℤ) : ℝ) from
+                  (IZR_Zpower radix2 h_prec_sub_nn).symm]
+            -- (prec - 1).toNat = prec.toNat - 1 (since prec ≥ 1)
+            have h_tn_sub : (prec - 1).toNat = prec.toNat - 1 := by
+              omega
+            rw [h_tn_sub]
+            -- Show: 2 ^ (prec.toNat - 1) ≤ 2 ^ prec.toNat - 1 (as reals).
+            have h_nat : ((2 : ℤ) ^ (prec.toNat - 1) : ℤ) ≤ 2 ^ prec.toNat - 1 := by
+              set n := prec.toNat - 1 with hn_def
+              have hN : prec.toNat = n + 1 := by omega
+              rw [hN, pow_succ]
+              -- Goal: 2 ^ n ≤ 2 ^ n * 2 - 1
+              have h_pos : (1 : ℤ) ≤ 2 ^ n :=
+                calc (1 : ℤ) = 2 ^ 0 := by norm_num
+                  _ ≤ 2 ^ n := pow_le_pow_right₀ (by norm_num) (Nat.zero_le _)
+              linarith
+            exact_mod_cast h_nat
+          · -- |((2 ^ prec.toNat - 1 : ℤ) : ℝ)| < bpow radix2 prec
+            have h_abs : |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
+                      = ((2 ^ prec.toNat - 1 : ℤ) : ℝ) := by
+              apply abs_of_pos
+              exact_mod_cast (by linarith : (0 : ℤ) < 2 ^ prec.toNat - 1)
+            rw [h_abs]
+            have h_prec_nn : 0 ≤ prec := le_of_lt hp
+            rw [show bpow radix2 prec = ((2 ^ prec.toNat : ℤ) : ℝ) from
+                  (IZR_Zpower radix2 h_prec_nn).symm]
+            exact_mod_cast (by linarith : (2 ^ prec.toNat - 1 : ℤ) < 2 ^ prec.toNat)
+        refine ⟨h_mant_ge_1, ?_, le_refl _⟩
+        show FLT_exp (3 - emax - prec) prec
+            (Zdigits radix2 (2 ^ prec.toNat - 1) + (emax - prec)) = emax - prec
+        rw [h_zd]
+        -- FLT_exp (emin) prec (prec + (emax - prec)) = FLT_exp emin prec emax
+        --   = max (emax - prec) (3 - emax - prec)
+        --   = emax - prec (since emax ≥ 2)
+        show FLT_exp (3 - emax - prec) prec (prec + (emax - prec)) = emax - prec
+        have h_simp : prec + (emax - prec) = emax := by ring
+        rw [h_simp]
+        unfold FLT_exp
+        -- max (emax - prec) (3 - emax - prec) = emax - prec.
+        -- Need: 3 - emax - prec ≤ emax - prec, i.e., 2*emax ≥ 3, i.e., emax ≥ 2.
+        have h_emax_ge_2 : 2 ≤ emax := by linarith
+        exact max_eq_left (by linarith)
 
 end binary_float
 

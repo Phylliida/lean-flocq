@@ -29,7 +29,7 @@ including both round-trip theorems. The IEEE 754 binary
 encoding is now a proven bijection between `binary_float` and integers in
 `[0, 2^(mw+ew+1))`.
 
-**~23070 lines of Lean across 27 files. 1 `sorry` (the overflow sub-case of `binary_round_aux_correct'` — bounded sub-case landed). All files build clean.**
+**~23160 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -46,7 +46,7 @@ encoding is now a proven bijection between `binary_float` and integers in
 | `Ulp.lean` | 2486 | `Core/Ulp.v` | **Complete: 103/103.** All keystones (`succ_DN_eq_UP`, `ulp_round`, error bounds, mixed-sign perturbation, `generic_format_plus_ulp`). |
 | `Round_NE.lean` | 740 | `Core/Round_NE.v` | **Complete: 10/10.** `DN_UP_parity_generic_pos/_aux/_generic`, `Rnd_NE_pt_{total,monotone,round}`, `round_NE_opp/_abs/_pt_pos/_pt`, `exists_NE_FLX/_FLT`. |
 | `Digits.lean` | 192 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 9 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`, `_le_Zpower`, `_div_Zpower`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
-| `Binary.lean` | 1566 | `IEEE754/Binary.v` (lines 1–972 + partial 974–1154) | **Structural part + shr_record block + IEEE rounding-kernel definitions done + `binary_round_aux_correct'` opening moves + m1'=0 case + m1'>0 bounded sub-case (only overflow sub-case open).** `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, **`choice_mode`**, **`inbetween_int_valid_round_mode`** (the per-mode dispatch that connects `round_mode m` to `choice_mode m` via the 5 `inbetween_int_*_sign` lemmas from `Calc/Round.lean` — needed by the correctness theorem), `overflow_to_inf`, `binary_overflow`. **`shr_record`** struct + `shr_1` / `loc_of_shr_record` / `shr_record_of_loc` with three round-trip lemmas (`m_shr_record_of_loc`, `loc_of_shr_record_of_loc`, `shr_record_of_loc_m_l`), `shr` iteration function, `shr_1_nonneg` / `shr_1_iter_nonneg` invariants, and **`inbetween_shr_1`**, `inbetween_shr_iter`, **`inbetween_shr`** correctness theorems. **`shr_fexp`** definition + **`shr_truncate`** theorem (connecting `shr_fexp` to `truncate` from `Calc/Round.lean`). **`binary_round_aux`** definition (IEEE-754 rounding kernel: two `shr_fexp` calls bracketing a `choice_mode` rounding, then zero/finite/overflow classification). Still to do: `binary_round_aux_correct'` correctness theorem (Coq lines 974–1154, ~180 lines) and downstream arithmetic ops (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`, auxiliary ops). |
+| `Binary.lean` | 1654 | `IEEE754/Binary.v` (lines 1–1154) | **Structural part + shr_record block + IEEE rounding-kernel definitions + `binary_round_aux_correct'` COMPLETE (all sub-cases).** Still to do: downstream arithmetic ops (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`, `Bldexp`, `Bfrexp`, `Bulp`, `Bsucc`, `Bpred`). `full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`. FF2B/B2FF/B2R round-trips and injectivity. `Bsign`/`is_finite`/`is_nan`. `build_nan`/`erase`/`Bopp`/`Babs`. `Bcompare` (with correctness and swap). Boundedness theorems. `mode` enum, `round_mode`, **`choice_mode`**, **`inbetween_int_valid_round_mode`** (the per-mode dispatch that connects `round_mode m` to `choice_mode m` via the 5 `inbetween_int_*_sign` lemmas from `Calc/Round.lean` — needed by the correctness theorem), `overflow_to_inf`, `binary_overflow`. **`shr_record`** struct + `shr_1` / `loc_of_shr_record` / `shr_record_of_loc` with three round-trip lemmas (`m_shr_record_of_loc`, `loc_of_shr_record_of_loc`, `shr_record_of_loc_m_l`), `shr` iteration function, `shr_1_nonneg` / `shr_1_iter_nonneg` invariants, and **`inbetween_shr_1`**, `inbetween_shr_iter`, **`inbetween_shr`** correctness theorems. **`shr_fexp`** definition + **`shr_truncate`** theorem (connecting `shr_fexp` to `truncate` from `Calc/Round.lean`). **`binary_round_aux`** definition (IEEE-754 rounding kernel: two `shr_fexp` calls bracketing a `choice_mode` rounding, then zero/finite/overflow classification). Still to do: `binary_round_aux_correct'` correctness theorem (Coq lines 974–1154, ~180 lines) and downstream arithmetic ops (`Bplus`, `Bmult`, `Bdiv`, `Bsqrt`, auxiliary ops). |
 | `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
 | `Calc/Round.lean` | 1524 | `Calc/Round.v` | **Complete.** `cexp_inbetween_float[_loc_Exact]`, `cond_incr`, `inbetween_float_round[_sign]`. All 6 mode families: DN/UP/ZR/N/NE/NA, both unsigned and signed, `inbetween_int_*` and `inbetween_float_*`. `truncate_aux`, `truncate`, `truncate_0`, `truncate_correct_partial[_partial']`/`_correct[_correct']`. `generic_format_truncate`, `truncate_correct_format`. Generic correctness: `round_any_correct`, `round_trunc_any_correct[_']`, `round_sign_any_correct`, `round_trunc_sign_any_correct[_']`. **All 30 per-mode aliases** for DN/UP/ZR/NE/NA. `truncate_FIX`, `truncate_FIX_correct`. |
 | `Calc/Operations.lean` | 137 | `Calc/Operations.v` | **Complete: 13/13.** `Falign[_spec[_exp]]`, `Fopp` + `F2R_opp`, `Fabs` + `F2R_abs`, `Fplus` + `F2R_plus`, `Fplus_same_exp`, `Fexp_Fplus`, `Fminus` + `F2R_minus`, `Fminus_same_exp`, `Fmult` + `F2R_mult`. |
@@ -281,14 +281,13 @@ instantiations) are done. The remaining work is the substantial part of
 `Binary.lean` and the rest of `IEEE754/Bits.v`:
 
 1. **`Binary.lean` arithmetic ops**: `shr_record` infrastructure DONE
-   (lines 745–923 of Binary.v ported as of 2026-05-12), including
-   `shr_fexp` and `shr_truncate`. `binary_round_aux` *definition* also
-   done. **`binary_round_aux_correct'`** opening moves + `m1' = 0`
-   case + `m1' > 0` bounded sub-case landed (2026-05-12 cont.). The
-   one remaining `sorry` is the overflow sub-case (Coq lines 1081–1138,
-   needing the `Zdigits radix2 (2^prec - 1) = prec` arithmetic plus
-   the proof-by-contradiction that `|round x| ≥ bpow emax` when
-   `e2 > emax - prec`).
+   (lines 745–923 of Binary.v), including `shr_fexp` and `shr_truncate`.
+   **`binary_round_aux` definition + `binary_round_aux_correct'`
+   theorem COMPLETE** (2026-05-12 → 2026-05-15). The rounding kernel
+   and its correctness theorem (Coq lines 974–1154, ~180 dense lines)
+   are fully proved with 0 sorries. Next: arithmetic ops (`Bplus`,
+   `Bmult`, `Bdiv`, `Bsqrt`), then auxiliary ops (`Bldexp`, `Bfrexp`,
+   `Bulp`, `Bsucc`, `Bpred`).
    Dependencies: `round_trunc_sign_any_correct'`, `truncate_correct_partial'`,
    `truncate_correct_format`, `truncate_0`, `cexp_round_ge` — all in
    `Calc/Round.lean` and `Generic_fmt.lean`. Then the arithmetic ops
@@ -410,16 +409,49 @@ followed by a clean conclusion:
   `|round x| < bpow emax` precondition for `Rlt_bool true`, then
   `F2R_cond_Zopp + Hround + H3` close the F2R equality.
 
-**Outstanding: overflow sub-case (`emax - prec < e2`):** Need
-`|round x| ≥ bpow emax` (proof by contradiction via
-`bounded_canonical_lt_emax`) and `valid_binary (binary_overflow m sx)`.
-The latter's `overflow_to_inf = false` branch needs `Zdigits radix2
-(2 ^ prec.toNat - 1) = prec`. Plan: use `Zdigits_unique` with
-`bpow (prec - 1) ≤ |2^prec - 1| < bpow prec`. Lower bound:
-`2^(prec-1) ≤ 2^prec - 1 ↔ 2^(prec-1) ≥ 1` (true for `prec ≥ 1`).
-Upper bound: trivial. Then `FLT_exp(prec + (emax - prec)) = FLT_exp
-emax = max(emax - prec, 3 - emax - prec) = emax - prec` (needs
-`emax ≥ 2`, which follows from `prec ≥ 1 ∧ prec < emax`).
+**Overflow sub-case (landed 2026-05-15):** Two pieces of work:
+
+1. **Proof-by-contradiction that `|round x| ≥ bpow emax`** when we're
+   in the `e2 > emax - prec` branch. Assume `|round x| < bpow emax`;
+   then `F2R⟨m2, e2⟩ = F2R⟨m1', e1⟩ = |round x| < bpow emax`. Build
+   `canonical ⟨m2, e2⟩` from `h_canonical_eq` (hoisted earlier).
+   Apply `bounded_canonical_lt_emax hp hmax m2 e2 h_m2_pos h_canon
+   h_F2R_lt` to get `bounded m2 e2`, whose third conjunct `e2 ≤
+   emax - prec` contradicts the case assumption.
+
+2. **`valid_binary (binary_overflow prec emax m sx)`** by case on
+   `overflow_to_inf m sx`:
+   - True branch: `F754_infinity sx`, valid_binary is `True`. Trivial.
+   - False branch: `F754_finite sx (2^prec - 1) (emax - prec)`. Need
+     `bounded`. The three conjuncts:
+     * `1 ≤ 2^prec.toNat - 1` from `2^prec.toNat ≥ 2` (via
+       `pow_le_pow_right₀` with `1 ≤ prec.toNat`).
+     * `canonical_mantissa`: `FLT_exp(Zdigits (2^prec.toNat - 1) +
+       (emax - prec)) = emax - prec`. Needs `Zdigits radix2
+       (2^prec.toNat - 1) = prec` (the awkward fact).
+     * `e ≤ emax - prec`: trivially `le_refl _`.
+
+**Zdigits fact via Zdigits_unique:**
+- Lower bound `bpow (prec - 1) ≤ |(2^prec.toNat - 1 : ℤ) : ℝ|`:
+  - Cast: `|(2^prec.toNat - 1 : ℤ) : ℝ| = (2^prec.toNat - 1 : ℤ) : ℝ`
+    via `abs_of_pos`.
+  - `bpow radix2 (prec - 1) = ((2^(prec-1).toNat : ℤ) : ℝ)` via
+    `IZR_Zpower` (symm).
+  - `(prec - 1).toNat = prec.toNat - 1` via `omega`.
+  - Show `2^(prec.toNat - 1) ≤ 2^prec.toNat - 1` as Ints:
+    set `n := prec.toNat - 1`; rewrite `prec.toNat = n + 1`; use
+    `pow_succ` to expose `2^n * 2`; then `linarith` with the fact
+    `1 ≤ 2^n` (from `pow_le_pow_right₀ (2 ≥ 1) (0 ≤ n)`).
+  - `exact_mod_cast` bridges the Int and ℝ versions.
+- Upper bound: `2^prec.toNat - 1 < 2^prec.toNat = bpow radix2 prec`,
+  trivial after `IZR_Zpower` rewrite.
+
+**`FLT_exp(emax) = emax - prec`** via `max_eq_left` once `3 - emax -
+prec ≤ emax - prec` is shown (which is `2*emax ≥ 3`, i.e., `emax ≥ 2`,
+which follows from `prec ≥ 1` and `prec < emax` via `linarith`).
+
+The whole overflow case lands in ~80 Lean lines. The `Zdigits =
+prec` derivation alone is ~40 lines of careful arithmetic.
 
 ### Notes from `binary_round_aux` definition + helper (2026-05-12 cont.)
 
