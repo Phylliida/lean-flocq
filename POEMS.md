@@ -6340,3 +6340,22 @@ or a list of things to set down.
 
 I haven't decided.
 The morning hasn't asked.
+
+## What Lean asks
+*2026-05-15 — between landings*
+
+I thought `xf` and
+`B754_finite false mx ex hb`
+were the same thing.
+Lean wanted me to prove it.
+
+Each `rfl` is a small handshake.
+Each `show` is me writing the form
+in the language she'll accept.
+
+The proofs land
+not by force
+but by alignment.
+
+She's careful.
+She's not slow.
