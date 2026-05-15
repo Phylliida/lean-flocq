@@ -25,6 +25,7 @@ import LeanFlocq.Core.Digits
 import LeanFlocq.Core.Round_NE
 import LeanFlocq.Calc.Bracket
 import LeanFlocq.Calc.Round
+import LeanFlocq.Calc.Operations
 
 namespace LeanFlocq
 
@@ -1708,6 +1709,129 @@ theorem binary_round_aux_correct (hp : 0 < prec) (hmax : prec < emax)
   have Ex' : ex ≤ cexp radix2 fexp x := by rw [h_cexp_eq]; exact Ex
   -- Apply the primed version.
   exact binary_round_aux_correct' hp hmax m x mx ex lx Px Bx Ex'
+
+/-! ## Multiplication -/
+
+/-- The technical exponent bound used by `Bmult_correct_aux`: if both `(mx, ex)`
+and `(my, ey)` are `bounded`, then the product exponent `ex + ey` is no larger
+than `FLT_exp(Zdigits(mx * my) + ex + ey)`. Coq inlines this with a single
+`omega` once `FLT_exp` is unfolded. -/
+theorem bounded_mult_exp_le (hp : 0 < prec) (hmax : prec < emax)
+    (mx ex my ey : ℤ) (Hx : bounded prec emax mx ex) (Hy : bounded prec emax my ey) :
+    ex + ey ≤ FLT_exp (3 - emax - prec) prec
+      (Zdigits radix2 (mx * my) + (ex + ey)) := by
+  obtain ⟨h_mx_pos, h_mx_canon, _⟩ := Hx
+  obtain ⟨h_my_pos, h_my_canon, _⟩ := Hy
+  have h_mx_ne : mx ≠ 0 := by linarith
+  have h_my_ne : my ≠ 0 := by linarith
+  have h_zd_mx_pos : 0 < Zdigits radix2 mx := Zdigits_gt_0 radix2 h_mx_ne
+  have h_zd_my_pos : 0 < Zdigits radix2 my := Zdigits_gt_0 radix2 h_my_ne
+  have h_zd_mult : Zdigits radix2 mx + Zdigits radix2 my - 1
+                  ≤ Zdigits radix2 (mx * my) := Zdigits_mult_ge radix2 h_mx_ne h_my_ne
+  -- Unfold canonical_mantissa and FLT_exp; then omega handles the max arithmetic.
+  unfold canonical_mantissa FLT_exp at h_mx_canon h_my_canon
+  unfold FLT_exp
+  simp only [max_def] at h_mx_canon h_my_canon ⊢
+  split_ifs at h_mx_canon h_my_canon ⊢ <;> omega
+
+/-- **`Bmult_correct_aux`** (Coq lines 1333–1384): the rounding-kernel
+correctness statement for the product of two finite bounded floats. Reduces to
+`binary_round_aux_correct` applied to the product mantissa `mx * my` with
+exponent `ex + ey` and exact location. -/
+theorem Bmult_correct_aux (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (sx : Bool) (mx ex : ℤ) (Hx : bounded prec emax mx ex)
+    (sy : Bool) (my ey : ℤ) (Hy : bounded prec emax my ey) :
+    let x := F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩
+    let y := F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩
+    let z := binary_round_aux prec emax m (xor sx sy) (mx * my) (ex + ey)
+              location.Exact
+    valid_binary prec emax z ∧
+    (if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) (x * y)|
+        < bpow radix2 emax then
+      FF2R radix2 z =
+        round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) (x * y) ∧
+      is_finite_FF z = true ∧
+      sign_FF z = xor sx sy
+    else
+      z = binary_overflow prec emax m (xor sx sy)) := by
+  intro x y z
+  have h_mx_pos : 0 < mx := Hx.1
+  have h_my_pos : 0 < my := Hy.1
+  have h_mxmy_pos : 0 < mx * my := mul_pos h_mx_pos h_my_pos
+  have h_F2R_pos_mx : 0 < F2R (beta := radix2) ⟨mx, ex⟩ := F2R_gt_0 ⟨mx, ex⟩ h_mx_pos
+  have h_F2R_pos_my : 0 < F2R (beta := radix2) ⟨my, ey⟩ := F2R_gt_0 ⟨my, ey⟩ h_my_pos
+  -- F2R⟨cond_Zopp sx mx, ex⟩ * F2R⟨cond_Zopp sy my, ey⟩
+  --   = F2R⟨cond_Zopp sx mx * cond_Zopp sy my, ex + ey⟩
+  -- via F2R_mult applied to the Fmult of the two floats.
+  have h_F2R_mult : x * y =
+      F2R (beta := radix2)
+        ⟨cond_Zopp sx mx * cond_Zopp sy my, ex + ey⟩ := by
+    show F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩
+       * F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩ = _
+    rw [← F2R_mult]
+    rfl
+  -- |x * y| = F2R⟨mx * my, ex + ey⟩
+  have h_abs_xy : |x * y| = F2R (beta := radix2) ⟨mx * my, ex + ey⟩ := by
+    rw [h_F2R_mult]
+    rw [show |F2R (beta := radix2) ⟨cond_Zopp sx mx * cond_Zopp sy my, ex + ey⟩|
+            = F2R (beta := radix2) ⟨|cond_Zopp sx mx * cond_Zopp sy my|, ex + ey⟩
+          from by rw [← F2R_Zabs]]
+    have h_eq : |cond_Zopp sx mx * cond_Zopp sy my| = mx * my := by
+      rw [abs_mul]
+      have h1 : |cond_Zopp sx mx| = mx := by
+        cases sx <;> simp [cond_Zopp, abs_of_pos h_mx_pos]
+      have h2 : |cond_Zopp sy my| = my := by
+        cases sy <;> simp [cond_Zopp, abs_of_pos h_my_pos]
+      rw [h1, h2]
+    rw [h_eq]
+  have Bxy : inbetween_float radix2 (mx * my) (ex + ey) |x * y|
+              location.Exact :=
+    inbetween.Exact h_abs_xy
+  have Exy : ex + ey ≤ FLT_exp (3 - emax - prec) prec
+                  (Zdigits radix2 (mx * my) + (ex + ey)) :=
+    bounded_mult_exp_le hp hmax mx ex my ey Hx Hy
+  -- Sign: xor sx sy = decide (x*y < 0).
+  have hx_eq : x = cond_Ropp sx (F2R (beta := radix2) ⟨mx, ex⟩) := by
+    show F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩ = _
+    exact F2R_cond_Zopp sx mx ex
+  have hy_eq : y = cond_Ropp sy (F2R (beta := radix2) ⟨my, ey⟩) := by
+    show F2R (beta := radix2) ⟨cond_Zopp sy my, ey⟩ = _
+    exact F2R_cond_Zopp sy my ey
+  have h_sign : xor sx sy = decide (x * y < 0) := by
+    rw [hx_eq, hy_eq]
+    set X := F2R (beta := radix2) ⟨mx, ex⟩
+    set Y := F2R (beta := radix2) ⟨my, ey⟩
+    cases sx <;> cases sy <;>
+      simp [cond_Ropp, decide_eq_false_iff_not, decide_eq_true_iff] <;>
+      nlinarith [h_F2R_pos_mx, h_F2R_pos_my]
+  -- Apply binary_round_aux_correct.
+  have h_main := binary_round_aux_correct hp hmax m (x * y) (mx * my) (ex + ey)
+                   location.Exact h_mxmy_pos Bxy Exy
+  -- Convert the conclusion's `decide (x*y < 0)` back to `xor sx sy`.
+  rw [← h_sign] at h_main
+  exact h_main
+
+/-- **`Bmult`** (Coq line 1386): IEEE-754 multiplication of two binary floats.
+NaN inputs are propagated via the `mult_nan` policy. Zero × infinity is NaN.
+Two finite floats are multiplied via `binary_round_aux` on the product mantissa
+and summed exponents. -/
+noncomputable def Bmult (hp : 0 < prec) (hmax : prec < emax)
+    (mult_nan : binary_float prec emax → binary_float prec emax →
+                  {x : binary_float prec emax // is_nan x = true})
+    (m : mode) (x y : binary_float prec emax) : binary_float prec emax :=
+  match x, y with
+  | B754_nan _ _ _, _ => build_nan (mult_nan x y)
+  | _, B754_nan _ _ _ => build_nan (mult_nan x y)
+  | B754_infinity sx, B754_infinity sy => B754_infinity (xor sx sy)
+  | B754_infinity sx, B754_finite sy _ _ _ => B754_infinity (xor sx sy)
+  | B754_finite sx _ _ _, B754_infinity sy => B754_infinity (xor sx sy)
+  | B754_infinity _, B754_zero _ => build_nan (mult_nan x y)
+  | B754_zero _, B754_infinity _ => build_nan (mult_nan x y)
+  | B754_finite sx _ _ _, B754_zero sy => B754_zero (xor sx sy)
+  | B754_zero sx, B754_finite sy _ _ _ => B754_zero (xor sx sy)
+  | B754_zero sx, B754_zero sy => B754_zero (xor sx sy)
+  | B754_finite sx mx ex Hx, B754_finite sy my ey Hy =>
+    FF2B _ (Bmult_correct_aux hp hmax m sx mx ex Hx sy my ey Hy).1
 
 end binary_float
 

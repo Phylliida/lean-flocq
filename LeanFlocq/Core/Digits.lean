@@ -84,6 +84,18 @@ theorem Zdigits_le_Zpower (beta : radix) {n k : ℤ} (Hk : 0 ≤ k)
     rw [← IZR_Zpower beta Hk]
     exact_mod_cast Hn
 
+/-- `Zdigits` of a product is at least the sum of digit counts minus one.
+Coq: `Zdigits_mult_ge`. -/
+theorem Zdigits_mult_ge (beta : radix) {x y : ℤ} (hx : x ≠ 0) (hy : y ≠ 0) :
+    Zdigits beta x + Zdigits beta y - 1 ≤ Zdigits beta (x * y) := by
+  unfold Zdigits
+  have hxR : (x : ℝ) ≠ 0 := by exact_mod_cast hx
+  have hyR : (y : ℝ) ≠ 0 := by exact_mod_cast hy
+  have h := (mag_mult beta hxR hyR).1
+  -- Bridge ((x * y : ℤ) : ℝ) ↔ (x : ℝ) * (y : ℝ)
+  rw [show (((x * y : ℤ) : ℝ)) = ((x : ℝ) * (y : ℝ)) from by push_cast; ring]
+  exact h
+
 /-- `Zdigits (m / β^e) = Zdigits m - e` for `0 ≤ m` and `0 ≤ e ≤ Zdigits m`. -/
 theorem Zdigits_div_Zpower (beta : radix) {m e : ℤ}
     (Hm : 0 ≤ m) (He : 0 ≤ e ∧ e ≤ Zdigits beta m) :
