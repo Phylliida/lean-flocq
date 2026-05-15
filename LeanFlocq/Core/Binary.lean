@@ -2161,6 +2161,108 @@ theorem binary_round_correct (hp : 0 < prec) (hmax : prec < emax)
   rw [h_sign]
   exact h_main
 
+/-- **`binary_normalize`** (Coq line 1544): normalize a signed mantissa + exponent
+into a `binary_float`. Dispatches on the sign of `mx`: zero → `B754_zero szero`,
+positive → `binary_round` with `sx = false`, negative → `binary_round` with
+`sx = true` and `-mx` (which is then positive). -/
+noncomputable def binary_normalize (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (mx ex : ℤ) (szero : Bool) : binary_float prec emax :=
+  if h_pos : 0 < mx then
+    FF2B _ (binary_round_correct hp hmax m false mx ex h_pos).1
+  else if h_neg : mx < 0 then
+    FF2B _ (binary_round_correct hp hmax m true (-mx) ex (by omega)).1
+  else
+    B754_zero szero
+
+theorem binary_normalize_correct (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (mx ex : ℤ) (szero : Bool) :
+    let x := F2R (beta := radix2) ⟨mx, ex⟩
+    let z := binary_normalize hp hmax m mx ex szero
+    (if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+        < bpow radix2 emax then
+      B2R z = round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x ∧
+      is_finite z = true ∧
+      Bsign z = (match compare x (0 : ℝ) with
+                  | Ordering.eq => szero
+                  | Ordering.lt => true
+                  | Ordering.gt => false)
+    else
+      B2FF z = binary_overflow prec emax m (decide (x < 0))) := by
+  intro x z
+  rcases lt_trichotomy mx 0 with h_neg | h_zero | h_pos
+  · -- mx < 0
+    show (if _ < _ then _ else _)
+    have h_neg_mx_pos : 0 < -mx := by omega
+    have h_brc := binary_round_correct hp hmax m true (-mx) ex h_neg_mx_pos
+    simp only [] at h_brc
+    -- F2R⟨cond_Zopp true (-mx), ex⟩ = F2R⟨mx, ex⟩
+    have h_F2R_eq : F2R (beta := radix2) ⟨cond_Zopp true (-mx), ex⟩ = x := by
+      show F2R (beta := radix2) ⟨-(-mx), ex⟩ = F2R (beta := radix2) ⟨mx, ex⟩
+      congr 1; show ⟨-(-mx), ex⟩ = (⟨mx, ex⟩ : float radix2); congr 1; omega
+    rw [h_F2R_eq] at h_brc
+    obtain ⟨h_valid, h_cond⟩ := h_brc
+    -- z = FF2B _ h_valid (via binary_normalize's mx < 0 branch)
+    have h_z_eq : z = FF2B _ h_valid := by
+      show binary_normalize hp hmax m mx ex szero = _
+      unfold binary_normalize
+      rw [dif_neg (by omega : ¬ 0 < mx), dif_pos h_neg]
+    rw [h_z_eq]
+    have h_F2R_neg : x < 0 :=
+      F2R_lt_0 (⟨mx, ex⟩ : float radix2) h_neg
+    -- Both branches use binary_round_correct's result.
+    split_ifs with h_lt
+    · rw [if_pos h_lt] at h_cond
+      obtain ⟨h_F2R_round, h_finite, h_sign⟩ := h_cond
+      refine ⟨?_, ?_, ?_⟩
+      · rw [show B2R (FF2B _ _) = FF2R radix2 _ from B2R_FF2B _ _]
+        exact h_F2R_round
+      · rw [is_finite_FF2B]; exact h_finite
+      · rw [Bsign_FF2B, h_sign]
+        rw [show compare x (0 : ℝ) = Ordering.lt from compare_lt_iff_lt.mpr h_F2R_neg]
+    · rw [if_neg h_lt] at h_cond
+      rw [B2FF_FF2B, h_cond]
+      rw [show decide (x < 0) = true from decide_eq_true h_F2R_neg]
+  · -- mx = 0
+    subst h_zero
+    have h_F2R_zero : x = 0 := by show F2R (beta := radix2) ⟨0, ex⟩ = 0; exact F2R_0 ex
+    rw [h_F2R_zero, round_0, abs_zero, if_pos (bpow_gt_0 radix2 emax)]
+    have h_z_eq : z = B754_zero szero := by
+      show binary_normalize hp hmax m 0 ex szero = _
+      unfold binary_normalize
+      rw [dif_neg (by omega : ¬ 0 < (0 : ℤ)),
+          dif_neg (by omega : ¬ (0 : ℤ) < 0)]
+    refine ⟨?_, ?_, ?_⟩
+    · rw [h_z_eq]; rfl
+    · rw [h_z_eq]; rfl
+    · rw [h_z_eq]
+      show szero = _
+      rw [show compare (0 : ℝ) (0 : ℝ) = Ordering.eq from compare_eq_iff_eq.mpr rfl]
+  · -- 0 < mx
+    show (if _ < _ then _ else _)
+    have h_brc := binary_round_correct hp hmax m false mx ex h_pos
+    simp only [] at h_brc
+    have h_F2R_eq : F2R (beta := radix2) ⟨cond_Zopp false mx, ex⟩ = x := rfl
+    rw [h_F2R_eq] at h_brc
+    obtain ⟨h_valid, h_cond⟩ := h_brc
+    have h_z_eq : z = FF2B _ h_valid := by
+      show binary_normalize hp hmax m mx ex szero = _
+      unfold binary_normalize
+      rw [dif_pos h_pos]
+    rw [h_z_eq]
+    have h_F2R_pos : 0 < x := F2R_gt_0 (⟨mx, ex⟩ : float radix2) h_pos
+    split_ifs with h_lt
+    · rw [if_pos h_lt] at h_cond
+      obtain ⟨h_F2R_round, h_finite, h_sign⟩ := h_cond
+      refine ⟨?_, ?_, ?_⟩
+      · rw [show B2R (FF2B _ _) = FF2R radix2 _ from B2R_FF2B _ _]
+        exact h_F2R_round
+      · rw [is_finite_FF2B]; exact h_finite
+      · rw [Bsign_FF2B, h_sign]
+        rw [show compare x (0 : ℝ) = Ordering.gt from compare_gt_iff_gt.mpr h_F2R_pos]
+    · rw [if_neg h_lt] at h_cond
+      rw [B2FF_FF2B, h_cond]
+      rw [show decide (x < 0) = false from decide_eq_false (by linarith)]
+
 end binary_float
 
 end LeanFlocq
