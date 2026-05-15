@@ -3811,8 +3811,7 @@ private theorem Bmax_float_valid (hp : 0 < prec) (hmax : prec < emax) :
   have h_mant_ge_1 : 1 ≤ (2 : ℤ) ^ prec.toNat - 1 := by linarith
   have h_zd : Zdigits radix2 (2 ^ prec.toNat - 1) = prec := by
     apply Zdigits_unique radix2
-    · -- bpow (prec - 1) ≤ |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
-      have h_abs : |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
+    · have h_abs : |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
                 = ((2 ^ prec.toNat - 1 : ℤ) : ℝ) := by
         apply abs_of_pos
         exact_mod_cast (by linarith : (0 : ℤ) < 2 ^ prec.toNat - 1)
@@ -3832,8 +3831,7 @@ private theorem Bmax_float_valid (hp : 0 < prec) (hmax : prec < emax) :
             _ ≤ 2 ^ n := pow_le_pow_right₀ (by norm_num) (Nat.zero_le _)
         linarith
       exact_mod_cast h_nat
-    · -- |((2 ^ prec.toNat - 1 : ℤ) : ℝ)| < bpow radix2 prec
-      have h_abs : |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
+    · have h_abs : |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
                 = ((2 ^ prec.toNat - 1 : ℤ) : ℝ) := by
         apply abs_of_pos
         exact_mod_cast (by linarith : (0 : ℤ) < 2 ^ prec.toNat - 1)
@@ -3859,6 +3857,318 @@ noncomputable def Bmax_float (hp : 0 < prec) (hmax : prec < emax) :
     binary_float prec emax :=
   FF2B (full_float.F754_finite false (2 ^ prec.toNat - 1) (emax - prec))
     (Bmax_float_valid hp hmax)
+
+/-! ## Bsucc: successor in the IEEE format -/
+
+/-- **`Bsucc`** (Coq line 2681): the successor of a binary float.
+
+- `B754_zero _` → `Bldexp Bone emin = bpow(emin)`, the smallest positive subnormal.
+- `B754_infinity false` (+∞) → +∞ itself.
+- `B754_infinity true` (-∞) → `-Bmax_float`, the largest negative finite.
+- `B754_nan` → propagated NaN via `succ_nan`.
+- Positive finite → `Bplus x (Bulp x)`.
+- Negative finite → `-(Bpred_pos(-x))`. -/
+noncomputable def Bsucc (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (succ_nan : binary_float prec emax →
+                  {z : binary_float prec emax // is_nan z = true})
+    (x : binary_float prec emax) : binary_float prec emax :=
+  match x with
+  | B754_zero _ => Bldexp hp hmax mode.mode_NE (Bone hp hmax) (3 - emax - prec)
+  | B754_infinity false => B754_infinity false
+  | B754_infinity true => Bopp succ_nan (Bmax_float hp hmax)
+  | B754_nan _ _ _ => build_nan (succ_nan x)
+  | B754_finite false mx ex hb =>
+    Bplus hp hmax (fun a _ => succ_nan a) mode.mode_NE (B754_finite false mx ex hb)
+      (Bulp hp hmax hemax (B754_finite false mx ex hb))
+  | B754_finite true mx ex hb =>
+    Bopp succ_nan (Bpred_pos hp hmax hemax succ_nan
+      (Bopp succ_nan (B754_finite true mx ex hb)))
+
+/-- **`Bsucc_correct`** (Coq line 2693): correctness of `Bsucc`.
+
+If `succ(B2R x) < bpow emax` (no overflow), then `B2R (Bsucc x) = succ(B2R x)`,
+`is_finite (Bsucc x) = true`, and `Bsign (Bsucc x) = Bsign x ∧ is_finite_strict x`.
+Otherwise, `Bsucc x` encodes `+∞`.
+
+The four input cases (after ruling out non-finite by `hf`):
+- **Zero**: `succ 0 = bpow(emin)` (via `negligible_exp_FLT`); `Bsucc` returns `Bldexp Bone emin`.
+- **Positive finite**: `succ x = x + ulp(x)`; `Bsucc` is `Bplus x (Bulp x)`, and the
+  sum is in format (via `generic_format_succ`), so `round = identity`.
+- **Negative finite**: `succ x = -(pred_pos(-x))`; `Bsucc` is `-(Bpred_pos(-x))`,
+  reducing to `Bpred_pos_correct`. No overflow (succ of negative is ≤ 0). -/
+theorem Bsucc_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (succ_nan : binary_float prec emax →
+                  {z : binary_float prec emax // is_nan z = true})
+    (x : binary_float prec emax) (hf : is_finite x = true) :
+    if succ radix2 (FLT_exp (3 - emax - prec) prec) (B2R x) < bpow radix2 emax then
+      B2R (Bsucc hp hmax hemax succ_nan x)
+        = succ radix2 (FLT_exp (3 - emax - prec) prec) (B2R x) ∧
+      is_finite (Bsucc hp hmax hemax succ_nan x) = true ∧
+      Bsign (Bsucc hp hmax hemax succ_nan x) = (Bsign x && is_finite_strict x)
+    else
+      B2FF (Bsucc hp hmax hemax succ_nan x) = full_float.F754_infinity false := by
+  -- Establish succ 0 = bpow(emin) once for the zero case.
+  have h_succ_0 : succ radix2 (FLT_exp (3 - emax - prec) prec) 0
+      = bpow radix2 (3 - emax - prec) := by
+    unfold succ
+    rw [if_pos (le_refl 0), zero_add]
+    unfold ulp
+    rw [if_pos rfl]
+    obtain ⟨n, h_neg, h_n_le⟩ := negligible_exp_FLT radix2 (3 - emax - prec) prec hp
+    rw [h_neg]
+    show bpow radix2 (FLT_exp (3 - emax - prec) prec n) = bpow radix2 (3 - emax - prec)
+    have h_fexp_n : FLT_exp (3 - emax - prec) prec n = 3 - emax - prec := by
+      unfold FLT_exp; apply max_eq_right; linarith
+    rw [h_fexp_n]
+  -- bpow(emin) in format and < bpow emax.
+  have h_emin_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+      (bpow radix2 (3 - emax - prec)) := by
+    apply generic_format_bpow' radix2 _ (FLT_exp_valid (3 - emax - prec) prec hp)
+    unfold FLT_exp; apply max_le _ (le_refl _); omega
+  have h_emin_bnd : bpow radix2 (3 - emax - prec) < bpow radix2 emax :=
+    bpow_lt radix2 (by omega)
+  cases x with
+  | B754_infinity _ => simp [is_finite] at hf
+  | B754_nan _ _ _ => simp [is_finite] at hf
+  | B754_zero s =>
+    -- B2R x = 0, succ 0 = bpow(emin) < bpow(emax) (always no overflow).
+    have h_B2R_zero : B2R (B754_zero s : binary_float prec emax) = 0 := rfl
+    rw [h_B2R_zero, h_succ_0, if_pos h_emin_bnd]
+    have h_is_fin_strict : is_finite_strict (B754_zero s : binary_float prec emax) = false := rfl
+    show B2R (Bldexp hp hmax mode.mode_NE (Bone hp hmax) (3 - emax - prec)
+            : binary_float prec emax) = bpow radix2 (3 - emax - prec) ∧
+        is_finite (Bldexp hp hmax mode.mode_NE (Bone hp hmax) (3 - emax - prec)
+            : binary_float prec emax) = true ∧
+        Bsign (Bldexp hp hmax mode.mode_NE (Bone hp hmax) (3 - emax - prec)
+            : binary_float prec emax)
+          = (Bsign (B754_zero s : binary_float prec emax)
+              && is_finite_strict (B754_zero s : binary_float prec emax))
+    rw [h_is_fin_strict, Bool.and_false]
+    obtain ⟨h_b2r, h_fin, h_sign⟩ :=
+      Bldexp_Bone_eq hp hmax (3 - emax - prec) h_emin_fmt h_emin_bnd
+    exact ⟨h_b2r, h_fin, h_sign⟩
+  | B754_finite sx mx ex hb =>
+    -- Common: mx > 0, B2R = (cond_Zopp sx mx : ℝ) * bpow ex.
+    have h_mx_pos : 0 < mx := by linarith [hb.1]
+    cases sx with
+    | false =>
+      -- Positive finite: Bsucc reduces to Bplus x (Bulp x). succ x = x + ulp x.
+      have h_B2R_pos : 0 < B2R (B754_finite false mx ex hb : binary_float prec emax) := by
+        show 0 < F2R (beta := radix2) ⟨mx, ex⟩
+        exact F2R_gt_0 _ h_mx_pos
+      have h_B2R_nn : 0 ≤ B2R (B754_finite false mx ex hb : binary_float prec emax) :=
+        le_of_lt h_B2R_pos
+      have h_xf_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (B2R (B754_finite false mx ex hb : binary_float prec emax)) :=
+        generic_format_B2R _
+      have h_ulp_nn : 0 ≤ ulp radix2 (FLT_exp (3 - emax - prec) prec)
+          (B2R (B754_finite false mx ex hb : binary_float prec emax)) := ulp_ge_0 _ _ _
+      have h_succ_eq : succ radix2 (FLT_exp (3 - emax - prec) prec)
+            (B2R (B754_finite false mx ex hb : binary_float prec emax))
+          = B2R (B754_finite false mx ex hb : binary_float prec emax)
+            + ulp radix2 (FLT_exp (3 - emax - prec) prec)
+                (B2R (B754_finite false mx ex hb : binary_float prec emax)) := by
+        unfold succ; rw [if_pos h_B2R_nn]
+      have h_succ_nn : 0 ≤ succ radix2 (FLT_exp (3 - emax - prec) prec)
+          (B2R (B754_finite false mx ex hb : binary_float prec emax)) := by
+        rw [h_succ_eq]; linarith
+      have h_succ_fmt : generic_format radix2 (FLT_exp (3 - emax - prec) prec)
+          (succ radix2 (FLT_exp (3 - emax - prec) prec)
+            (B2R (B754_finite false mx ex hb : binary_float prec emax))) :=
+        generic_format_succ radix2 _ (FLT_exp_valid _ _ hp) h_xf_fmt
+      obtain ⟨h_bulp_b2r, h_bulp_fin, _⟩ :=
+        Bulp_correct hp hmax hemax (B754_finite false mx ex hb) rfl
+      have h_bplus := Bplus_correct hp hmax (fun a _ => succ_nan a) mode.mode_NE
+        (B754_finite false mx ex hb)
+        (Bulp hp hmax hemax (B754_finite false mx ex hb)) rfl h_bulp_fin
+      rw [h_bulp_b2r] at h_bplus
+      have h_round_eq : round radix2 (FLT_exp (3 - emax - prec) prec)
+          (round_mode mode.mode_NE)
+          (B2R (B754_finite false mx ex hb : binary_float prec emax)
+            + ulp radix2 (FLT_exp (3 - emax - prec) prec)
+                (B2R (B754_finite false mx ex hb : binary_float prec emax)))
+          = succ radix2 (FLT_exp (3 - emax - prec) prec)
+              (B2R (B754_finite false mx ex hb : binary_float prec emax)) := by
+        rw [← h_succ_eq]; exact round_generic _ _ _ h_succ_fmt
+      rw [h_round_eq, abs_of_nonneg h_succ_nn] at h_bplus
+      -- Bsucc reduces to Bplus x (Bulp x).
+      have h_bsucc : Bsucc hp hmax hemax succ_nan (B754_finite false mx ex hb)
+          = Bplus hp hmax (fun a _ => succ_nan a) mode.mode_NE
+              (B754_finite false mx ex hb)
+              (Bulp hp hmax hemax (B754_finite false mx ex hb)) := rfl
+      rw [h_bsucc]
+      by_cases h_no_ovf : succ radix2 (FLT_exp (3 - emax - prec) prec)
+          (B2R (B754_finite false mx ex hb : binary_float prec emax)) < bpow radix2 emax
+      · rw [if_pos h_no_ovf]
+        rw [if_pos h_no_ovf] at h_bplus
+        obtain ⟨h_b2r, h_fin, h_sign⟩ := h_bplus
+        refine ⟨h_b2r, h_fin, ?_⟩
+        have h_sum_pos : 0 < B2R (B754_finite false mx ex hb : binary_float prec emax)
+            + ulp radix2 (FLT_exp (3 - emax - prec) prec)
+                (B2R (B754_finite false mx ex hb : binary_float prec emax)) := by linarith
+        have h_cmp : compare (B2R (B754_finite false mx ex hb : binary_float prec emax)
+              + ulp radix2 (FLT_exp (3 - emax - prec) prec)
+                (B2R (B754_finite false mx ex hb : binary_float prec emax))) (0 : ℝ)
+            = Ordering.gt := compare_gt_iff_gt.mpr h_sum_pos
+        rw [h_sign, h_cmp]
+        rfl
+      · rw [if_neg h_no_ovf]
+        rw [if_neg h_no_ovf] at h_bplus
+        obtain ⟨h_b2ff, _⟩ := h_bplus
+        rw [h_b2ff]
+        show binary_overflow prec emax mode.mode_NE
+            (Bsign (B754_finite false mx ex hb : binary_float prec emax))
+          = full_float.F754_infinity false
+        rfl
+    | true =>
+      -- Negative finite: Bsucc reduces to Bopp(Bpred_pos(Bopp x)). succ x = -pred_pos(-x).
+      have h_B2R_neg : B2R (B754_finite true mx ex hb : binary_float prec emax) < 0 := by
+        show F2R (beta := radix2) ⟨cond_Zopp true mx, ex⟩ < 0
+        show ((cond_Zopp true mx : ℤ) : ℝ) * bpow radix2 ex < 0
+        rw [show (cond_Zopp true mx : ℤ) = -mx from rfl]
+        have h_neg : ((-mx : ℤ) : ℝ) < 0 := by
+          push_cast
+          have h_mx_r : (1 : ℝ) ≤ (mx : ℝ) := by exact_mod_cast hb.1
+          linarith
+        exact mul_neg_of_neg_of_pos h_neg (bpow_gt_0 _ _)
+      have h_succ_eq : succ radix2 (FLT_exp (3 - emax - prec) prec)
+            (B2R (B754_finite true mx ex hb : binary_float prec emax))
+          = -(pred_pos radix2 (FLT_exp (3 - emax - prec) prec)
+              (-(B2R (B754_finite true mx ex hb : binary_float prec emax)))) := by
+        unfold succ; rw [if_neg (by linarith)]
+      have h_neg_x_pos : 0 < B2R (Bopp succ_nan (B754_finite true mx ex hb)) := by
+        rw [B2R_Bopp]; linarith
+      obtain ⟨h_bpp_b2r, h_bpp_fin, h_bpp_sign⟩ := Bpred_pos_correct hp hmax hemax succ_nan
+        (Bopp succ_nan (B754_finite true mx ex hb)) h_neg_x_pos
+      have h_succ_lt : succ radix2 (FLT_exp (3 - emax - prec) prec)
+          (B2R (B754_finite true mx ex hb : binary_float prec emax)) < bpow radix2 emax := by
+        rw [h_succ_eq]
+        have h_pred_pos_nn :
+            0 ≤ pred_pos radix2 (FLT_exp (3 - emax - prec) prec)
+              (B2R (Bopp succ_nan (B754_finite true mx ex hb))) :=
+          pred_pos_ge_0 radix2 _ (FLT_exp_valid _ _ hp) h_neg_x_pos (generic_format_B2R _)
+        have h_eq : B2R (Bopp succ_nan (B754_finite true mx ex hb))
+            = -(B2R (B754_finite true mx ex hb : binary_float prec emax)) := B2R_Bopp _ _
+        rw [h_eq] at h_pred_pos_nn
+        have : (0 : ℝ) < bpow radix2 emax := bpow_gt_0 _ _
+        linarith
+      rw [if_pos h_succ_lt]
+      -- Bsucc reduces to Bopp(Bpred_pos(Bopp x)).
+      have h_bsucc : Bsucc hp hmax hemax succ_nan (B754_finite true mx ex hb)
+          = Bopp succ_nan
+              (Bpred_pos hp hmax hemax succ_nan
+                (Bopp succ_nan (B754_finite true mx ex hb))) := rfl
+      rw [h_bsucc]
+      have h_bpp_not_nan : is_nan
+          (Bpred_pos hp hmax hemax succ_nan
+            (Bopp succ_nan (B754_finite true mx ex hb))) = false := by
+        cases hres : Bpred_pos hp hmax hemax succ_nan
+            (Bopp succ_nan (B754_finite true mx ex hb)) with
+        | B754_zero _ => rfl
+        | B754_infinity _ => rw [hres] at h_bpp_fin; simp [is_finite] at h_bpp_fin
+        | B754_nan _ _ _ => rw [hres] at h_bpp_fin; simp [is_finite] at h_bpp_fin
+        | B754_finite _ _ _ _ => rfl
+      refine ⟨?_, ?_, ?_⟩
+      · rw [B2R_Bopp, h_bpp_b2r, B2R_Bopp, ← h_succ_eq]
+      · rw [is_finite_Bopp]; exact h_bpp_fin
+      · rw [Bsign_Bopp _ _ h_bpp_not_nan, h_bpp_sign]
+        rfl
+
+/-! ## Bpred: predecessor in the IEEE format -/
+
+/-- **`Bpred`** (Coq line 2780): the predecessor of a binary float,
+defined as `-(Bsucc(-x))`. -/
+noncomputable def Bpred (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (pred_nan : binary_float prec emax →
+                  {z : binary_float prec emax // is_nan z = true})
+    (x : binary_float prec emax) : binary_float prec emax :=
+  Bopp pred_nan (Bsucc hp hmax hemax pred_nan (Bopp pred_nan x))
+
+/-- **`Bpred_correct`** (Coq line 2783): correctness of `Bpred`. Dual of
+`Bsucc_correct` via `Bopp` (using `pred = -succ(-·)`). -/
+theorem Bpred_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (pred_nan : binary_float prec emax →
+                  {z : binary_float prec emax // is_nan z = true})
+    (x : binary_float prec emax) (hf : is_finite x = true) :
+    if -(bpow radix2 emax) < pred radix2 (FLT_exp (3 - emax - prec) prec) (B2R x) then
+      B2R (Bpred hp hmax hemax pred_nan x)
+        = pred radix2 (FLT_exp (3 - emax - prec) prec) (B2R x) ∧
+      is_finite (Bpred hp hmax hemax pred_nan x) = true ∧
+      Bsign (Bpred hp hmax hemax pred_nan x) = (Bsign x || !(is_finite_strict x))
+    else
+      B2FF (Bpred hp hmax hemax pred_nan x) = full_float.F754_infinity true := by
+  have h_neg_xf_fin : is_finite (Bopp pred_nan x) = true := by
+    rw [is_finite_Bopp]; exact hf
+  have h_succ := Bsucc_correct hp hmax hemax pred_nan (Bopp pred_nan x) h_neg_xf_fin
+  -- pred x = -(succ(-x)). The if-condition `-bpow emax < pred x` matches
+  -- Bsucc_correct's `succ(-x) < bpow emax` via negation.
+  have h_pred_eq : pred radix2 (FLT_exp (3 - emax - prec) prec) (B2R x)
+      = -(succ radix2 (FLT_exp (3 - emax - prec) prec) (-(B2R x))) := rfl
+  rw [B2R_Bopp] at h_succ
+  -- The condition: -bpow emax < pred x ↔ -bpow emax < -succ(-x) ↔ succ(-x) < bpow emax.
+  have h_cond_iff : (-(bpow radix2 emax)
+        < pred radix2 (FLT_exp (3 - emax - prec) prec) (B2R x))
+      ↔ (succ radix2 (FLT_exp (3 - emax - prec) prec) (-(B2R x))
+        < bpow radix2 emax) := by
+    rw [h_pred_eq]; constructor <;> intro h <;> linarith
+  by_cases h_no_ovf : succ radix2 (FLT_exp (3 - emax - prec) prec) (-(B2R x))
+      < bpow radix2 emax
+  · have h_no_ovf' : -(bpow radix2 emax)
+        < pred radix2 (FLT_exp (3 - emax - prec) prec) (B2R x) :=
+      h_cond_iff.mpr h_no_ovf
+    rw [if_pos h_no_ovf']
+    rw [if_pos h_no_ovf] at h_succ
+    obtain ⟨h_b2r, h_fin, h_sign⟩ := h_succ
+    have h_succ_not_nan : is_nan
+        (Bsucc hp hmax hemax pred_nan (Bopp pred_nan x)) = false := by
+      cases hres : Bsucc hp hmax hemax pred_nan (Bopp pred_nan x) with
+      | B754_zero _ => rfl
+      | B754_infinity _ => rw [hres] at h_fin; simp [is_finite] at h_fin
+      | B754_nan _ _ _ => rw [hres] at h_fin; simp [is_finite] at h_fin
+      | B754_finite _ _ _ _ => rfl
+    have hx_not_nan : is_nan x = false := by
+      cases x with
+      | B754_zero _ => rfl
+      | B754_infinity _ => simp [is_finite] at hf
+      | B754_nan _ _ _ => simp [is_finite] at hf
+      | B754_finite _ _ _ _ => rfl
+    refine ⟨?_, ?_, ?_⟩
+    · rw [show Bpred hp hmax hemax pred_nan x
+          = Bopp pred_nan (Bsucc hp hmax hemax pred_nan (Bopp pred_nan x)) from rfl,
+        B2R_Bopp, h_b2r, h_pred_eq]
+    · rw [show Bpred hp hmax hemax pred_nan x
+          = Bopp pred_nan (Bsucc hp hmax hemax pred_nan (Bopp pred_nan x)) from rfl,
+        is_finite_Bopp]; exact h_fin
+    · rw [show Bpred hp hmax hemax pred_nan x
+          = Bopp pred_nan (Bsucc hp hmax hemax pred_nan (Bopp pred_nan x)) from rfl,
+        Bsign_Bopp _ _ h_succ_not_nan, h_sign, Bsign_Bopp _ _ hx_not_nan]
+      -- !(Bsign(Bopp x) && is_finite_strict(Bopp x)) = Bsign x || !(is_finite_strict x).
+      -- is_finite_strict is preserved by Bopp (when not nan).
+      have h_fs_eq : is_finite_strict (Bopp pred_nan x) = is_finite_strict x := by
+        cases x with
+        | B754_zero _ => rfl
+        | B754_infinity _ => simp [is_finite] at hf
+        | B754_nan _ _ _ => simp [is_finite] at hf
+        | B754_finite _ _ _ _ => rfl
+      rw [h_fs_eq]
+      cases hbs : Bsign x <;> cases hfs : is_finite_strict x <;> simp
+  · have h_no_ovf' : ¬ (-(bpow radix2 emax)
+        < pred radix2 (FLT_exp (3 - emax - prec) prec) (B2R x)) := by
+      intro h; exact h_no_ovf (h_cond_iff.mp h)
+    rw [if_neg h_no_ovf']
+    rw [if_neg h_no_ovf] at h_succ
+    show B2FF (Bopp pred_nan (Bsucc hp hmax hemax pred_nan (Bopp pred_nan x)))
+        = full_float.F754_infinity true
+    cases hres : Bsucc hp hmax hemax pred_nan (Bopp pred_nan x) with
+    | B754_zero _ => rw [hres] at h_succ; simp [B2FF] at h_succ
+    | B754_infinity s =>
+      rw [hres] at h_succ; simp [B2FF] at h_succ
+      subst h_succ
+      show B2FF (Bopp pred_nan (B754_infinity false : binary_float prec emax))
+          = full_float.F754_infinity true
+      rfl
+    | B754_nan _ _ _ => rw [hres] at h_succ; simp [B2FF] at h_succ
+    | B754_finite _ _ _ _ => rw [hres] at h_succ; simp [B2FF] at h_succ
 
 end binary_float
 
