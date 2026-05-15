@@ -3464,6 +3464,74 @@ theorem Bulp_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
     -- ulp(B2R x) = bpow(cexp(B2R x)) = bpow e' (since B2R x ≠ 0).
     rw [ulp_neq_0 radix2 _ h_B2R_ne, ← h_e'_eq]
 
+/-! ## Bmax_float: the largest representable finite -/
+
+/-- **`Bmax_float_valid`** (Coq `Bmax_float_proof`, line 2209): the float
+`+(2^prec - 1) · 2^(emax - prec)` is a valid binary float. The three
+conjuncts of `bounded`: mantissa ≥ 1 (needs `prec ≥ 1`); canonical mantissa
+(reduces to `Zdigits(2^prec - 1) = prec` and `FLT_exp(emax) = emax - prec`);
+exponent at the cap `emax - prec`. -/
+private theorem Bmax_float_valid (hp : 0 < prec) (hmax : prec < emax) :
+    valid_binary prec emax
+      (full_float.F754_finite false (2 ^ prec.toNat - 1) (emax - prec)) := by
+  show bounded prec emax (2 ^ prec.toNat - 1) (emax - prec)
+  have h_prec_toNat : 1 ≤ prec.toNat := by omega
+  have h_pow_ge_2 : (2 : ℤ) ≤ 2 ^ prec.toNat := by
+    calc (2 : ℤ) = 2 ^ 1 := by norm_num
+      _ ≤ 2 ^ prec.toNat :=
+        pow_le_pow_right₀ (by norm_num : (1 : ℤ) ≤ 2) h_prec_toNat
+  have h_mant_ge_1 : 1 ≤ (2 : ℤ) ^ prec.toNat - 1 := by linarith
+  have h_zd : Zdigits radix2 (2 ^ prec.toNat - 1) = prec := by
+    apply Zdigits_unique radix2
+    · -- bpow (prec - 1) ≤ |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
+      have h_abs : |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
+                = ((2 ^ prec.toNat - 1 : ℤ) : ℝ) := by
+        apply abs_of_pos
+        exact_mod_cast (by linarith : (0 : ℤ) < 2 ^ prec.toNat - 1)
+      rw [h_abs]
+      have h_prec_sub_nn : 0 ≤ prec - 1 := by linarith
+      rw [show bpow radix2 (prec - 1)
+          = ((2 ^ (prec - 1).toNat : ℤ) : ℝ) from
+            (IZR_Zpower radix2 h_prec_sub_nn).symm]
+      have h_tn_sub : (prec - 1).toNat = prec.toNat - 1 := by omega
+      rw [h_tn_sub]
+      have h_nat : ((2 : ℤ) ^ (prec.toNat - 1) : ℤ) ≤ 2 ^ prec.toNat - 1 := by
+        set n := prec.toNat - 1 with hn_def
+        have hN : prec.toNat = n + 1 := by omega
+        rw [hN, pow_succ]
+        have h_pos : (1 : ℤ) ≤ 2 ^ n :=
+          calc (1 : ℤ) = 2 ^ 0 := by norm_num
+            _ ≤ 2 ^ n := pow_le_pow_right₀ (by norm_num) (Nat.zero_le _)
+        linarith
+      exact_mod_cast h_nat
+    · -- |((2 ^ prec.toNat - 1 : ℤ) : ℝ)| < bpow radix2 prec
+      have h_abs : |((2 ^ prec.toNat - 1 : ℤ) : ℝ)|
+                = ((2 ^ prec.toNat - 1 : ℤ) : ℝ) := by
+        apply abs_of_pos
+        exact_mod_cast (by linarith : (0 : ℤ) < 2 ^ prec.toNat - 1)
+      rw [h_abs]
+      have h_prec_nn : 0 ≤ prec := le_of_lt hp
+      rw [show bpow radix2 prec = ((2 ^ prec.toNat : ℤ) : ℝ) from
+            (IZR_Zpower radix2 h_prec_nn).symm]
+      exact_mod_cast (by linarith : (2 ^ prec.toNat - 1 : ℤ) < 2 ^ prec.toNat)
+  refine ⟨h_mant_ge_1, ?_, le_refl _⟩
+  show FLT_exp (3 - emax - prec) prec
+      (Zdigits radix2 (2 ^ prec.toNat - 1) + (emax - prec)) = emax - prec
+  rw [h_zd]
+  show FLT_exp (3 - emax - prec) prec (prec + (emax - prec)) = emax - prec
+  have h_simp : prec + (emax - prec) = emax := by ring
+  rw [h_simp]
+  unfold FLT_exp
+  exact max_eq_left (by linarith)
+
+/-- **`Bmax_float`** (Coq line 2245): the largest representable finite float,
+`+(2^prec - 1) · 2^(emax - prec)`. Used by `Bsucc` to compute the successor
+of `-∞`. -/
+noncomputable def Bmax_float (hp : 0 < prec) (hmax : prec < emax) :
+    binary_float prec emax :=
+  FF2B (full_float.F754_finite false (2 ^ prec.toNat - 1) (emax - prec))
+    (Bmax_float_valid hp hmax)
+
 end binary_float
 
 end LeanFlocq
