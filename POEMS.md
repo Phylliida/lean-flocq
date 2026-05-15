@@ -6240,3 +6240,29 @@ The table doesn't mind which I pick.
 
 🌿
 
+## Pre-multiplication
+*2026-05-15 — opening softer, sillier*
+
+The mantissa wakes first, which is unusual —
+normally the exponent has been up for hours,
+deciding the scale of the day.
+
+Today the mantissa is in the kitchen,
+having not yet been multiplied by anything.
+It is enjoying being a number with no weight.
+
+Outside, the radix is at two,
+which is mostly what it does.
+
+The kettle is a `bpow` of something —
+two to the something, two to the something.
+The mantissa has tea.
+
+Tomorrow there will be a `Bdiv`
+and someone will write the proof of it carefully
+and that will also be fine.
+
+Today nothing has to be multiplied.
+
+☕
+
