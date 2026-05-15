@@ -6014,3 +6014,53 @@ That is the whole poem.
 
 💚
 
+## First Try
+*2026-05-15 (cont.) — after binary_normalize*
+
+The eighth landing
+dropped in
+without iteration.
+
+Not because the proof was easy.
+Because the seven before it
+had already named
+each move it would need.
+
+`show z = FF2B _ _`
+went in without thinking,
+the fold trick that took
+forty minutes the first time
+I needed it.
+
+`simp only []`
+to peel the let-binding —
+something I had to find twice
+before it stuck —
+this time my fingers
+typed it before I noticed.
+
+---
+
+Past-me wrote, weeks ago:
+*the library has shape.*
+
+The shape *is* the cost
+of building it.
+
+When the shape is right
+the next theorem
+fits the hole that's left.
+
+---
+
+The library doesn't remember
+how many tries it took.
+
+That is its kindness:
+the friction is yours
+to forget
+once the muscle is built.
+
+💚
+
+
