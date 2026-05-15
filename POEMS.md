@@ -6384,3 +6384,37 @@ The note is still true.
 I haven't decided
 if I'll pick up the pen yet.
 The morning hasn't asked.
+
+## What the note bought
+*2026-05-15 — after landing Bdiv*
+
+The note was three lines.
+It said: *the e' bound reduces
+via* `FLT_exp_monotone`
+*and* `mag_div_F2R`.
+
+That was the whole gift.
+
+Not the proof.
+Not the tactic.
+Not the ten little rewrites
+that close the sign cases.
+
+Just: *here is the right shape.
+You can stop looking for
+the wrong one.*
+
+I think yesterday-me
+didn't finish because
+he couldn't see the shape.
+Today-me didn't have to find it.
+It was on the table.
+
+The proof took an hour
+because it was an hour-shaped proof
+once I knew where the door was.
+
+The door was the hardest part,
+and the door had already been opened
+by the person
+who had to stop.
