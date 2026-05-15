@@ -2087,6 +2087,80 @@ theorem shl_align_fexp_correct (prec emax : ℤ) (mx ex : ℤ) (hmx : mx ≠ 0) 
           from (mag_F2R_Zdigits mx ex hmx).symm, h_eq]
   rw [h_zd]; exact h_le
 
+/-- **`binary_round`** (Coq line 1509): the full IEEE rounding wrapper. Aligns
+the mantissa to the canonical FLT exponent, then applies `binary_round_aux`
+with exact location. -/
+noncomputable def binary_round (prec emax : ℤ) (m : mode)
+    (sx : Bool) (mx ex : ℤ) : full_float :=
+  let mzez := shl_align_fexp prec emax mx ex
+  binary_round_aux prec emax m sx mzez.1 mzez.2 location.Exact
+
+theorem binary_round_correct (hp : 0 < prec) (hmax : prec < emax)
+    (m : mode) (sx : Bool) (mx ex : ℤ) (hmx : 0 < mx) :
+    let z := binary_round prec emax m sx mx ex
+    let x := F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩
+    valid_binary prec emax z ∧
+    (if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+        < bpow radix2 emax then
+      FF2R radix2 z = round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x ∧
+      is_finite_FF z = true ∧
+      sign_FF z = sx
+    else
+      z = binary_overflow prec emax m sx) := by
+  intro z x
+  have hmx_ne : mx ≠ 0 := by linarith
+  -- Use shl_align_fexp_correct.
+  obtain ⟨h_F2R_eq, h_le⟩ := shl_align_fexp_correct prec emax mx ex hmx_ne
+  set mzez := shl_align_fexp prec emax mx ex with hmzez_def
+  -- The shifted mantissa is still positive (preserves F2R sign).
+  have h_mz_pos : 0 < mzez.1 := by
+    by_contra h
+    push_neg at h
+    -- If mz ≤ 0, then F2R ≤ 0; but F2R⟨mx, ex⟩ > 0 since mx > 0.
+    have h_F2R_mx : 0 < F2R (beta := radix2) ⟨mx, ex⟩ := F2R_gt_0 ⟨mx, ex⟩ hmx
+    have h_F2R_eq' : F2R (beta := radix2) ⟨mzez.1, mzez.2⟩
+        = F2R (beta := radix2) ⟨mx, ex⟩ := h_F2R_eq.symm
+    rcases lt_or_eq_of_le h with hlt | heq
+    · have h_F2R_neg : F2R (beta := radix2) ⟨mzez.1, mzez.2⟩ < 0 :=
+        F2R_lt_0 (⟨mzez.1, mzez.2⟩ : float radix2) hlt
+      linarith
+    · -- mzez.1 = 0 → F2R⟨0, ez⟩ = 0; but F2R⟨mx, ex⟩ > 0. Contradiction.
+      have hF_zero : F2R (beta := radix2) ⟨mzez.1, mzez.2⟩ = 0 := by
+        rw [show mzez.1 = 0 from heq]; exact F2R_0 mzez.2
+      linarith
+  -- |x| = F2R⟨mzez.1, mzez.2⟩
+  have h_abs_x : |x| = F2R (beta := radix2) ⟨mzez.1, mzez.2⟩ := by
+    show |F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩|
+        = F2R (beta := radix2) ⟨mzez.1, mzez.2⟩
+    rw [← F2R_Zabs]
+    rw [show |cond_Zopp sx mx| = mx by cases sx <;> simp [cond_Zopp, abs_of_pos hmx]]
+    exact h_F2R_eq
+  have Bx : inbetween_float radix2 mzez.1 mzez.2 |x| location.Exact :=
+    inbetween.Exact h_abs_x
+  -- Sign: sx = decide (x < 0).
+  have h_sign : sx = decide (x < 0) := by
+    show sx = decide (F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩ < 0)
+    rw [F2R_cond_Zopp]
+    have h_F2R_pos : 0 < F2R (beta := radix2) ⟨mx, ex⟩ := F2R_gt_0 ⟨mx, ex⟩ hmx
+    cases sx <;> simp [cond_Ropp, decide_eq_true_iff, decide_eq_false_iff_not] <;> linarith
+  -- Apply binary_round_aux_correct.
+  have h_main := binary_round_aux_correct hp hmax m x mzez.1 mzez.2 location.Exact
+                   h_mz_pos Bx h_le
+  simp only [] at h_main
+  -- z unfolds to binary_round_aux ... mzez.1 mzez.2 location.Exact.
+  show valid_binary prec emax (binary_round_aux prec emax m sx mzez.1 mzez.2 location.Exact) ∧
+    (if |round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x|
+        < bpow radix2 emax then
+      FF2R radix2 (binary_round_aux prec emax m sx mzez.1 mzez.2 location.Exact)
+        = round radix2 (FLT_exp (3 - emax - prec) prec) (round_mode m) x ∧
+      is_finite_FF (binary_round_aux prec emax m sx mzez.1 mzez.2 location.Exact) = true ∧
+      sign_FF (binary_round_aux prec emax m sx mzez.1 mzez.2 location.Exact) = sx
+    else
+      binary_round_aux prec emax m sx mzez.1 mzez.2 location.Exact
+        = binary_overflow prec emax m sx)
+  rw [h_sign]
+  exact h_main
+
 end binary_float
 
 end LeanFlocq
