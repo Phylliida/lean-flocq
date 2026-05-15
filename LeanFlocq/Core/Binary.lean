@@ -3202,6 +3202,69 @@ theorem Bfrexp_correct_aux (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ e
       congr 1
       simp [hd_def]; ring
 
+/-- **`Bfrexp`** (Coq line 2406): split a finite float into a normalized
+mantissa in `[1/2, 1)` and an integer exponent. Non-finite floats are
+returned unchanged with a sentinel exponent `-2·emax - prec`. -/
+noncomputable def Bfrexp (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (f : binary_float prec emax) : binary_float prec emax × ℤ :=
+  match f with
+  | B754_finite sx mx ex hb =>
+    (FF2B (Ffrexp_core_binary prec sx mx ex).1
+       (Bfrexp_correct_aux hp hmax hemax sx mx ex hb).1,
+     (Ffrexp_core_binary prec sx mx ex).2)
+  | _ => (f, -2 * emax - prec)
+
+/-- **`Bfrexp_correct`** (Coq line 2414): on strictly-finite floats,
+`Bfrexp f = (z, e)` satisfies `1/2 ≤ |B2R z| < 1`, `B2R f = B2R z · 2^e`,
+and `e = mag (B2R f)`. -/
+theorem Bfrexp_correct (hp : 0 < prec) (hmax : prec < emax) (hemax : 3 ≤ emax)
+    (f : binary_float prec emax) (hf : is_finite_strict f = true) :
+    (1/2 ≤ |B2R (Bfrexp hp hmax hemax f).1| ∧
+     |B2R (Bfrexp hp hmax hemax f).1| < 1) ∧
+    B2R f = B2R (Bfrexp hp hmax hemax f).1 * bpow radix2 (Bfrexp hp hmax hemax f).2 ∧
+    (Bfrexp hp hmax hemax f).2 = mag radix2 (B2R f) := by
+  cases f with
+  | B754_zero _ => simp [is_finite_strict] at hf
+  | B754_infinity _ => simp [is_finite_strict] at hf
+  | B754_nan _ _ _ => simp [is_finite_strict] at hf
+  | B754_finite sx mx ex hb =>
+    obtain ⟨_, ⟨h_low, h_high⟩, h_eq⟩ :=
+      Bfrexp_correct_aux hp hmax hemax sx mx ex hb
+    have h_Bfrexp : Bfrexp hp hmax hemax (B754_finite sx mx ex hb : binary_float prec emax)
+        = (FF2B (Ffrexp_core_binary prec sx mx ex).1
+            (Bfrexp_correct_aux hp hmax hemax sx mx ex hb).1,
+           (Ffrexp_core_binary prec sx mx ex).2) := rfl
+    rw [h_Bfrexp]
+    have h_B2R_FF2B : B2R (FF2B (Ffrexp_core_binary prec sx mx ex).1
+          (Bfrexp_correct_aux hp hmax hemax sx mx ex hb).1 : binary_float prec emax)
+        = FF2R radix2 (Ffrexp_core_binary prec sx mx ex).1 := B2R_FF2B _ _
+    refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
+    · rw [h_B2R_FF2B]; exact h_low
+    · rw [h_B2R_FF2B]; exact h_high
+    · rw [h_B2R_FF2B]
+      show F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩
+          = FF2R radix2 (Ffrexp_core_binary prec sx mx ex).1
+            * bpow radix2 (Ffrexp_core_binary prec sx mx ex).2
+      exact h_eq
+    · -- e_out = mag(B2R f). From h_eq: B2R f = FF2R z * bpow e_out.
+      -- |FF2R z| ∈ [1/2, 1) → FF2R z ≠ 0 → mag(FF2R z) = 0.
+      have h_z_ne : FF2R radix2 (Ffrexp_core_binary prec sx mx ex).1 ≠ 0 := by
+        intro h_z_eq
+        rw [h_z_eq, abs_zero] at h_low
+        linarith
+      have h_half_eq : bpow radix2 (-1) = (1 : ℝ) / 2 := by
+        unfold bpow
+        show ((2 : ℤ) : ℝ)^(-1 : ℤ) = 1/2
+        push_cast; rw [zpow_neg, zpow_one]; norm_num
+      have h_mag_z : mag radix2 (FF2R radix2 (Ffrexp_core_binary prec sx mx ex).1) = 0 := by
+        apply mag_unique radix2
+        · rw [show (0 : ℤ) - 1 = -1 from by ring, h_half_eq]; exact h_low
+        · rw [bpow_zero]; exact h_high
+      show (Ffrexp_core_binary prec sx mx ex).2
+          = mag radix2 (F2R (beta := radix2) ⟨cond_Zopp sx mx, ex⟩)
+      rw [h_eq, mag_mult_bpow radix2 h_z_ne, h_mag_z]
+      ring
+
 end binary_float
 
 end LeanFlocq
