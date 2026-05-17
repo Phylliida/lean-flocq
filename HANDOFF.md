@@ -295,6 +295,74 @@ IEEE754/Bits.v bit codecs + B32/B64 instantiations) are complete.
   to Flocq via the `Pff2Flocq*` files. Not on the critical path for
   IEEE-754 users; a much larger project worth its own session(s).
 
+### Recommended next direction: named numerical algorithms for verified CAD
+
+For tactus's use case (verified CAD), the practical next step is **not**
+porting Pff — it's adding the half-dozen named algorithms that CAD
+actually depends on, proved **directly** in Lean on top of the Flocq
+foundations we have now. Pff has them because Pff predates Flocq; modern
+work skips Pff and proves them in Flocq's framework directly.
+
+The relevant algorithms, sized roughly:
+
+| Algorithm | What it gives | ≈ Lean lines |
+|---|---|---|
+| `Fast2Sum` (with precondition `|b| ≤ |a|`) | `a + b = round(a+b) + e` exactly | ~200 |
+| `TwoSum` (no precondition) | same, general inputs | ~400 |
+| `Veltkamp` splitting | split `x` into hi/lo parts of `prec/2` bits | ~400 |
+| `Dekker` / `TwoProduct` | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~500 (builds on Veltkamp) |
+| `ErrFMA` | FMA with an explicit error term | ~500 |
+| Compensated discriminant (`b² − ac`) | sharp error bound for the quadratic discriminant | ~600 |
+
+**Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
+(roughly 10× ratio).
+
+**Why these specifically:** Shewchuk-style **adaptive geometric
+predicates** (`orient2d`, `orient3d`, `incircle`, `insphere`) are all
+built on `TwoSum` + `TwoProduct` expansions. A verified CAD that stays
+in IEEE 754 floats for the fast path and provably falls back to
+expansion arithmetic near degeneracies needs exactly this primitive
+layer. The compensated discriminant unlocks verified quadratic
+intersections (line–sphere, ray–circle, line–conic) without dropping
+to BigInt rationals.
+
+**Foundations we already have for this:**
+
+- **`Prop/Sterbenz.lean`** — the core trick behind every error-free
+  transformation. When `y/2 ≤ x ≤ 2y`, `x − y ∈ format` (no rounding).
+  2Sum, Fast2Sum, Veltkamp all resolve down to "this cancellation is in
+  Sterbenz range, so the subtraction is exact."
+- **`Core/Generic_fmt.lean`** — `round_generic`, `round_le`,
+  `round_DN_or_UP`, the round-machinery.
+- **`Core/Ulp.lean`** — `error_le_half_ulp`, `error_lt_ulp`,
+  `ulp_round`, the error-bound family.
+- **`Prop/Mult_error.lean`** — `mult_error_FLX` and friends: the
+  product error is itself in the format. This is the bridge from "fl(a·b)
+  rounds correctly" to "the residual `e = a·b − fl(a·b)` is a float."
+- Mathlib's real-arithmetic for the algebraic moves.
+
+**Sketch of a path:**
+
+1. `Fast2Sum` (1 session) — ~5 lemmas building on Sterbenz + round
+   bounds. The shape: `s := round(a+b)`, `z := round(s − a)`, then
+   `e := b − z` is exactly the error term.
+2. `TwoSum` (1 session, ~6 lemmas; no precondition).
+3. `Veltkamp` splitting (1 session). The proof of "splitting factor
+   `C = 2^s + 1` gives a hi-part with exactly `prec − s` bits" uses
+   Sterbenz cancellation twice.
+4. `Dekker`/`TwoProduct` (1 session, builds on Veltkamp).
+5. `ErrFMA` (1 session, builds on TwoProduct + TwoSum).
+6. Compensated discriminant (1 session, applies the above).
+
+Probably **5–6 focused sessions** for the whole layer. Then Shewchuk-
+style predicates (`orient2d`, etc.) become "definition + correctness
+lemma" exercises sitting on top of `TwoSum` + `TwoProduct`.
+
+If at some point you decide you want the *rest* of Pff (Pff has dozens
+of theorems beyond the half-dozen above), the Pff2Flocq translation
+remains an option — but it's a much larger investment that's only
+worth it for the residual results, not for the CAD-critical primitives.
+
 ### Coverage-sweep footnotes (2026-05-17)
 
 A name-by-name comparison against Flocq's Coq sources turned up these
