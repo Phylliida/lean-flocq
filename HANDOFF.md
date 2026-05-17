@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `dc98a9a`+)
+## Status (as of commit `f982989`+)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -29,7 +29,12 @@ including both round-trip theorems. The IEEE 754 binary
 encoding is now a proven bijection between `binary_float` and integers in
 `[0, 2^(mw+ew+1))`.
 
-**~26630 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
+**~26881 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
+
+**Flocq's main-line is complete in Lean.** A comprehensive name-by-name
+sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
+`Prop/`, and `IEEE754/` that should have a Lean counterpart now has one.
+Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 
 | File | Lean lines | Coq source | Status |
 |------|-----------|------------|--------|
@@ -43,22 +48,22 @@ encoding is now a proven bijection between `binary_float` and integers in
 | `FLX.lean` | 383 | `Core/FLX.v` | **Complete: 19/19.** Includes `FLXN_format` family, `FIX_format_FLX`, `ulp_FLX_le/_ge`, `succ_FLX_exact_shift`. |
 | `FLT.lean` | 454 | `Core/FLT.v` | **Complete: 19/19.** Includes `succ_FLT_exact_shift_pos/_full`, `negligible_exp_FLT`. |
 | `FTZ.lean` | 414 | `Core/FTZ.v` | **Complete: 8/8.** Includes `FLXN_format_FTZ` and `FTZ_format_FLXN`. |
-| `Ulp.lean` | 2486 | `Core/Ulp.v` | **Complete: 103/103.** All keystones (`succ_DN_eq_UP`, `ulp_round`, error bounds, mixed-sign perturbation, `generic_format_plus_ulp`). |
+| `Ulp.lean` | 2508 | `Core/Ulp.v` | **Complete.** All keystones (`succ_DN_eq_UP`, `ulp_round`, error bounds, mixed-sign perturbation, `generic_format_plus_ulp`). `negligible_exp_prop` + `negligible_exp_spec` + `negligible_exp_spec'`. |
 | `Round_NE.lean` | 740 | `Core/Round_NE.v` | **Complete: 10/10.** `DN_UP_parity_generic_pos/_aux/_generic`, `Rnd_NE_pt_{total,monotone,round}`, `round_NE_opp/_abs/_pt_pos/_pt`, `exists_NE_FLX/_FLT`. |
 | `Digits.lean` | 206 | (subset of `Core/Digits.v`) | Minimal: `Zdigits` + 10 properties (`_zero`, `_neg`, `_abs`, `_correct`, `_unique`, `_gt_0`, `_ge_0`, `_le_Zpower`, `_div_Zpower`, `_mult_Zpower`). The rest of Coq's `Digits.v` is binary-representation machinery we don't need — `Zdigits := mag` makes the bridge definitional. |
-| `Binary.lean` | 4668 | `IEEE754/Binary.v` (lines 1–2814, full file) | **Complete arithmetic surface.** Structural part (`full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`; FF2B/B2FF/B2R round-trips and injectivity; `Bsign`/`is_finite`/`is_nan`; `build_nan`/`erase`/`Bopp`/`Babs`; `Bcompare` with correctness and swap; boundedness theorems; `mode`/`round_mode`/`choice_mode`/`inbetween_int_valid_round_mode`/`overflow_to_inf`/`binary_overflow`). **`shr_record`** block (`shr_1`, `loc_of_shr_record`, `shr_record_of_loc` with three round-trip lemmas; `shr` iteration; `shr_1_nonneg`/`shr_1_iter_nonneg` invariants; `inbetween_shr_1`, `inbetween_shr_iter`, `inbetween_shr` correctness; `shr_fexp` + `shr_truncate`). IEEE-754 rounding kernel: `binary_round_aux` + `binary_round_aux_correct'` + `binary_round_aux_correct`. **Arithmetic ops:** `Bmult_correct_aux` + `Bmult` + `Bmult_correct`; `shl_align` + `shl_align_correct` + `snd_shl_align` + `shl_align_fexp` + `shl_align_fexp_correct`; `binary_round` + `binary_round_correct`; `binary_normalize` + `binary_normalize_correct`; `Bplus` + `Bplus_correct`; `Bminus` + `Bminus_correct`; `Bldexp` + `Bldexp_correct`; `Ffrexp_core_binary` + `Bfrexp_correct_aux` + `Bfrexp` + `Bfrexp_correct`; `Bone` + `Bone_correct` + `is_finite_Bone` + `Bsign_Bone`; `Bulp` + `Bulp_correct`; `Bpred_pos` + `Bpred_pos_correct`; `Bmax_float_valid` + `Bmax_float`; `Bsucc` + `Bsucc_correct`; `Bpred` + `Bpred_correct`; `Fdiv_core_binary` + `Bdiv_correct_aux` + `Bdiv` + `Bdiv_correct`; `Fsqrt_core_binary` + `Bsqrt_correct_aux` + `Bsqrt` + `Bsqrt_correct`. |
-| `Calc/Bracket.lean` | 643 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location`. |
+| `Binary.lean` | 4684 | `IEEE754/Binary.v` (lines 1–2814, full file) | **Complete arithmetic surface.** Structural part (`full_float`, `binary_float`, `valid_binary`, `bounded`, `nan_pl`; FF2B/B2FF/B2R round-trips and injectivity; `Bsign`/`is_finite`/`is_nan`; `build_nan`/`erase`/`Bopp`/`Babs`; `Bcompare` with correctness and swap; boundedness theorems; `mode`/`round_mode`/`choice_mode`/`inbetween_int_valid_round_mode`/`overflow_to_inf`/`binary_overflow`). **`shr_record`** block (`shr_1`, `loc_of_shr_record`, `shr_record_of_loc` with three round-trip lemmas; `shr` iteration; `shr_1_nonneg`/`shr_1_iter_nonneg` invariants; `inbetween_shr_1`, `inbetween_shr_iter`, `inbetween_shr` correctness; `shr_fexp` + `shr_truncate`). IEEE-754 rounding kernel: `binary_round_aux` + `binary_round_aux_correct'` + `binary_round_aux_correct`. **Arithmetic ops:** `Bmult_correct_aux` + `Bmult` + `Bmult_correct`; `shl_align` + `shl_align_correct` + `snd_shl_align` + `shl_align_fexp` + `shl_align_fexp_correct`; `binary_round` + `binary_round_correct`; `binary_normalize` + `binary_normalize_correct`; `Bplus` + `Bplus_correct`; `Bminus` + `Bminus_correct`; `Bldexp` + `Bldexp_correct`; `Ffrexp_core_binary` + `Bfrexp_correct_aux` + `Bfrexp` + `Bfrexp_correct`; `Bone` + `Bone_correct` + `is_finite_Bone` + `Bsign_Bone`; `Bulp` + `Bulp_correct`; `Bpred_pos` + `Bpred_pos_correct`; `Bmax_float_valid` + `Bmax_float`; `Bsucc` + `Bsucc_correct`; `Bpred` + `Bpred_correct`; `Fdiv_core_binary` + `Bdiv_correct_aux` + `Bdiv` + `Bdiv_correct`; `Fsqrt_core_binary` + `Bsqrt_correct_aux` + `Bsqrt` + `Bsqrt_correct`; `Bnormfr_mantissa`. |
+| `Calc/Bracket.lean` | 656 | `Calc/Bracket.v` | **Complete.** `location` enum, `inbetween` predicate, `inbetween_loc`, `inbetween_spec/_unique/_bounds/_distance_inexact[_abs]`. Step lemmas (`ordered_steps`, `inbetween_step_*`), `new_location_even/_odd/new_location` with correctness. Scaling (`inbetween_mult_aux`, `inbetween_mult_compat/_reg`). Float-level: `inbetween_float/_int/_bounds/_ex/_unique`, `inbetween_float_new_location[_single]`. |
 | `Calc/Round.lean` | 1536 | `Calc/Round.v` | **Complete (all 79 Coq names).** `cexp_inbetween_float[_loc_Exact]`, `cond_incr`, `inbetween_float_round[_sign]`. All 6 mode families: DN/UP/ZR/N/NE/NA, both unsigned and signed, `inbetween_int_*` and `inbetween_float_*`. `truncate_aux`, `truncate_aux_comp`, `truncate`, `truncate_0`, `truncate_correct_partial[_partial']`/`_correct[_correct']`. `generic_format_truncate`, `truncate_correct_format`. Generic correctness: `round_any_correct`, `round_trunc_any_correct[_']`, `round_sign_any_correct`, `round_trunc_sign_any_correct[_']`. **All 30 per-mode aliases** for DN/UP/ZR/NE/NA. `truncate_FIX`, `truncate_FIX_correct`. |
 | `Calc/Operations.lean` | 137 | `Calc/Operations.v` | **Complete: 13/13.** `Falign[_spec[_exp]]`, `Fopp` + `F2R_opp`, `Fabs` + `F2R_abs`, `Fplus` + `F2R_plus`, `Fplus_same_exp`, `Fexp_Fplus`, `Fminus` + `F2R_minus`, `Fminus_same_exp`, `Fmult` + `F2R_mult`. |
 | `Calc/Div.lean` | 213 | `Calc/Div.v` | **Complete.** `mag_div_F2R`, `Fdiv_core` + `Fdiv_core_correct`, `Fdiv` + `Fdiv_correct`. Helpers: `quot_eq_mul_bpow`, `fdiv_pair`, `fdiv_pair_quot`. |
 | `Calc/Sqrt.lean` | 256 | `Calc/Sqrt.v` | **Complete.** `mag_sqrt_F2R`, `int_sqrtrem` (Int.sqrt remainder semantics), `Fsqrt_core` + `Fsqrt_core_correct`, `Fsqrt` + `Fsqrt_correct`. |
-| `Prop/Relative.lean` | 760 | `Prop/Relative.v` | **Complete.** Conversion lemmas (lt/le, both directions). Generic family: `relative_error[_ex/_F2R_emin/_F2R_emin_ex/_round/_round_F2R_emin]`, `relative_error_N[_ex/_F2R_emin/_F2R_emin_ex/_round/_round_F2R_emin]`. FLX family: `_FLX_aux/_FLX/_FLX_ex/_FLX_round/_N_FLX/_N_FLX_ex/_N_FLX_round`. FLT family: `_FLT_aux/_FLT/_FLT_F2R_emin[_ex]/_FLT_ex/_N_FLT[_ex]/_N_FLT_round/_N_FLT_F2R_emin[_ex]/_N_FLT_round_F2R_emin`. Combined: `error_N_FLT_aux`, `error_N_FLT`. **Unit-roundoff family complete:** `u_ro/u_ro_pos/u_ro_lt_1/u_rod1pu_ro_pos/u_rod1pu_ro_le_u_ro`, `relative_error_N_FLX'` (the tighter `u_ro/(1+u_ro)` bound via ufpx), `relative_error_N_FLX'_ex`, `relative_error_N_round_ex_derive`, `relative_error_N_FLX_round_ex`. |
+| `Prop/Relative.lean` | 883 | `Prop/Relative.v` | **Complete.** Conversion lemmas (lt/le, both directions). Generic family: `relative_error[_ex/_F2R_emin/_F2R_emin_ex/_round/_round_F2R_emin]`, `relative_error_N[_ex/_F2R_emin/_F2R_emin_ex/_round/_round_F2R_emin]`. FLX family: `_FLX_aux/_FLX/_FLX_ex/_FLX_round/_N_FLX/_N_FLX_ex/_N_FLX_round`. FLT family: `_FLT_aux/_FLT/_FLT_F2R_emin[_ex]/_FLT_ex/_N_FLT[_ex]/_N_FLT_round/_N_FLT_F2R_emin[_ex]/_N_FLT_round_F2R_emin`. Combined: `error_N_FLT_aux`, `error_N_FLT`. **Unit-roundoff family complete:** `u_ro/u_ro_pos/u_ro_lt_1/u_rod1pu_ro_pos/u_rod1pu_ro_le_u_ro`, `relative_error_N_FLX'` (the tighter `u_ro/(1+u_ro)` bound via ufpx), `relative_error_N_FLX'_ex`, `relative_error_N_round_ex_derive`, `relative_error_N_FLX_round_ex`, `relative_error_N_FLT'_ex`, `relative_error_N_FLT'_ex_separate`. |
 | `Prop/Sterbenz.lean` | 119 | `Prop/Sterbenz.v` | **Complete: 4/4.** `generic_format_plus` (sum stays in F when bounded by `β^(min(mag x, mag y))`), `generic_format_plus_weak` (weak version with `min(\|x\|, \|y\|)`), `sterbenz_aux` (helper `y ≤ x ≤ 2y → x - y ∈ F`), `sterbenz` (the keystone: `y/2 ≤ x ≤ 2y → x - y ∈ F`). |
 | `Prop/Mult_error.lean` | 351 | `Prop/Mult_error.v` | **Complete: 7/7.** FLX: `mult_error_FLX_aux` (the keystone — produces an explicit float for the error at exponent `cx + cy`), `mult_error_FLX`, `mult_bpow_exact_FLX`. FLT: `mult_error_FLT`, `F2R_ge`, `mult_error_FLT_ge_bpow`, `mult_bpow_exact_FLT`. |
 | `Prop/Plus_error.lean` | 670 | `Prop/Plus_error.v` | **Complete: 20.** Keystones: `round_repr_same_exp`, `plus_error_aux`, `plus_error`. Zero family: `FLT_format_plus_small`, `round_plus_neq_0_aux`, `round_plus_neq_0`, `round_plus_eq_0`. Trivial bounds: `plus_error_le_l/r`. Helpers: `ex_shift`, `mag_minus1`, `lt_mag`, `mag_minus_lb`. mult_ulp section: `round_plus_F2R`, `round_plus_ge_ulp`. plus_ge family: `round_FLT_plus_ge`, `round_FLT_plus_ge'`, `round_FLX_plus_ge`. **Unit-roundoff variants:** `FLT_plus_error_N_ex` and `FLT_plus_error_N_round_ex`. |
-| `Prop/Div_sqrt_error.lean` | 1328 | `Prop/Div_sqrt_error.v` | **Complete (file fully ported).** Keystones: `generic_format_plus_prec`, `div_error_FLX`, `sqrt_error_FLX_N`. Sqrt unit-roundoff helpers: `om1ds1p2u_ro_pos`, `s1p2u_rom1_pos`, `om1ds1p2u_ro_le_u_rod1pu_ro`. Main sqrt error theorem and variants: `sqrt_bpow_even`, `sqrt_error_N_FLX_aux1/_aux2/_aux3`, `sqrt_error_N_FLX`, `sqrt_error_N_FLX_ex`, `sqrt_error_N_FLX_round_ex`, `sqrt_bpow_ge`, `sqrt_error_N_FLT_ex`, `sqrt_error_N_FLT_round_ex`. format_REM family: `format_REM_aux`, `format_REM_pos` (private), `format_REM`, `format_REM_ZR`, `format_REM_N`. Note: `sqrt_error_N_FLX_aux2` strengthened to `prec > 1` to avoid edge case at prec=1, β=2 where `1 + 2u_ro = β`. |
-| `Prop/Round_odd.lean` | 1427 | `Prop/Round_odd.v` | **Complete.** Z-level: `Zrnd_odd` (the rounding function — rounds non-integers to the odd integer between floor and ceiling), `valid_rnd_odd`, `Zrnd_odd_Zodd`, `Zfloor_plus`, `Zceil_plus`, `Zeven_abs`, `Zrnd_odd_plus`. R-level: `Rnd_odd_pt` predicate, `Rnd_odd`, `Rnd_odd_pt_opp_inv`, `round_odd_opp`. Core: `round_odd_pt` (the keystone), `Rnd_odd_pt_unique`, `Rnd_odd_pt_monotone`. **Odd_prop_aux geometry (Stage 5):** `generic_format_fexpe_fexp`, `exists_even_fexp_lt`, `d_eq_round_DN`, `u_eq_round_UP`, `d_ge_0`, `mag_d`, `Fexp_d`, `format_bpow_x`, `format_bpow_d`, `d_le_m`, `m_le_u`, `mag_m`, `mag_m_0`, `u'_eq`, `m_eq`, `m_eq_0`, `fexp_m_eq_0`, `Fm`, `Zm`, `DN_odd_d_aux`, `UP_odd_d_aux`. **Keystones:** `round_N_odd_pos` (the no-double-rounding theorem for positive x — rounding-to-nearest of round-to-odd at coarser precision equals rounding-to-nearest directly, when fexpe ≤ fexp - 2 and β even) and `round_N_odd` (general form via opp symmetry). **Stage 6 (cexp preservation):** `mag_round_odd` and `fexp_round_odd` (FLT, β even, prec > 1: round-to-odd preserves both `mag` and `cexp`). |
-| `Prop/Double_rounding.lean` | 4885 | `Prop/Double_rounding.v` (~95% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + sqrt radix_ge_4 + full plus/minus arc + plus/minus radix_ge_3 + full division arc.** Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers, plus/minus aux families, **`round_round_plus`** and **`round_round_minus`** keystones, plus FLX/FLT/FTZ instantiations. **Division arc complete:** `round_round_really_zero`, `round_round_zero`, `round_round_all_mid_cases` (4-callback dispatcher), `round_round_eq_mid_beta_even` (bridge for β even), `mag_div_disj`, `round_round_div_hyp` (5-conjunct precision), **`round_round_div_aux0/1/2`** (the three case-split preludes — boundary/below-midpoint/above-midpoint), **`round_round_div_aux`** dispatcher, **`round_round_div`** keystone (with sign dispatch via `round_N_opp` for negative x or y), FLX/FLT/FTZ instantiations (3 hyp lemmas + 3 user theorems). **Sqrt radix_ge_4 arc:** `bpow_neg_one_le_quarter_of_beta_ge_4` helper, `round_round_sqrt_radix_ge_4_hyp`, `_aux`, `_radix_ge_4` keystone, FLX/FLT/FTZ — the regular sqrt aux with `-2 → -1` throughout, needing `4 ≤ beta`. **Plus/minus radix_ge_3 arc:** `bpow_neg_one_le_third_of_beta_ge_3` helper, `round_round_plus_radix_ge_3_hyp`, plus chain (aux0/aux1/aux2/aux), minus chain (aux0/aux1/aux2/aux3/aux), plus/minus keystones with sign dispatch, FLX/FLT/FTZ for both — needs `3 ≤ beta`, uses `bpow(-1) ≤ 1/3`. |
+| `Prop/Div_sqrt_error.lean` | 1392 | `Prop/Div_sqrt_error.v` | **Complete (file fully ported).** Keystones: `generic_format_plus_prec`, `div_error_FLX`, `sqrt_error_FLX_N`. Sqrt unit-roundoff helpers: `om1ds1p2u_ro_pos`, `s1p2u_rom1_pos`, `om1ds1p2u_ro_le_u_rod1pu_ro`. Main sqrt error theorem and variants: `sqrt_bpow_even`, `sqrt_error_N_FLX_aux1/_aux2/_aux3`, `sqrt_error_N_FLX`, `sqrt_error_N_FLX_ex`, `sqrt_error_N_round_ex_derive`, `sqrt_error_N_FLX_round_ex`, `sqrt_bpow_ge`, `sqrt_error_N_FLT_ex`, `sqrt_error_N_FLT_round_ex`. format_REM family: `format_REM_aux`, `format_REM_pos` (private), `format_REM`, `format_REM_ZR`, `format_REM_N`. Note: `sqrt_error_N_FLX_aux2` strengthened to `prec > 1` to avoid edge case at prec=1, β=2 where `1 + 2u_ro = β`. |
+| `Prop/Round_odd.lean` | 1453 | `Prop/Round_odd.v` | **Complete.** Z-level: `Zrnd_odd` (the rounding function — rounds non-integers to the odd integer between floor and ceiling), `valid_rnd_odd`, `Zrnd_odd_Zodd`, `Zfloor_plus`, `Zceil_plus`, `Zeven_abs`, `Zrnd_odd_plus`, `Zrnd_odd_plus'`. R-level: `Rnd_odd_pt` predicate, `Rnd_odd`, `Rnd_odd_pt_opp_inv`, `round_odd_opp`. Core: `round_odd_pt` (the keystone), `Rnd_odd_pt_unique`, `Rnd_odd_pt_monotone`. **Odd_prop_aux geometry (Stage 5):** `generic_format_fexpe_fexp`, `exists_even_fexp_lt`, `d_eq_round_DN`, `u_eq_round_UP`, `d_ge_0`, `mag_d`, `Fexp_d`, `format_bpow_x`, `format_bpow_d`, `d_le_m`, `m_le_u`, `mag_m`, `mag_m_0`, `u'_eq`, `m_eq`, `m_eq_0`, `fexp_m_eq_0`, `Fm`, `Zm`, `DN_odd_d_aux`, `UP_odd_d_aux`. **Keystones:** `round_N_odd_pos` (the no-double-rounding theorem for positive x — rounding-to-nearest of round-to-odd at coarser precision equals rounding-to-nearest directly, when fexpe ≤ fexp - 2 and β even) and `round_N_odd` (general form via opp symmetry). **Stage 6 (cexp preservation):** `mag_round_odd` and `fexp_round_odd` (FLT, β even, prec > 1: round-to-odd preserves both `mag` and `cexp`). |
+| `Prop/Double_rounding.lean` | 4893 | `Prop/Double_rounding.v` (~95% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + sqrt radix_ge_4 + full plus/minus arc + plus/minus radix_ge_3 + full division arc.** `mag_mult_disj`. Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers, plus/minus aux families, **`round_round_plus`** and **`round_round_minus`** keystones, plus FLX/FLT/FTZ instantiations. **Division arc complete:** `round_round_really_zero`, `round_round_zero`, `round_round_all_mid_cases` (4-callback dispatcher), `round_round_eq_mid_beta_even` (bridge for β even), `mag_div_disj`, `round_round_div_hyp` (5-conjunct precision), **`round_round_div_aux0/1/2`** (the three case-split preludes — boundary/below-midpoint/above-midpoint), **`round_round_div_aux`** dispatcher, **`round_round_div`** keystone (with sign dispatch via `round_N_opp` for negative x or y), FLX/FLT/FTZ instantiations (3 hyp lemmas + 3 user theorems). **Sqrt radix_ge_4 arc:** `bpow_neg_one_le_quarter_of_beta_ge_4` helper, `round_round_sqrt_radix_ge_4_hyp`, `_aux`, `_radix_ge_4` keystone, FLX/FLT/FTZ — the regular sqrt aux with `-2 → -1` throughout, needing `4 ≤ beta`. **Plus/minus radix_ge_3 arc:** `bpow_neg_one_le_third_of_beta_ge_3` helper, `round_round_plus_radix_ge_3_hyp`, plus chain (aux0/aux1/aux2/aux), minus chain (aux0/aux1/aux2/aux3/aux), plus/minus keystones with sign dispatch, FLX/FLT/FTZ for both — needs `3 ≤ beta`, uses `bpow(-1) ≤ 1/3`. |
 | `IEEE754/Bits.lean` | 1019 | `IEEE754/Bits.v` (full file) | **Bit encoding fully proven: 14 + 5 helpers, plus B32/B64 instantiations.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **B32/B64 specialization:** `binary32 := binary_float 24 128` and `binary64 := binary_float 53 1024`, with default NaN payloads (`2^22` / `2^51`), `unop_nan_pl{32,64}`, `binop_nan_pl{32,64}`, and the full op suite `b{32,64}_{erase,opp,abs,sqrt,plus,minus,mult,div,compare,of_bits}` + `bits_of_b{32,64}`. |
 
 **Total: ~720 Lean theorems vs ~480 substantive Coq theorems** (we have extras
@@ -271,7 +276,7 @@ not needed for downstream Flocq theorems.
 `generic_format`, `round`, `Zrnd_opp`, `ulp`, `pred_pos`, `succ`, `pred`,
 `negligible_exp`, `ZnearestA`, `Zdigits` are all `noncomputable def`.
 
-## Suggested next steps
+## What's left
 
 **Core, Calc, Prop, and all of IEEE754 are done.** Core, Calc, all of
 Prop/{Relative, Sterbenz, Mult_error, Plus_error, Div_sqrt_error,
@@ -280,21 +285,59 @@ mid_cases bridge + sqrt arc + sqrt radix_ge_4 + plus/minus arc +
 plus/minus radix_ge_3 + division arc, all with FLX/FLT/FTZ
 instantiations), and all of IEEE754 (Binary.v structural part +
 shr_record block + binary_round_aux kernel + Bplus/Bminus/Bmult/Bdiv/
-Bsqrt/Bldexp/Bfrexp/Bone/Bulp/Bsucc/Bpred + IEEE754/Bits.v bit codecs +
-B32/B64 instantiations) are complete.
+Bsqrt/Bldexp/Bfrexp/Bnormfr_mantissa/Bone/Bulp/Bsucc/Bpred +
+IEEE754/Bits.v bit codecs + B32/B64 instantiations) are complete.
 
-The remaining work outside Flocq's main arc:
+### Outside Flocq's main arc
 
 - **`Pff/`** — the older Pff theory (`Pff.v` 27.9k lines, `Pff2Flocq.v`
   2.5k, `Pff2FlocqAux.v` 828). A standalone development that bridges
   to Flocq via the `Pff2Flocq*` files. Not on the critical path for
   IEEE-754 users; a much larger project worth its own session(s).
-- **`Calc/Round.v` polish**: `Zdigits_div_Zpower` lives in
-  `Digits.lean` already, but the few `generic_format_truncate`/
-  `truncate_correct_format` polish points could use it for cleaner
-  proofs. Mostly nice-to-have.
 
-The "in-progress" log below was preserved for historical context (what
+### Coverage-sweep footnotes (2026-05-17)
+
+A name-by-name comparison against Flocq's Coq sources turned up these
+items that are listed as "missing" by a literal-name diff, but are all
+explained:
+
+**Intentional design — Mathlib subsumes:**
+- `Core/Raux.v` (123 names not ported) — real-number utilities; Mathlib
+  has the analogues.
+- `Core/Zaux.v` (58 names not ported) — integer utilities; Mathlib's
+  `Int` and `omega` cover almost all of it.
+- `Core/Digits.v` (50 names not ported) — binary-representation
+  machinery (`Zdigit`, `Zscale`, `Zslice`, `Zsum_digit_digit`, …) not
+  needed by the rest of the port. `Zdigits` + 11 properties is enough.
+
+**Renames or relocations (in Lean under different names/files):**
+- `Generic_fmt.v`'s `abs_round_ge_generic`, `abs_round_le_generic`,
+  `subnormal_exponent` → all in `Core/Ulp.lean`.
+- `IEEE754/Binary.v`'s `Bmax_float_proof` → `Bmax_float_valid` (renamed).
+- `Prop/Round_odd.v`'s `d_eq`, `u_eq` → `d_eq_round_DN`, `u_eq_round_UP`.
+
+**Coq-specific helpers not needed in Lean:**
+- `Core/Ulp.v`'s `Z_le_dec_aux` — decidability helper; Lean's instances
+  are automatic.
+- `IEEE754/Binary.v`'s `match_FF2B` — dependent-match eliminator; Lean's
+  native `match` handles this directly.
+
+**Coq-style hypothesis-bundle Definitions (likely inlined in Lean):**
+- `Prop/Double_rounding.v`'s `{FLT,FLX,FTZ}_round_round_sqrt_hyp` and
+  `_radix_ge_4_hyp` (6 Definitions). These bundle hypotheses for the
+  main sqrt theorems; the Lean port inlines them.
+
+**Genuinely-missing lemmas ported on 2026-05-17:**
+- `Calc/Bracket`: `inbetween_mult_aux`, `inbetween_float_new_location_single`
+- `Calc/Round`: `truncate_aux_comp`
+- `Core/Ulp`: `negligible_exp_prop` + `negligible_exp_spec` + `negligible_exp_spec'`
+- `IEEE754/Binary`: `Bnormfr_mantissa`, `shr_m_shr_record_of_loc` (alias)
+- `Prop/Double_rounding`: `mag_mult_disj`
+- `Prop/Div_sqrt_error`: `sqrt_error_N_round_ex_derive`
+- `Prop/Relative`: `relative_error_N_FLT'_ex`, `relative_error_N_FLT'_ex_separate`
+- `Prop/Round_odd`: `Zrnd_odd_plus'`
+
+The "in-progress" log below is preserved for historical context (what
 landed when, in which order). All items marked DONE.
 
 1. **`Binary.lean` arithmetic ops**: `shr_record` infrastructure DONE
