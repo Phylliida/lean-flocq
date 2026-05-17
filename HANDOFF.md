@@ -382,18 +382,23 @@ to BigInt rationals.
 
    **Pff's solution** (`Pff.v` `Dekker1_FTS`/`Dekker2_FTS`/`Dekker3`,
    referenced from `MDekker` and `Dekker_FTS`):
-   - **Dekker1** (`b ≥ 0`): Sterbenz on `(s, a)` with `a ≤ s ≤ 2a`,
-     where the lower bound is `a` itself (not `a/2`!). No `a/2 ∈ F`
-     needed.
+   - **Dekker1** (`b ≥ 0`): Sterbenz on `(a, s)`. Pff uses
+     `FmultRadixInv` here to get `s ≥ p/2`, but **the Lean port can
+     do better**: with `b ≥ 0` we have `a ≤ s ≤ 2a` directly via
+     `round_ge_generic` (using `a ∈ F`) and `round_le_generic` (using
+     `2a ∈ F`). Then Sterbenz on `(s, a)` with `a/2 ≤ a ≤ s ≤ 2a`.
+     **No `FmultRadixInv` needed in this case for our Lean port.**
    - **Dekker2** (`b < 0, |b| ≥ a/radix`, i.e., `-q ≤ p ≤ 2(-q)`):
      Sterbenz on `(a, -b)` gives `a + b ∈ F` directly. Same as our
      existing FLX Case 2.
    - **Dekker3** (`b < 0, |b| < a/radix`): Sterbenz on `(a, s)` with
      `s/2 ≤ a ≤ 2s`. The non-obvious bound `s ≥ a/2` (which needs
      `a/2 ∉ F` to not break things) comes from **`FmultRadixInv`**:
-     for `x ∈ F` and `y > x/2`, `round_N(y) ≥ x/2`. This holds
-     even when `x/2 ∉ F`, via the midpoint-symmetry of `x/2`'s
-     neighbors in radix-2 F.
+     for `x ∈ F` and `y > x/2` (**strict!**), `round_N(y) ≥ x/2`.
+     This holds even when `x/2 ∉ F`, via the midpoint-symmetry of
+     `x/2`'s neighbors in radix-2 F. For our Case 3: `b > -a/2`
+     strictly gives `a + b > a/2` strictly, satisfying the lemma's
+     precondition.
 
    **Lean port plan, ordered by checkpoint:**
    1. `two_mul_in_FLT_radix2` helper (~30 lines): for `a ∈ FLT (radix 2)`,
@@ -401,15 +406,17 @@ to BigInt rationals.
       `cexp(2a) ≤ cexp(a) + 1`. (Note: cannot use `mult_bpow_exact_FLT`
       directly — its precondition `mag(a) ≥ emin + prec - 1` fails for
       small denormals. The direct construction works unconditionally.)
-   2. `round_N_ge_half_FLT_radix2` helper (~80 lines): for `a ∈ FLT
-      (radix 2), 0 < a, a/2 ≤ v`, then `a/2 ≤ round_N(v)`. Case split
-      on whether `a/2 ∈ F` (use `round_ge_generic`) or `a/2 ∉ F` (use
-      `round_N_ge_midp` from `Core/Ulp.lean:2220` with the radix-2
-      midpoint-symmetry sub-lemma). The sub-lemma: for `a ∈ F (radix 2
-      FLT)` with `a/2 ∉ F`, `a/2 = (pred(u) + u)/2` where `u =
-      round_UP(a/2)`. This holds because `a/2 ∉ F` only when `a` has
-      cexp = emin with odd mantissa, and the neighbors of `a/2` at
-      exponent `emin` differ by exactly `bpow emin` with `a/2` exactly
+   2. `round_N_gt_half_FLT_radix2` helper (~80 lines): for `a ∈ FLT
+      (radix 2), 0 < a, a/2 < v` (**strict** — the weak version is
+      false when `a/2 ∉ F` and tie-break picks the floor), then
+      `a/2 ≤ round_N(v)`. Case split on whether `a/2 ∈ F` (use
+      `round_ge_generic`) or `a/2 ∉ F` (use `round_N_ge_midp` from
+      `Core/Ulp.lean:2220` with the radix-2 midpoint-symmetry
+      sub-lemma). The sub-lemma: for `a ∈ F (radix 2 FLT)` with
+      `a/2 ∉ F`, `a/2 = (pred(u) + u)/2` where `u = round_UP(a/2)`.
+      This holds because `a/2 ∉ F` only when `a` has cexp = emin
+      with odd mantissa, and the neighbors of `a/2` at exponent
+      `emin` differ by exactly `bpow emin` with `a/2` exactly
       between them.
    3. Refactor `Fast2Sum_step1_pos` into three Pff-style cases
       (`b ≥ 0`, `b ≤ -a/2`, `-a/2 < b < 0`) — ~80-120 lines.
