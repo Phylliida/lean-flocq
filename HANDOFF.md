@@ -30,11 +30,13 @@ encoding is now a proven bijection between `binary_float` and integers in
 `[0, 2^(mw+ew+1))`.
 
 **Plus the first two error-free transformations of the CAD-direction
-roadmap: `Fast2Sum` (radix 2, FLX, round-to-nearest) gives exact `s + e
+roadmap: `Fast2Sum` (radix 2, FLT, round-to-nearest) gives exact `s + e
 = a + b` under `|b| ≤ |a|`, and `TwoSum` removes the precondition via a
-magnitude-comparison branch into Fast2Sum on the larger side.**
+magnitude-comparison branch into Fast2Sum on the larger side. Both
+live at FLT (gradual underflow) using Pff's three-case structure
+(`Dekker1_FTS`/`Dekker2_FTS`/`Dekker3`).**
 
-**~27185 lines of Lean across 29 files. 0 `sorry`s. All files build clean.**
+**~27425 lines of Lean across 29 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -70,8 +72,8 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Prop/Round_odd.lean` | 1453 | `Prop/Round_odd.v` | **Complete.** Z-level: `Zrnd_odd` (the rounding function — rounds non-integers to the odd integer between floor and ceiling), `valid_rnd_odd`, `Zrnd_odd_Zodd`, `Zfloor_plus`, `Zceil_plus`, `Zeven_abs`, `Zrnd_odd_plus`, `Zrnd_odd_plus'`. R-level: `Rnd_odd_pt` predicate, `Rnd_odd`, `Rnd_odd_pt_opp_inv`, `round_odd_opp`. Core: `round_odd_pt` (the keystone), `Rnd_odd_pt_unique`, `Rnd_odd_pt_monotone`. **Odd_prop_aux geometry (Stage 5):** `generic_format_fexpe_fexp`, `exists_even_fexp_lt`, `d_eq_round_DN`, `u_eq_round_UP`, `d_ge_0`, `mag_d`, `Fexp_d`, `format_bpow_x`, `format_bpow_d`, `d_le_m`, `m_le_u`, `mag_m`, `mag_m_0`, `u'_eq`, `m_eq`, `m_eq_0`, `fexp_m_eq_0`, `Fm`, `Zm`, `DN_odd_d_aux`, `UP_odd_d_aux`. **Keystones:** `round_N_odd_pos` (the no-double-rounding theorem for positive x — rounding-to-nearest of round-to-odd at coarser precision equals rounding-to-nearest directly, when fexpe ≤ fexp - 2 and β even) and `round_N_odd` (general form via opp symmetry). **Stage 6 (cexp preservation):** `mag_round_odd` and `fexp_round_odd` (FLT, β even, prec > 1: round-to-odd preserves both `mag` and `cexp`). |
 | `Prop/Double_rounding.lean` | 4893 | `Prop/Double_rounding.v` (~95% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + sqrt radix_ge_4 + full plus/minus arc + plus/minus radix_ge_3 + full division arc.** `mag_mult_disj`. Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers, plus/minus aux families, **`round_round_plus`** and **`round_round_minus`** keystones, plus FLX/FLT/FTZ instantiations. **Division arc complete:** `round_round_really_zero`, `round_round_zero`, `round_round_all_mid_cases` (4-callback dispatcher), `round_round_eq_mid_beta_even` (bridge for β even), `mag_div_disj`, `round_round_div_hyp` (5-conjunct precision), **`round_round_div_aux0/1/2`** (the three case-split preludes — boundary/below-midpoint/above-midpoint), **`round_round_div_aux`** dispatcher, **`round_round_div`** keystone (with sign dispatch via `round_N_opp` for negative x or y), FLX/FLT/FTZ instantiations (3 hyp lemmas + 3 user theorems). **Sqrt radix_ge_4 arc:** `bpow_neg_one_le_quarter_of_beta_ge_4` helper, `round_round_sqrt_radix_ge_4_hyp`, `_aux`, `_radix_ge_4` keystone, FLX/FLT/FTZ — the regular sqrt aux with `-2 → -1` throughout, needing `4 ≤ beta`. **Plus/minus radix_ge_3 arc:** `bpow_neg_one_le_third_of_beta_ge_3` helper, `round_round_plus_radix_ge_3_hyp`, plus chain (aux0/aux1/aux2/aux), minus chain (aux0/aux1/aux2/aux3/aux), plus/minus keystones with sign dispatch, FLX/FLT/FTZ for both — needs `3 ≤ beta`, uses `bpow(-1) ≤ 1/3`. |
 | `IEEE754/Bits.lean` | 1019 | `IEEE754/Bits.v` (full file) | **Bit encoding fully proven: 14 + 5 helpers, plus B32/B64 instantiations.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **B32/B64 specialization:** `binary32 := binary_float 24 128` and `binary64 := binary_float 53 1024`, with default NaN payloads (`2^22` / `2^51`), `unop_nan_pl{32,64}`, `binop_nan_pl{32,64}`, and the full op suite `b{32,64}_{erase,opp,abs,sqrt,plus,minus,mult,div,compare,of_bits}` + `bits_of_b{32,64}`. |
-| `Algorithms/Fast2Sum.lean` | 232 | *not in Coq Flocq* (only in Pff) | **First error-free transformation, proved directly on Flocq's foundations.** Radix 2, FLX, round-to-nearest. `Fast2Sum_step1_pos` (Sterbenz step, positive case, two-case argument on `b ≥ -a/2`), `Fast2Sum_step1` (general, via `round_N_opp` symmetry), `Fast2Sum_step2` (plus_error step), `Fast2Sum_correct` (keystone: `a + b = s + e` exactly). |
-| `Algorithms/TwoSum.lean` | 72 | *not in Coq Flocq* (only in Pff) | **Error-free transformation, no precondition.** Branching formulation: comparison + Fast2Sum on the larger side. Mathematically identical to Knuth's 6-op TwoSum (same `e`, same exactness). One theorem, `TwoSum_correct` — exposes both `s` and `e` as named `let`-bindings, returns `e ∈ F ∧ a + b = s + e`. |
+| `Algorithms/Fast2Sum.lean` | 470 | *not in Coq Flocq* (only in Pff) | **First error-free transformation, proved directly on Flocq's foundations.** Radix 2, **FLT**, round-to-nearest. Helpers: `two_mul_in_FLT_radix2` (closure under doubling), `succ_FLT_subnormal_step` (uniform `succ d = d + bpow(emin)` for `0 ≤ d < bpow(emin+prec)`), `round_N_gt_half_FLT_radix2` (radix-2 midpoint-symmetry: for `a ∈ F, 0 < a, a/2 < v` strict, `a/2 ≤ round_N(v)` even when `a/2 ∉ F`). Main: `Fast2Sum_step1_pos` (Pff three-case argument on `b ≥ 0` vs `b ≤ -a/2` vs `-a/2 < b < 0`), `Fast2Sum_step1` (general, via `round_N_opp` symmetry), `Fast2Sum_step2` (plus_error step), `Fast2Sum_correct` (keystone: `a + b = s + e` exactly). |
+| `Algorithms/TwoSum.lean` | 70 | *not in Coq Flocq* (only in Pff) | **Error-free transformation, no precondition.** Radix 2, **FLT**, round-to-nearest. Branching formulation: comparison + Fast2Sum on the larger side. Mathematically identical to Knuth's 6-op TwoSum (same `e`, same exactness). One theorem, `TwoSum_correct` — exposes both `s` and `e` as named `let`-bindings, returns `e ∈ F ∧ a + b = s + e`. |
 
 **Total: ~720 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
@@ -314,8 +316,8 @@ The relevant algorithms, sized roughly:
 
 | Algorithm | What it gives | ≈ Lean lines |
 |---|---|---|
-| ~~`Fast2Sum` (with precondition `|b| ≤ |a|`)~~ ✓ **done in `Algorithms/Fast2Sum.lean` (232 lines)** | `a + b = round(a+b) + e` exactly | ~~~200~~ 232 |
-| ~~`TwoSum` (no precondition)~~ ✓ **done in `Algorithms/TwoSum.lean` (72 lines, branching form)** | same, general inputs | ~~~400~~ 72 |
+| ~~`Fast2Sum` (with precondition `|b| ≤ |a|`)~~ ✓ **done at FLT in `Algorithms/Fast2Sum.lean` (470 lines)** | `a + b = round(a+b) + e` exactly | ~~~200~~ 470 |
+| ~~`TwoSum` (no precondition)~~ ✓ **done at FLT in `Algorithms/TwoSum.lean` (70 lines, branching form)** | same, general inputs | ~~~400~~ 70 |
 | `Veltkamp` splitting | split `x` into hi/lo parts of `prec/2` bits | ~400 |
 | `Dekker` / `TwoProduct` | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~500 (builds on Veltkamp) |
 | `ErrFMA` | FMA with an explicit error term | ~500 |
@@ -350,12 +352,15 @@ to BigInt rationals.
 
 **Sketch of a path:**
 
-1. ~~`Fast2Sum`~~ ✓ **DONE 2026-05-17, `a7d8eff`** — 232 lines, 8 theorems, 0 sorries.
-   Two-case argument under `|b| ≤ |a|`: either `b ≥ -|a|/2` (Sterbenz
-   applies to `(s, a)` since `a/2 ≤ s ≤ 2a`) or `b < -|a|/2` (Sterbenz
-   applies to `(a, -b)` giving `a + b ∈ F` exactly). Sign symmetry via
-   `round_N_opp` with a double-flipped choice function.
-2. ~~`TwoSum`~~ ✓ **DONE 2026-05-17, `cc7ad6c`** — 72 lines, 1 theorem,
+1. ~~`Fast2Sum`~~ ✓ **DONE 2026-05-17 at FLT** (originally landed at FLX
+   in `a7d8eff`; ported to FLT in `b5e9d48`). 470 lines, 11 theorems
+   (including 3 helpers), 0 sorries. Three-case Pff structure under
+   `|b| ≤ |a|`: Case 1 `b ≥ 0` (Pff Dekker1, `a ≤ s ≤ 2a`), Case 2
+   `b ≤ -a/2` (Pff Dekker2, Sterbenz on `(a, -b)`), Case 3
+   `-a/2 < b < 0` (Pff Dekker3, midpoint-symmetry helper). Sign
+   symmetry via `round_N_opp` with a double-flipped choice function.
+2. ~~`TwoSum`~~ ✓ **DONE 2026-05-17 at FLT** (originally landed at FLX
+   in `cc7ad6c`; ported to FLT in `b5e9d48`). 70 lines, 1 theorem,
    0 sorries. Branching formulation (magnitude comparison, then
    Fast2Sum on the larger side). Mathematically identical to Knuth's
    6-op TwoSum but the proof is one case-split + two Fast2Sum_correct
@@ -364,86 +369,39 @@ to BigInt rationals.
    CAD's needs and ~5× smaller. **API**: exposes `s` and `e` as named
    `let`-bindings and returns the conjunction `e ∈ F ∧ a + b = s + e`,
    making it drop-in usable downstream.
-3. **FLX → FLT port of Fast2Sum/TwoSum (1 session, NEXT UP).** Decided
-   2026-05-17 with Danielle: the existing Fast2Sum/TwoSum live at
-   radix-2 FLX. Veltkamp (next theorem after this) lives at radix-2
-   FLT — Boldo's `Pff2Flocq.v` puts the whole error-free-transformation
-   family at FLT. For foundational consistency across the CAD-direction
-   roadmap, port the existing Fast2Sum/TwoSum to FLT first, then
-   stack Veltkamp/Dekker on top in their natural setting.
+3. ~~**FLX → FLT port of Fast2Sum/TwoSum**~~ ✓ **DONE 2026-05-17**
+   (`526cf8d`, `c12cc52`, `b5e9d48`). Three landing commits:
+   - `526cf8d`: `two_mul_in_FLT_radix2` helper (~30 lines). Direct
+     `generic_format_F2R'` construction; avoids `mult_bpow_exact_FLT`'s
+     `mag(a) ≥ emin + prec - 1` precondition which fails for small
+     denormals.
+   - `c12cc52`: `round_N_gt_half_FLT_radix2` helper (~208 lines). The
+     radix-2 midpoint-symmetry lemma: for `a ∈ F, 0 < a, a/2 < v`
+     strict, `a/2 ≤ round_N(v)` even when `a/2 ∉ F`. Case split:
+     `a/2 ∈ F` → direct via `round_ge_generic`; `a/2 ∉ F` →
+     `cexp(a) = emin` with `ma` odd, define `d := k·bpow(emin)` and
+     `u := (k+1)·bpow(emin)` where `ma = 2k+1`; show `d + u = a`,
+     `succ d = u` (via small helper `succ_FLT_subnormal_step` using
+     `ulp_FLT_small`), apply `round_N_ge_midp`. Past-me's estimate of
+     ~80 lines was optimistic — landed at ~208 (size called out
+     before starting, agreed with Danielle to push through).
+   - `b5e9d48`: `Fast2Sum_step1_pos` refactored to Pff's three cases.
+     Case 1 (`b ≥ 0`) — avoids `FmultRadixInv` route via direct
+     `a ≤ s ≤ 2a` using `2a ∈ F`. Case 2 (`b ≤ -a/2`) — Sterbenz on
+     `(a, -b)`, ports directly from FLX. Case 3 (`-a/2 < b < 0`) —
+     `a/2 ≤ s` via the midpoint helper, Sterbenz on `(s, a)`.
+     Propagated to `Fast2Sum_step1`/`step2`/`correct` and
+     `TwoSum_correct`. The whole refactor: +137/-146 lines (net
+     -9 lines on the existing functions; helpers added 240 lines).
 
-   **Why this is real work, not a trivial s/FLX/FLT/:** under FLT with
-   denormals, `a/2 ∈ F` is no longer automatic for `a ∈ F`. The current
-   FLX proof of `Fast2Sum_step1_pos` Case 1 (`b ≥ -a/2`) uses
-   `round_ge_generic` with `a/2 ∈ F` as the F-side lower bound when
-   applying Sterbenz on `(s, a)`. Under FLT, when `a` is boundary-normal
-   with odd mantissa or denormal with odd mantissa, `a/2 ∉ F`. Concrete
-   counterexample: `prec=3, emin=-2, a=0.75`; then `a/2=0.375 ∉ F`.
+   **API after the port**: `(emin prec : ℤ) (hp : 0 < prec)` everywhere.
+   The choice function stays fully arbitrary (Pff requires
+   `choice_sym`; we avoid it via the `round_N_opp` flipped-choice trick
+   in `Fast2Sum_step1`).
 
-   **Pff's solution** (`Pff.v` `Dekker1_FTS`/`Dekker2_FTS`/`Dekker3`,
-   referenced from `MDekker` and `Dekker_FTS`):
-   - **Dekker1** (`b ≥ 0`): Sterbenz on `(a, s)`. Pff uses
-     `FmultRadixInv` here to get `s ≥ p/2`, but **the Lean port can
-     do better**: with `b ≥ 0` we have `a ≤ s ≤ 2a` directly via
-     `round_ge_generic` (using `a ∈ F`) and `round_le_generic` (using
-     `2a ∈ F`). Then Sterbenz on `(s, a)` with `a/2 ≤ a ≤ s ≤ 2a`.
-     **No `FmultRadixInv` needed in this case for our Lean port.**
-   - **Dekker2** (`b < 0, |b| ≥ a/radix`, i.e., `-q ≤ p ≤ 2(-q)`):
-     Sterbenz on `(a, -b)` gives `a + b ∈ F` directly. Same as our
-     existing FLX Case 2.
-   - **Dekker3** (`b < 0, |b| < a/radix`): Sterbenz on `(a, s)` with
-     `s/2 ≤ a ≤ 2s`. The non-obvious bound `s ≥ a/2` (which needs
-     `a/2 ∉ F` to not break things) comes from **`FmultRadixInv`**:
-     for `x ∈ F` and `y > x/2` (**strict!**), `round_N(y) ≥ x/2`.
-     This holds even when `x/2 ∉ F`, via the midpoint-symmetry of
-     `x/2`'s neighbors in radix-2 F. For our Case 3: `b > -a/2`
-     strictly gives `a + b > a/2` strictly, satisfying the lemma's
-     precondition.
-
-   **Lean port plan, ordered by checkpoint:**
-   1. `two_mul_in_FLT_radix2` helper (~30 lines): for `a ∈ FLT (radix 2)`,
-      `2a ∈ FLT`. Direct construction via `generic_format_F2R` with
-      `cexp(2a) ≤ cexp(a) + 1`. (Note: cannot use `mult_bpow_exact_FLT`
-      directly — its precondition `mag(a) ≥ emin + prec - 1` fails for
-      small denormals. The direct construction works unconditionally.)
-   2. `round_N_gt_half_FLT_radix2` helper (~80 lines): for `a ∈ FLT
-      (radix 2), 0 < a, a/2 < v` (**strict** — the weak version is
-      false when `a/2 ∉ F` and tie-break picks the floor), then
-      `a/2 ≤ round_N(v)`. Case split on whether `a/2 ∈ F` (use
-      `round_ge_generic`) or `a/2 ∉ F` (use `round_N_ge_midp` from
-      `Core/Ulp.lean:2220` with the radix-2 midpoint-symmetry
-      sub-lemma). The sub-lemma: for `a ∈ F (radix 2 FLT)` with
-      `a/2 ∉ F`, `a/2 = (pred(u) + u)/2` where `u = round_UP(a/2)`.
-      This holds because `a/2 ∉ F` only when `a` has cexp = emin
-      with odd mantissa, and the neighbors of `a/2` at exponent
-      `emin` differ by exactly `bpow emin` with `a/2` exactly
-      between them.
-   3. Refactor `Fast2Sum_step1_pos` into three Pff-style cases
-      (`b ≥ 0`, `b ≤ -a/2`, `-a/2 < b < 0`) — ~80-120 lines.
-      Cases 1 and 3 use the helpers; Case 2 ports almost directly
-      from the existing FLX proof.
-   4. Propagate to `Fast2Sum_step1` (general — `round_N_opp` symmetry,
-      already in place, just needs FLT instead of FLX) and
-      `Fast2Sum_correct` — ~20 lines.
-   5. Refactor `TwoSum_correct` — just imports + format change,
-      maybe ~10 lines.
-
-   **Total estimate**: ~200-300 lines of fresh Lean, one focused
-   session, possibly bleeding into a second. Reference for the
-   midpoint-symmetry argument: Pff's `FmultRadixInv` proof
-   (`Pff.v:8713`) and `div2IsBetween` (search Pff.v). Reference for
-   `round_N_ge_midp`: `Core/Ulp.lean:2220`.
-
-   **Why not skip and stay at FLX**: the inconsistency would propagate
-   — Veltkamp at FLT can't use FLX results directly. Better to pay
-   this cost once, up front, so Veltkamp/Dekker/ErrFMA all sit cleanly
-   at FLT.
-
-   **API after the port**: same shape as current, but with
-   `FLT_exp emin prec` and an `emin_neg : emin ≤ 0` hypothesis added
-   throughout. The choice function stays arbitrary (Pff requires
-   `choice_sym`; we don't, thanks to our `round_N_opp` flipped-choice
-   trick).
+   **Total**: 470 lines for Fast2Sum.lean (+238 from FLX version),
+   70 lines for TwoSum.lean (-2 from FLX version), single session
+   to land all three commits.
 
 4. `Veltkamp` splitting (1 session, after the FLT port). The proof of
    "splitting factor `C = 2^s + 1` gives a hi-part with exactly
