@@ -769,6 +769,83 @@ theorem error_N_FLT_aux (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
     · ring
     · ring
 
+/-- Unit-roundoff version of `error_N_FLT`. The relative-error bound is
+the tighter `u_ro / (1 + u_ro)`, and the absolute-error bound is
+`(1/2) · bpow emin`. -/
+theorem relative_error_N_FLT'_ex (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    ∃ eps eta : ℝ,
+      |eps| ≤ u_ro beta prec / (1 + u_ro beta prec) ∧
+      |eta| ≤ (1/2) * bpow beta emin ∧
+      eps * eta = 0 ∧
+      round beta (FLT_exp emin prec) (Znearest choice) x = x * (1 + eps) + eta := by
+  by_cases MX : bpow beta (emin + prec - 1) ≤ |x|
+  · -- Above threshold: use the FLX' relative-error result, eta = 0.
+    obtain ⟨d, Bd, Hd⟩ := relative_error_N_FLX'_ex beta prec Hp choice x
+    refine ⟨d, 0, Bd, ?_, ?_, ?_⟩
+    · rw [abs_zero]; exact mul_nonneg (by norm_num) (bpow_ge_0 _ _)
+    · ring
+    · rw [add_zero, round_FLT_FLX beta emin prec _ MX, Hd]
+  · -- Below threshold: eps = 0, eta = round x - x with |eta| ≤ (1/2)·bpow emin.
+    push_neg at MX
+    set rx := round beta (FLT_exp emin prec) (Znearest choice) x with hrx_def
+    have h_abs_lt : |x| < bpow beta (emin + prec) :=
+      lt_of_lt_of_le MX (bpow_le beta (by omega))
+    have h_err : |rx - x| ≤ (1/2) * bpow beta emin := by
+      have h_half_ulp := error_le_half_ulp beta (FLT_exp emin prec)
+        (FLT_exp_valid emin prec Hp) choice x
+      rw [ulp_FLT_small beta emin prec Hp h_abs_lt] at h_half_ulp
+      exact h_half_ulp
+    refine ⟨0, rx - x, ?_, h_err, ?_, ?_⟩
+    · rw [abs_zero]; exact u_rod1pu_ro_pos beta prec
+    · ring
+    · ring
+
+/-- Separation form: there is an `x'` differing from `x` by a small additive `eta`
+such that rounding `x'` equals rounding `x` and the rounding of `x'` matches a
+pure `(1 + eps)`-form with `|eps| ≤ u_ro/(1+u_ro)`. -/
+theorem relative_error_N_FLT'_ex_separate (beta : radix) (emin prec : ℤ)
+    (Hp : 0 < prec) (choice : ℤ → Bool) (x : ℝ) :
+    ∃ x' : ℝ,
+      round beta (FLT_exp emin prec) (Znearest choice) x'
+        = round beta (FLT_exp emin prec) (Znearest choice) x ∧
+      (∃ eta : ℝ, |eta| ≤ (1/2) * bpow beta emin ∧ x' = x + eta) ∧
+      (∃ eps : ℝ, |eps| ≤ u_ro beta prec / (1 + u_ro beta prec) ∧
+              round beta (FLT_exp emin prec) (Znearest choice) x' = x' * (1 + eps)) := by
+  set rx := round beta (FLT_exp emin prec) (Znearest choice) x with hrx_def
+  obtain ⟨d, e, Bd, Be, Hde0, Hde⟩ := relative_error_N_FLT'_ex beta emin prec Hp choice x
+  have h_rx_in_format : generic_format beta (FLT_exp emin prec) rx :=
+    generic_format_round beta (FLT_exp emin prec) (FLT_exp_valid emin prec Hp)
+      (Znearest choice) x
+  by_cases h : |d * x| < |e|
+  · -- Case |d·x| < |e|: take x' = rx. From d·e = 0 and |d·x| < |e|, conclude d = 0.
+    refine ⟨rx, ?_, ?_, ?_⟩
+    · exact round_generic beta (FLT_exp emin prec) (Znearest choice) h_rx_in_format
+    · refine ⟨e, Be, ?_⟩
+      show round beta (FLT_exp emin prec) (Znearest choice) x = x + e
+      rw [Hde]
+      rcases mul_eq_zero.mp Hde0 with Zd | Ze
+      · rw [Zd]; ring
+      · exfalso
+        rw [Ze, abs_zero] at h
+        exact not_lt_of_ge (abs_nonneg _) h
+    · refine ⟨0, ?_, ?_⟩
+      · rw [abs_zero]; exact u_rod1pu_ro_pos beta prec
+      · rw [show ((1 : ℝ) + 0) = 1 from by ring, mul_one]
+        exact round_generic beta (FLT_exp emin prec) (Znearest choice) h_rx_in_format
+  · -- Case |e| ≤ |d·x|: take x' = x. From d·e = 0 split: if d = 0 then |e| ≤ 0 → e = 0.
+    push_neg at h
+    refine ⟨x, rfl, ?_, ?_⟩
+    · refine ⟨0, ?_, by ring⟩
+      rw [abs_zero]; exact mul_nonneg (by norm_num) (bpow_ge_0 _ _)
+    · refine ⟨d, Bd, ?_⟩
+      rw [Hde]
+      rcases mul_eq_zero.mp Hde0 with Zd | Ze
+      · rw [Zd, zero_mul, abs_zero] at h
+        have he_zero : e = 0 := abs_eq_zero.mp (le_antisymm h (abs_nonneg e))
+        rw [he_zero, add_zero]
+      · rw [Ze, add_zero]
+
 /-- The full theorem: for any real `x`, FLT round-to-nearest error decomposes
 into a relative part `eps` and an absolute part `eta`, exactly one nonzero. -/
 theorem error_N_FLT (beta : radix) (emin prec : ℤ) (Hp : 0 < prec)

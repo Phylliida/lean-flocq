@@ -284,6 +284,32 @@ theorem Zrnd_odd_plus {x y : ℝ} (Hx : x = (⌊x⌋ : ℝ)) (H : Even ⌊x⌋) 
       rw [if_neg h_not_even_xy, if_neg h_even_y, h_floor_sum]
       push_cast; rw [← Hx]
 
+/-- Primed variant of `Zrnd_odd_plus`. When `x = n · bpow β e` for some
+integer `n` and exponent `e ≥ 1`, and `β` is even, then
+`Zrnd_odd (x + y) = x + Zrnd_odd y`. -/
+theorem Zrnd_odd_plus' (beta : radix) (h_beta_even : Even beta.val)
+    {x y : ℝ}
+    (h_x : ∃ n e : ℤ, x = (n : ℝ) * bpow beta e ∧ 1 ≤ e) :
+    ((Zrnd_odd (x + y) : ℝ)) = x + (Zrnd_odd y : ℝ) := by
+  obtain ⟨n, e, Hxe, He⟩ := h_x
+  have h_e_nn : 0 ≤ e := by linarith
+  have h_bpow_int : bpow beta e = ((beta.val ^ e.toNat : ℤ) : ℝ) :=
+    (IZR_Zpower beta h_e_nn).symm
+  have h_x_eq_int : x = ((n * beta.val ^ e.toNat : ℤ) : ℝ) := by
+    rw [Hxe, h_bpow_int]; push_cast; ring
+  -- x is an integer.
+  have hx_int : x = (⌊x⌋ : ℝ) := by
+    rw [h_x_eq_int, Int.floor_intCast]
+  -- ⌊x⌋ is even (β even and e ≥ 1 ⟹ β^e even).
+  have h_pow_even : Even (beta.val ^ e.toNat) := by
+    have h_e_toNat_pos : 0 < e.toNat := by omega
+    rw [show e.toNat = (e.toNat - 1) + 1 from by omega, pow_succ]
+    exact Even.mul_left h_beta_even _
+  have hx_floor_even : Even ⌊x⌋ := by
+    rw [h_x_eq_int, Int.floor_intCast]
+    exact h_pow_even.mul_left n
+  exact Zrnd_odd_plus hx_int hx_floor_even
+
 /-! ### Round_odd produces a round-to-odd point -/
 
 /-- The core theorem: rounding `x` with `Zrnd_odd` produces a round-to-odd point.

@@ -811,6 +811,70 @@ theorem sqrt_error_N_FLX_ex (beta : radix) (prec : ℤ) (Hp1 : 1 < prec)
     (om1ds1p2u_ro_pos beta prec)
     (sqrt_error_N_FLX beta prec Hp1 choice Fx)
 
+/-- Derivation step (Coq `sqrt_error_N_round_ex_derive`): convert an
+`(1+ε)`-bound with `|ε| ≤ 1 - 1/√(1+2·u_ro)` (relating `rx` to `x · (1+ε)`)
+into the swapped form `|ε'| ≤ √(1+2·u_ro) - 1` (relating `x` to `rx · (1+ε')`). -/
+theorem sqrt_error_N_round_ex_derive (beta : radix) (prec : ℤ) {x rx : ℝ}
+    (h : ∃ eps : ℝ, |eps| ≤ 1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec) ∧
+                    rx = x * (1 + eps)) :
+    ∃ eps : ℝ, |eps| ≤ Real.sqrt (1 + 2 * u_ro beta prec) - 1 ∧
+              x = rx * (1 + eps) := by
+  obtain ⟨d, Bd, Hd⟩ := h
+  have Pu_ro_nn : 0 ≤ u_ro beta prec := u_ro_pos beta prec
+  have h_arg_pos : 0 < 1 + 2 * u_ro beta prec := by linarith
+  have h_sqrt_pos : 0 < Real.sqrt (1 + 2 * u_ro beta prec) :=
+    Real.sqrt_pos.mpr h_arg_pos
+  have h_sqrt_ge_1 : 1 ≤ Real.sqrt (1 + 2 * u_ro beta prec) := by
+    calc (1 : ℝ) = Real.sqrt 1 := Real.sqrt_one.symm
+      _ ≤ Real.sqrt (1 + 2 * u_ro beta prec) :=
+          Real.sqrt_le_sqrt (by linarith)
+  have h_one_minus_inv_pos : 1 - 1 / Real.sqrt (1 + 2 * u_ro beta prec) < 1 := by
+    have : 0 < 1 / Real.sqrt (1 + 2 * u_ro beta prec) :=
+      div_pos one_pos h_sqrt_pos
+    linarith
+  have h_d_abs : |d| < 1 := lt_of_le_of_lt Bd h_one_minus_inv_pos
+  have h_one_plus_d_pos : 0 < 1 + d := by
+    have := neg_lt_of_abs_lt h_d_abs; linarith
+  by_cases Zfx : rx = 0
+  · refine ⟨0, ?_, ?_⟩
+    · rw [abs_zero]; exact s1p2u_rom1_pos beta prec
+    · rw [Zfx, zero_mul]
+      rw [Zfx] at Hd
+      rcases mul_eq_zero.mp Hd.symm with h_x0 | h_d1
+      · exact h_x0
+      · linarith
+  by_cases Zx : x = 0
+  · exfalso; apply Zfx
+    rw [Hd, Zx, zero_mul]
+  refine ⟨(x - rx) / rx, ?_, ?_⟩
+  · have h_xsubrx : x - rx = -(x * d) := by rw [Hd]; ring
+    have h_abs_diff : |x - rx| = |x| * |d| := by
+      rw [h_xsubrx, abs_neg, abs_mul]
+    have h_abs_rx : |rx| = |x| * (1 + d) := by
+      rw [Hd, abs_mul, abs_of_pos h_one_plus_d_pos]
+    rw [abs_div, h_abs_diff, h_abs_rx]
+    have h_x_pos : 0 < |x| := abs_pos.mpr Zx
+    have h_denom_pos : 0 < |x| * (1 + d) :=
+      mul_pos h_x_pos h_one_plus_d_pos
+    rw [div_le_iff₀ h_denom_pos]
+    set s := Real.sqrt (1 + 2 * u_ro beta prec)
+    have h_d_bound : |d| ≤ (s - 1) / s := by
+      have h_eq : 1 - 1/s = (s - 1)/s := by field_simp
+      rw [← h_eq]; exact Bd
+    have h_d_s_bound : |d| * s ≤ s - 1 := by
+      rw [le_div_iff₀ h_sqrt_pos] at h_d_bound; exact h_d_bound
+    have h_key : |d| ≤ (s - 1) * (1 + d) := by
+      rcases le_or_lt 0 d with hd_nn | hd_neg
+      · rw [abs_of_nonneg hd_nn]
+        nlinarith [h_d_s_bound, hd_nn, abs_of_nonneg hd_nn, h_sqrt_ge_1,
+                   sq_nonneg d, sq_nonneg (s - 1)]
+      · rw [abs_of_neg hd_neg]
+        nlinarith [h_d_s_bound, hd_neg, abs_of_neg hd_neg, h_sqrt_ge_1]
+    have := mul_le_mul_of_nonneg_left h_key (le_of_lt h_x_pos)
+    nlinarith [this, h_x_pos, h_one_plus_d_pos, h_sqrt_ge_1]
+  · field_simp
+    rw [Hd]; ring
+
 /-- The `1 + ε` form w.r.t. the rounded value: bound `sqrt(1+2·u_ro) - 1`. -/
 theorem sqrt_error_N_FLX_round_ex (beta : radix) (prec : ℤ) (Hp1 : 1 < prec)
     (choice : ℤ → Bool) {x : ℝ} (Fx : generic_format beta (FLX_exp prec) x) :

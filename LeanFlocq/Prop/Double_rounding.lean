@@ -1032,6 +1032,14 @@ When `x` and `y` are in the target format `F1`, the product `x * y` is
 representable in `F2` provided `fexp2` is "fine enough" relative to `fexp1`.
 This makes double rounding for multiplication innocuous. -/
 
+/-- `mag β (x * y)` takes one of the two possible values `mag x + mag y - 1`
+or `mag x + mag y` (a disjunctive form of `mag_mult`). -/
+theorem mag_mult_disj (beta : radix) {x y : ℝ} (hx : x ≠ 0) (hy : y ≠ 0) :
+    mag beta (x * y) = mag beta x + mag beta y - 1
+    ∨ mag beta (x * y) = mag beta x + mag beta y := by
+  have ⟨h_lo, h_hi⟩ := mag_mult beta hx hy
+  omega
+
 /-- The hypothesis on `(fexp1, fexp2)` for `round_round_mult`: `fexp2` must
 be at most `fexp1(ex) + fexp1(ey)` at both possible magnitudes of `x * y`. -/
 def round_round_mult_hyp (fexp1 fexp2 : ℤ → ℤ) : Prop :=
