@@ -891,6 +891,11 @@ theorem m_shr_record_of_loc (m : ℤ) (l : location) :
   | Exact => rfl
   | Inexact c => cases c <;> rfl
 
+/-- Alias matching Coq's `shr_m_shr_record_of_loc`. -/
+theorem shr_m_shr_record_of_loc (m : ℤ) (l : location) :
+    (shr_record_of_loc m l).m = m :=
+  m_shr_record_of_loc m l
+
 theorem loc_of_shr_record_of_loc (m : ℤ) (l : location) :
     loc_of_shr_record (shr_record_of_loc m l) = l := by
   cases l with
@@ -2898,6 +2903,17 @@ theorem Bminus_correct (hp : 0 < prec) (hmax : prec < emax)
   rw [Bminus_eq_Bplus_Bopp hp hmax minus_nan minus_nan opp_nan m x y Fx Fy]
   -- Now h_bplus matches the goal directly.
   exact h_bplus
+
+/-! ## Bnormfr_mantissa: extract the integer mantissa of a normalized fraction -/
+
+/-- **`Bnormfr_mantissa`** (Coq line 2249): for a finite float with canonical
+exponent `-prec` (i.e., a value in `[1/2, 1)`), return the integer mantissa
+`mx`. For any other input (zero/infinity/NaN, or a finite float with a
+different exponent), return `0`. -/
+def Bnormfr_mantissa (x : binary_float prec emax) : ℤ :=
+  match x with
+  | B754_finite _ mx ex _ => if ex = -prec then mx else 0
+  | _ => 0
 
 /-! ## Bldexp: scale by a power of two -/
 

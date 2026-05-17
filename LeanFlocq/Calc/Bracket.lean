@@ -493,6 +493,10 @@ theorem new_location_correct (start step : ℝ) (Hstep : 0 < step)
 
 /-! ## Scaling: `inbetween` is preserved under multiplication by a positive scalar -/
 
+/-- The arithmetic identity scaling preserves: `(x·s + d·s)/2 = (x+d)/2 · s`. -/
+theorem inbetween_mult_aux (x d s : ℝ) : (x * s + d * s) / 2 = (x + d) / 2 * s := by
+  ring
+
 /-- Scaling all three reference points by a positive `s` preserves `inbetween`. -/
 theorem inbetween_mult_compat (d u x : ℝ) (l : location) (s : ℝ) (Hs : 0 < s)
     (h : inbetween d u x l) : inbetween (d * s) (u * s) (x * s) l := by
@@ -639,5 +643,14 @@ theorem inbetween_float_new_location (m e : ℤ) (x : ℝ) (l : location) (k : �
     (bpow beta e) (bpow_gt_0 beta e) (beta.val ^ k.toNat) (by exact_mod_cast hβ_gt_1) x R l
     ⟨h_R_ge, h_R_lt⟩
   exact Hx
+
+/-- The `k = 1` specialization of `inbetween_float_new_location`. -/
+theorem inbetween_float_new_location_single (m e : ℤ) (x : ℝ) (l : location)
+    (Hx : inbetween_float beta m e x l) :
+    inbetween_float beta (m / beta.val) (e + 1) x
+      (new_location beta.val (m % beta.val) l) := by
+  have h := inbetween_float_new_location (beta := beta) m e x l 1
+    (by decide : (0 : ℤ) < 1) Hx
+  simpa using h
 
 end LeanFlocq

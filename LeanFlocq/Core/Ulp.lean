@@ -46,6 +46,28 @@ theorem negligible_exp_none {fexp : ℤ → ℤ}
     have := hex n
     omega
 
+/-- Inductive characterization of `negligible_exp`'s value: either `none`
+together with `fexp n < n` for all `n`, or `some n` together with `n ≤ fexp n`. -/
+inductive negligible_exp_prop (fexp : ℤ → ℤ) : Option ℤ → Prop
+  | none : (∀ n : ℤ, fexp n < n) → negligible_exp_prop fexp .none
+  | some (n : ℤ) : n ≤ fexp n → negligible_exp_prop fexp (.some n)
+
+/-- `negligible_exp fexp` satisfies the inductive `negligible_exp_prop`. -/
+theorem negligible_exp_spec (fexp : ℤ → ℤ) :
+    negligible_exp_prop fexp (negligible_exp fexp) := by
+  cases h : negligible_exp fexp with
+  | none => exact .none (negligible_exp_none h)
+  | some n => exact .some n (negligible_exp_some h)
+
+/-- Disjunctive spec for `negligible_exp`. Either it returns `none` and `fexp n <
+n` for all `n`, or it returns `some n` for some `n` with `n ≤ fexp n`. -/
+theorem negligible_exp_spec' (fexp : ℤ → ℤ) :
+    (negligible_exp fexp = .none ∧ ∀ n : ℤ, fexp n < n) ∨
+    ∃ n : ℤ, negligible_exp fexp = .some n ∧ n ≤ fexp n := by
+  cases h : negligible_exp fexp with
+  | none => exact .inl ⟨rfl, negligible_exp_none h⟩
+  | some n => exact .inr ⟨n, rfl, negligible_exp_some h⟩
+
 /-- For any two indices in the small regime of `fexp` (i.e., `n ≤ fexp n` and
 `m ≤ fexp m`), `fexp n = fexp m`. The small regime stabilizes to a constant. -/
 theorem fexp_negligible_exp_eq {fexp : ℤ → ℤ} (hValid : Valid_exp fexp)
