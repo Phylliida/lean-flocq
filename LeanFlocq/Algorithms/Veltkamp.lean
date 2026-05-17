@@ -123,4 +123,71 @@ private theorem mag_xC_bounds (beta : radix) {x : ℝ} {s : ℤ}
   · linarith [h_mult.1]
   · linarith [h_mult.2]
 
+/-! ### FLX algorithm constants
+
+We name the algorithm steps for the FLX (no underflow) version. The keystone
+will refer to these by name across multiple theorems. Mirrors the section
+`Veltkamp` in `Pff2Flocq.v` (lines 323–350). -/
+
+/-- Veltkamp splitting constant: `C = β^s + 1`. -/
+noncomputable def Veltkamp_C (beta : radix) (s : ℤ) : ℝ := bpow beta s + 1
+
+/-- Step 1 of the algorithm: `p = round(x · C)`. -/
+noncomputable def Veltkamp_p_FLX (beta : radix) (prec : ℤ) (choice : ℤ → Bool)
+    (s : ℤ) (x : ℝ) : ℝ :=
+  round beta (FLX_exp prec) (Znearest choice) (x * Veltkamp_C beta s)
+
+/-- Step 2: `q = round(x − p)`. -/
+noncomputable def Veltkamp_q_FLX (beta : radix) (prec : ℤ) (choice : ℤ → Bool)
+    (s : ℤ) (x : ℝ) : ℝ :=
+  round beta (FLX_exp prec) (Znearest choice)
+    (x - Veltkamp_p_FLX beta prec choice s x)
+
+/-- Step 3: `hx = round(q + p)`, the "high part" of the splitting. -/
+noncomputable def Veltkamp_hx_FLX (beta : radix) (prec : ℤ) (choice : ℤ → Bool)
+    (s : ℤ) (x : ℝ) : ℝ :=
+  round beta (FLX_exp prec) (Znearest choice)
+    (Veltkamp_q_FLX beta prec choice s x + Veltkamp_p_FLX beta prec choice s x)
+
+/-- Step 4: `tx = round(x − hx)`, the "tail" / low part. -/
+noncomputable def Veltkamp_tx_FLX (beta : radix) (prec : ℤ) (choice : ℤ → Bool)
+    (s : ℤ) (x : ℝ) : ℝ :=
+  round beta (FLX_exp prec) (Znearest choice)
+    (x - Veltkamp_hx_FLX beta prec choice s x)
+
+/-- The FLX-form C is in F (FLX, prec) when `0 ≤ s` and `s + 1 < prec`. -/
+theorem Veltkamp_C_format_FLX (beta : radix) (prec s : ℤ)
+    (hp : 0 < prec) (hs_lo : 0 ≤ s) (hs_hi : s + 1 < prec) :
+    generic_format beta (FLX_exp prec) (Veltkamp_C beta s) := by
+  unfold Veltkamp_C
+  have hC_pos : 0 < bpow beta s + 1 := by linarith [bpow_gt_0 beta s]
+  have hC_ne : bpow beta s + 1 ≠ 0 := ne_of_gt hC_pos
+  have hβ : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have h_pow_s_ge_1 : (1 : ℝ) ≤ bpow beta s := by
+    rw [← bpow_zero beta]; exact bpow_le beta hs_lo
+  refine generic_format_F2R' beta (FLX_exp prec)
+    (⟨(beta.val : ℤ) ^ s.toNat + 1, 0⟩ : float beta) ?_ ?_
+  · -- F2R⟨β^s + 1, 0⟩ = β^s + 1
+    show ((((beta.val : ℤ) ^ s.toNat + 1 : ℤ) : ℝ) * bpow beta 0)
+           = bpow beta s + 1
+    rw [bpow_zero, mul_one, Int.cast_add, Int.cast_one, IZR_Zpower beta hs_lo]
+  · -- cexp(C) ≤ 0. Suffices mag(C) ≤ prec, which follows from |C| < β^prec.
+    intro _
+    show cexp beta (FLX_exp prec) (bpow beta s + 1) ≤ 0
+    have h_C_lt : |bpow beta s + 1| < bpow beta prec := by
+      rw [abs_of_pos hC_pos]
+      -- β^s + 1 ≤ 2·β^s ≤ β·β^s = β^(s+1) ≤ β^(prec-1) < β^prec.
+      have h1 : bpow beta s + 1 ≤ 2 * bpow beta s := by linarith
+      have h2 : 2 * bpow beta s ≤ (beta.val : ℝ) * bpow beta s := by nlinarith
+      have h3 : (beta.val : ℝ) * bpow beta s = bpow beta (s + 1) := by
+        rw [bpow_plus, bpow_one]; ring
+      have h4 : bpow beta (s + 1) ≤ bpow beta (prec - 1) :=
+        bpow_le beta (by linarith)
+      have h5 : bpow beta (prec - 1) < bpow beta prec :=
+        bpow_lt beta (by linarith)
+      linarith
+    have h_mag_le : mag beta (bpow beta s + 1) ≤ prec :=
+      mag_le_bpow beta hC_ne h_C_lt
+    show FLX_exp prec (mag beta (bpow beta s + 1)) ≤ 0
+    unfold FLX_exp; linarith
 end LeanFlocq
