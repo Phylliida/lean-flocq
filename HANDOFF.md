@@ -404,9 +404,9 @@ to BigInt rationals.
    70 lines for TwoSum.lean (-2 from FLX version), single session
    to land all three commits.
 
-4. `Veltkamp` splitting — **STARTED 2026-05-17** in
-   `Algorithms/Veltkamp.lean` (~190 lines, 0 sorries). Four pieces
-   landed:
+4. `Veltkamp` splitting — **STARTED 2026-05-17**, hxExact landed
+   same day. `Algorithms/Veltkamp.lean` is 546 lines, 0 sorries.
+   Pieces landed in order:
    - `Veltkamp_C_format` (FLT) — `β^s + 1 ∈ F` matching Pff2Flocq's
      `C_format` (lines 354–379). Uses F2R⟨β^s + 1, 0⟩, mantissa bound
      via β^s + 1 ≤ 2·β^s ≤ β·β^s = β^(s+1) ≤ β^(prec-1) < β^prec.
@@ -438,14 +438,25 @@ to BigInt rationals.
    showing the rounding in step 1 has additional structure given
    `M_xC = m_x · (β^s + 1)`.
 
-   **Sketch for the next session**: introduce mantissa-level objects
-   `m_x := Ztrunc(scaled_mantissa x)` and `M_xC := m_x · (β^s + 1)`,
-   prove the Case A path first (q = -β^s·x via half-ulp), then handle
-   Case B with the structural bound on `M_xC mod β^{s+1}`. Reference:
-   Boldo's "Pitfalls of a Full Floating-Point Proof" §3 if accessible;
-   otherwise `Pff.v` `Velt` section (13053–14776). Expected size:
-   ~400–600 Lean lines for the FLX keystone, then ~100–200 for the
-   FLT lift.
+   **Update (2026-05-17, hxExact landed)**: with `hxExact_FLX` in hand,
+   `x - hx = -err_q` (algebraic from `hx = q + p` and `q = (x-p) + err_q`).
+   So `|x - hx| = |err_q|`. The remaining bound `|err_q| ≤ β^(s+cexp x)/2`
+   needs `cexp(q) ≤ s + cexp(x)`, equivalently `mag(q) ≤ mag(x) + s`. The
+   loose bound we have so far gives `mag(q) ≤ mag(x) + s + 1` (from
+   `|x - p| < bpow(mag x + s + 1)` and `abs_round_le_generic`) — off by
+   one. Pff's `eqLe` proves Case A: `Fexp q ≤ s + Fexp x`, i.e.,
+   `mag(q) ≤ mag(x) + s`, OR an edge-case dichotomy: `q = -β^(prec+s+cexp x-1)`
+   exactly, in which case the bound holds directly by substitution.
+
+   **Sketch for the next session**: prove an `eqLe_FLX` dichotomy (Pff
+   line 13313, ~80 Coq lines). Then `Veltkamp_aux_FLX`'s `|x - hx|` bound
+   follows from `|err_q| ≤ ulp(q)/2 = β^cexp(q)/2 ≤ β^(s+cexp x)/2`. The
+   `hx ∈ F(prec - s)` part needs `Veltkamp_aux_aux` (Pff line 13863,
+   ~250 Coq lines), which is the integer-mantissa structural argument
+   distinguishing Case A from Case B. Expected size: ~200–400 Lean lines
+   for `eqLe_FLX` and ~300–500 lines for the format/aux side. Reference:
+   `Pff.v` `Velt` section (13053–14776), or Boldo's "Pitfalls of a Full
+   Floating-Point Proof" §3 if accessible.
 5. `Dekker`/`TwoProduct` (1 session, builds on Veltkamp).
 6. `ErrFMA` (1 session, builds on TwoProduct + TwoSum).
 7. Compensated discriminant (1 session, applies the above).
