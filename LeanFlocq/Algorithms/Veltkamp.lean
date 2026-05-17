@@ -1,6 +1,6 @@
 /-
 Veltkamp's splitting: an error-free decomposition `x = hx + tx` using only
-three FLT-rounded operations applied to a splitting constant `C = β^s + 1`.
+three rounded operations applied to a splitting constant `C = β^s + 1`.
 
 Following Coq Flocq's `Pff/Pff2Flocq.v` section `Veltkamp`, the algorithm is
 
@@ -10,13 +10,19 @@ Following Coq Flocq's `Pff/Pff2Flocq.v` section `Veltkamp`, the algorithm is
   hx := round(q + p)
   tx := round(x − hx)
 
-Under `3 ≤ prec`, `emin ≤ 0`, `2 ≤ s ≤ prec − 2`:
-- `Veltkamp_C_format`     — `C ∈ F` (the constant is representable).
-- `Veltkamp` (TODO)       — ∃ `choice'`, `hx = round_{prec − s, choice'} x`.
-- `Veltkamp_tail` (TODO)  — `x = hx + tx` and `tx ∈ FLT_{emin, s}`.
-- `Veltkamp_Even` (TODO)  — with round-to-nearest-even, `hx = round_NE_{prec-s} x`.
+The Pff statements are at FLT (gradual underflow). We mirror Fast2Sum's path:
+build the keystone at FLX (no underflow) first, then lift to FLT in a follow-up.
 
-Setting: generic radix β ≥ 2, FLT (gradual underflow), round-to-nearest.
+Current contents:
+- `Veltkamp_C_format` (FLT) — `C ∈ F`, matching the FLT statement.
+- `mag_xC_bounds` (FLX/generic) — `mag(x) + s ≤ mag(x·C) ≤ mag(x) + s + 1`.
+
+TODO (FLX first, then port to FLT):
+- `Veltkamp_aux_FLX`  — keystone bound `|x − hx| ≤ β^(s+cexp x)/2` + `hx ∈ F(prec − s)`.
+- `Veltkamp_FLX`      — ∃ `choice'`, `hx = round_{prec − s, choice'} x`.
+- `Veltkamp_tail_FLX` — `x = hx + tx` and `tx ∈ FLX_s`.
+- FLT lifts of all three.
+- `Veltkamp_Even`     — with round-to-nearest-even, the equality holds.
 -/
 import LeanFlocq.Core.FLT
 import LeanFlocq.Prop.Sterbenz
@@ -77,5 +83,44 @@ theorem Veltkamp_C_format (beta : radix) (emin prec s : ℤ)
     linarith
   · -- emin ≤ 0
     exact hemin
+
+/-! ### Magnitude of `x · C`
+
+For `C = β^s + 1` and `x ≠ 0`, the magnitude of `x · C` is in
+`{mag(x) + s, mag(x) + s + 1}`. The lower bound uses `β^s ≤ C`; the upper
+bound uses `C < β^(s+1)` (which needs `s ≥ 0`, since for `s = 0`,
+`C = 2 ≤ β` only when `β = 2`; we keep it generic via `1 ≤ s`). -/
+
+/-- Magnitude bounds for `x · C` with `C = β^s + 1`, `s ≥ 1`, `x ≠ 0`:
+`mag(x) + s ≤ mag(x · C) ≤ mag(x) + s + 1`. -/
+private theorem mag_xC_bounds (beta : radix) {x : ℝ} {s : ℤ}
+    (hx : x ≠ 0) (hs : 1 ≤ s) :
+    mag beta x + s ≤ mag beta (x * (bpow beta s + 1))
+      ∧ mag beta (x * (bpow beta s + 1)) ≤ mag beta x + s + 1 := by
+  have hC_pos : 0 < bpow beta s + 1 := by linarith [bpow_gt_0 beta s]
+  have hC_ne : bpow beta s + 1 ≠ 0 := ne_of_gt hC_pos
+  -- bpow(s) ≥ β ≥ 2 > 1 for s ≥ 1.
+  have h_pow_s_gt_1 : (1 : ℝ) < bpow beta s := by
+    have : bpow beta 0 < bpow beta s := bpow_lt beta (by linarith : (0 : ℤ) < s)
+    rwa [bpow_zero] at this
+  have hβ : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  -- mag(C) bounds via |C| sandwich.
+  have h_mag_C_lo : s + 1 ≤ mag beta (bpow beta s + 1) := by
+    by_contra hlt
+    push_neg at hlt
+    have hmagle : mag beta (bpow beta s + 1) ≤ s := by linarith
+    have h_high : |bpow beta s + 1| < bpow beta (mag beta (bpow beta s + 1)) :=
+      bpow_mag_gt beta (bpow beta s + 1)
+    have : |bpow beta s + 1| < bpow beta s :=
+      lt_of_lt_of_le h_high (bpow_le beta hmagle)
+    rw [abs_of_pos hC_pos] at this; linarith
+  have h_mag_C_hi : mag beta (bpow beta s + 1) ≤ s + 1 := by
+    apply mag_le_bpow beta hC_ne
+    rw [abs_of_pos hC_pos, bpow_plus, bpow_one]
+    nlinarith [bpow_ge_0 beta s, h_pow_s_gt_1]
+  have h_mult := mag_mult beta hx hC_ne
+  refine ⟨?_, ?_⟩
+  · linarith [h_mult.1]
+  · linarith [h_mult.2]
 
 end LeanFlocq
