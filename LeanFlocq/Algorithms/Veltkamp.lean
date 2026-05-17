@@ -1406,4 +1406,52 @@ theorem Veltkamp_aux_FLX_CaseB_boundary (beta : radix) (prec : ℤ) (hp : 0 < pr
       rw [ulp_neq_0 beta _ hq_zero] at h
       linarith
 
+/-! ### Unified `Veltkamp_aux_FLX_CaseB` and `Veltkamp_aux_FLX`
+
+Combining the interior and boundary subcases on `M_x` gives the unified
+Case B. Combining with Case A on `mag(x · C)` gives the full bound. -/
+
+/-- **`Veltkamp_aux_FLX_CaseB`** (unified): when `mag(x · C) = m + s + 1`, the
+bound holds. Dispatches on `M_x ≤ β^prec − β − 1` (interior) vs
+`M_x ≥ β^prec − β` (boundary). -/
+theorem Veltkamp_aux_FLX_CaseB (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_caseB : mag beta (x * Veltkamp_C beta s) = mag beta x + s + 1) :
+    |x - Veltkamp_hx_FLX beta prec choice s x|
+      ≤ bpow beta (s + cexp beta (FLX_exp prec) x) / 2 := by
+  by_cases h_Mx_interior :
+    Ztrunc (scaled_mantissa beta (FLX_exp prec) x)
+      ≤ (beta.val : ℤ) ^ prec.toNat - beta.val - 1
+  · exact Veltkamp_aux_FLX_CaseB_interior beta prec hp choice Fx hx_pos
+      hs_lo hs_hi h_caseB h_Mx_interior
+  · push_neg at h_Mx_interior
+    exact Veltkamp_aux_FLX_CaseB_boundary beta prec hp choice Fx hx_pos
+      hs_lo hs_hi (by omega)
+
+/-- **`Veltkamp_aux_FLX`** (unified): the keystone bound. For `x > 0` in F(FLX, prec),
+`2 ≤ s ≤ prec − 2`, the third Veltkamp step's error is at most `β^(s + cexp x)/2`.
+Dispatches on `mag(x · C) = m + s` (Case A) vs `m + s + 1` (Case B). -/
+theorem Veltkamp_aux_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    |x - Veltkamp_hx_FLX beta prec choice s x|
+      ≤ bpow beta (s + cexp beta (FLX_exp prec) x) / 2 := by
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  have h_mag_bounds := mag_xC_bounds beta hx_ne (by linarith : (1 : ℤ) ≤ s)
+  have hC_unfold : Veltkamp_C beta s = bpow beta s + 1 := rfl
+  -- mag(x·C) ∈ {m+s, m+s+1}.
+  rcases eq_or_lt_of_le h_mag_bounds.1 with h_eq_A | h_lt
+  · -- Case A: mag(x·C) = m+s.
+    apply Veltkamp_aux_FLX_CaseA beta prec hp choice Fx hx_pos hs_lo hs_hi
+    rw [hC_unfold]; exact h_eq_A.symm
+  · -- mag(x·C) > m+s, combined with ≤ m+s+1, gives = m+s+1.
+    have h_eq_B : mag beta (x * Veltkamp_C beta s) = mag beta x + s + 1 := by
+      rw [hC_unfold]
+      have := h_mag_bounds.2
+      linarith
+    exact Veltkamp_aux_FLX_CaseB beta prec hp choice Fx hx_pos hs_lo hs_hi h_eq_B
+
 end LeanFlocq
