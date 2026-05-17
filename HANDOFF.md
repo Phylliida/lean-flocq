@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `f982989`+)
+## Status (as of commit `a7d8eff`+)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -29,7 +29,12 @@ including both round-trip theorems. The IEEE 754 binary
 encoding is now a proven bijection between `binary_float` and integers in
 `[0, 2^(mw+ew+1))`.
 
-**~26881 lines of Lean across 27 files. 0 `sorry`s. All files build clean.**
+**Plus the first error-free transformation, `Fast2Sum`, in
+`Algorithms/Fast2Sum.lean` (radix 2, FLX, round-to-nearest): exact `s + e
+= a + b` under `|b| ≤ |a|`. The first brick of the CAD-direction
+roadmap.**
+
+**~27113 lines of Lean across 28 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -65,6 +70,7 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Prop/Round_odd.lean` | 1453 | `Prop/Round_odd.v` | **Complete.** Z-level: `Zrnd_odd` (the rounding function — rounds non-integers to the odd integer between floor and ceiling), `valid_rnd_odd`, `Zrnd_odd_Zodd`, `Zfloor_plus`, `Zceil_plus`, `Zeven_abs`, `Zrnd_odd_plus`, `Zrnd_odd_plus'`. R-level: `Rnd_odd_pt` predicate, `Rnd_odd`, `Rnd_odd_pt_opp_inv`, `round_odd_opp`. Core: `round_odd_pt` (the keystone), `Rnd_odd_pt_unique`, `Rnd_odd_pt_monotone`. **Odd_prop_aux geometry (Stage 5):** `generic_format_fexpe_fexp`, `exists_even_fexp_lt`, `d_eq_round_DN`, `u_eq_round_UP`, `d_ge_0`, `mag_d`, `Fexp_d`, `format_bpow_x`, `format_bpow_d`, `d_le_m`, `m_le_u`, `mag_m`, `mag_m_0`, `u'_eq`, `m_eq`, `m_eq_0`, `fexp_m_eq_0`, `Fm`, `Zm`, `DN_odd_d_aux`, `UP_odd_d_aux`. **Keystones:** `round_N_odd_pos` (the no-double-rounding theorem for positive x — rounding-to-nearest of round-to-odd at coarser precision equals rounding-to-nearest directly, when fexpe ≤ fexp - 2 and β even) and `round_N_odd` (general form via opp symmetry). **Stage 6 (cexp preservation):** `mag_round_odd` and `fexp_round_odd` (FLT, β even, prec > 1: round-to-odd preserves both `mag` and `cexp`). |
 | `Prop/Double_rounding.lean` | 4893 | `Prop/Double_rounding.v` (~95% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + sqrt radix_ge_4 + full plus/minus arc + plus/minus radix_ge_3 + full division arc.** `mag_mult_disj`. Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers, plus/minus aux families, **`round_round_plus`** and **`round_round_minus`** keystones, plus FLX/FLT/FTZ instantiations. **Division arc complete:** `round_round_really_zero`, `round_round_zero`, `round_round_all_mid_cases` (4-callback dispatcher), `round_round_eq_mid_beta_even` (bridge for β even), `mag_div_disj`, `round_round_div_hyp` (5-conjunct precision), **`round_round_div_aux0/1/2`** (the three case-split preludes — boundary/below-midpoint/above-midpoint), **`round_round_div_aux`** dispatcher, **`round_round_div`** keystone (with sign dispatch via `round_N_opp` for negative x or y), FLX/FLT/FTZ instantiations (3 hyp lemmas + 3 user theorems). **Sqrt radix_ge_4 arc:** `bpow_neg_one_le_quarter_of_beta_ge_4` helper, `round_round_sqrt_radix_ge_4_hyp`, `_aux`, `_radix_ge_4` keystone, FLX/FLT/FTZ — the regular sqrt aux with `-2 → -1` throughout, needing `4 ≤ beta`. **Plus/minus radix_ge_3 arc:** `bpow_neg_one_le_third_of_beta_ge_3` helper, `round_round_plus_radix_ge_3_hyp`, plus chain (aux0/aux1/aux2/aux), minus chain (aux0/aux1/aux2/aux3/aux), plus/minus keystones with sign dispatch, FLX/FLT/FTZ for both — needs `3 ≤ beta`, uses `bpow(-1) ≤ 1/3`. |
 | `IEEE754/Bits.lean` | 1019 | `IEEE754/Bits.v` (full file) | **Bit encoding fully proven: 14 + 5 helpers, plus B32/B64 instantiations.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **B32/B64 specialization:** `binary32 := binary_float 24 128` and `binary64 := binary_float 53 1024`, with default NaN payloads (`2^22` / `2^51`), `unop_nan_pl{32,64}`, `binop_nan_pl{32,64}`, and the full op suite `b{32,64}_{erase,opp,abs,sqrt,plus,minus,mult,div,compare,of_bits}` + `bits_of_b{32,64}`. |
+| `Algorithms/Fast2Sum.lean` | 232 | *not in Coq Flocq* (only in Pff) | **First error-free transformation, proved directly on Flocq's foundations.** Radix 2, FLX, round-to-nearest. `Fast2Sum_step1_pos` (Sterbenz step, positive case, two-case argument on `b ≥ -a/2`), `Fast2Sum_step1` (general, via `round_N_opp` symmetry), `Fast2Sum_step2` (plus_error step), `Fast2Sum_correct` (keystone: `a + b = s + e` exactly). |
 
 **Total: ~720 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
@@ -307,7 +313,7 @@ The relevant algorithms, sized roughly:
 
 | Algorithm | What it gives | ≈ Lean lines |
 |---|---|---|
-| `Fast2Sum` (with precondition `|b| ≤ |a|`) | `a + b = round(a+b) + e` exactly | ~200 |
+| ~~`Fast2Sum` (with precondition `|b| ≤ |a|`)~~ ✓ **done in `Algorithms/Fast2Sum.lean` (232 lines)** | `a + b = round(a+b) + e` exactly | ~~~200~~ 232 |
 | `TwoSum` (no precondition) | same, general inputs | ~400 |
 | `Veltkamp` splitting | split `x` into hi/lo parts of `prec/2` bits | ~400 |
 | `Dekker` / `TwoProduct` | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~500 (builds on Veltkamp) |
@@ -343,9 +349,11 @@ to BigInt rationals.
 
 **Sketch of a path:**
 
-1. `Fast2Sum` (1 session) — ~5 lemmas building on Sterbenz + round
-   bounds. The shape: `s := round(a+b)`, `z := round(s − a)`, then
-   `e := b − z` is exactly the error term.
+1. ~~`Fast2Sum`~~ ✓ **DONE 2026-05-17, `a7d8eff`** — 232 lines, 8 theorems, 0 sorries.
+   Two-case argument under `|b| ≤ |a|`: either `b ≥ -|a|/2` (Sterbenz
+   applies to `(s, a)` since `a/2 ≤ s ≤ 2a`) or `b < -|a|/2` (Sterbenz
+   applies to `(a, -b)` giving `a + b ∈ F` exactly). Sign symmetry via
+   `round_N_opp` with a double-flipped choice function.
 2. `TwoSum` (1 session, ~6 lemmas; no precondition).
 3. `Veltkamp` splitting (1 session). The proof of "splitting factor
    `C = 2^s + 1` gives a hi-part with exactly `prec − s` bits" uses
