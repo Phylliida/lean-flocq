@@ -16,6 +16,7 @@ The algorithm:
 Then `a + b = s + e` exactly.
 -/
 import LeanFlocq.Core.FLX
+import LeanFlocq.Core.FLT
 import LeanFlocq.Prop.Sterbenz
 import LeanFlocq.Prop.Mult_error
 import LeanFlocq.Prop.Plus_error
@@ -42,6 +43,42 @@ private theorem div_two_eq_mul_bpow (a : ℝ) : a / 2 = a * bpow radix2 (-1) := 
 /-- `2 * a = a * bpow radix2 1`. -/
 private theorem two_mul_eq_mul_bpow (a : ℝ) : 2 * a = a * bpow radix2 1 := by
   rw [bpow_one, radix2_val_cast]; ring
+
+/-! ### FLT helpers (radix 2) -/
+
+/-- For `a ∈ FLT_exp emin prec (radix 2)`, the value `2 * a` is also in FLT.
+
+Direct construction via `generic_format_F2R'`; unlike `mult_bpow_exact_FLT`,
+no precondition on `mag a` is needed because the shift exponent is non-negative
+(so `cexp(2a) ≤ cexp(a) + 1` falls out of `max` monotonicity without
+constraining the small-denormal case). -/
+private theorem two_mul_in_FLT_radix2 (emin prec : ℤ)
+    {a : ℝ} (Fa : generic_format radix2 (FLT_exp emin prec) a) :
+    generic_format radix2 (FLT_exp emin prec) (2 * a) := by
+  by_cases Ha : a = 0
+  · rw [Ha, mul_zero]; exact generic_format_0 _ _
+  set ma := Ztrunc (scaled_mantissa radix2 (FLT_exp emin prec) a) with hma_def
+  set ea := cexp radix2 (FLT_exp emin prec) a with hea_def
+  have ha_eq : a = (ma : ℝ) * bpow radix2 ea := Fa
+  refine generic_format_F2R' radix2 (FLT_exp emin prec)
+    (⟨ma, ea + 1⟩ : float radix2) ?_ ?_
+  · -- F2R ⟨ma, ea + 1⟩ = 2 * a.
+    show (ma : ℝ) * bpow radix2 (ea + 1) = 2 * a
+    rw [two_mul_eq_mul_bpow, ha_eq, bpow_plus]
+    ring
+  · -- cexp(2a) ≤ ea + 1.
+    intro _
+    show cexp radix2 (FLT_exp emin prec) (2 * a) ≤ ea + 1
+    rw [two_mul_eq_mul_bpow a]
+    unfold cexp
+    rw [mag_mult_bpow radix2 Ha 1]
+    show FLT_exp emin prec (mag radix2 a + 1) ≤ ea + 1
+    have hea_eq : ea = max (mag radix2 a - prec) emin := by
+      show cexp radix2 (FLT_exp emin prec) a = _
+      unfold cexp FLT_exp; rfl
+    unfold FLT_exp
+    rw [hea_eq]
+    omega
 
 /-! ### The Sterbenz step (positive case) -/
 
