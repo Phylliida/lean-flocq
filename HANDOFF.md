@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `cc7ad6c`+)
+## Status (as of commit `5a80d57`+)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -36,7 +36,16 @@ magnitude-comparison branch into Fast2Sum on the larger side. Both
 live at FLT (gradual underflow) using Pff's three-case structure
 (`Dekker1_FTS`/`Dekker2_FTS`/`Dekker3`).**
 
-**~27425 lines of Lean across 29 files. 0 `sorry`s. All files build clean.**
+**Veltkamp splitting (third algorithm) is in progress at FLX.**
+The constant `C = β^s + 1` is in F, `mag(x · C)` bounds are pinned
+between `mag(x)+s` and `mag(x)+s+1`, polarity (`p ≥ 0`, `x ≤ p`,
+`q ≤ 0`) is established, and **`hxExact_FLX` is proved**: under
+`2 ≤ s ≤ prec-2` with `x > 0` in F, `hx = q + p` exactly — the third
+rounding step is the identity, via Sterbenz on `(p, -q)` with both
+bounds (`-q ≤ p` from monotonicity, `p ≤ -2q` from careful error
+analysis showing `x·(β^s − 1) ≥ (3/2)·bpow(m+s+1−prec)`).
+
+**~27967 lines of Lean across 30 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -319,7 +328,7 @@ The relevant algorithms, sized roughly:
 |---|---|---|
 | ~~`Fast2Sum` (with precondition `|b| ≤ |a|`)~~ ✓ **done at FLT in `Algorithms/Fast2Sum.lean` (470 lines)** | `a + b = round(a+b) + e` exactly | ~~~200~~ 470 |
 | ~~`TwoSum` (no precondition)~~ ✓ **done at FLT in `Algorithms/TwoSum.lean` (70 lines, branching form)** | same, general inputs | ~~~400~~ 70 |
-| `Veltkamp` splitting | split `x` into hi/lo parts of `prec/2` bits | ~400 |
+| `Veltkamp` splitting (**in progress**, FLX side: `hxExact_FLX` done, `Veltkamp_aux_FLX` remaining) | split `x` into hi/lo parts of `prec/2` bits | ~400 |
 | `Dekker` / `TwoProduct` | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~500 (builds on Veltkamp) |
 | `ErrFMA` | FMA with an explicit error term | ~500 |
 | Compensated discriminant (`b² − ac`) | sharp error bound for the quadratic discriminant | ~600 |
@@ -417,6 +426,26 @@ to BigInt rationals.
      `noncomputable def`s of the four algorithm steps + the constant,
      mirroring Pff2Flocq's let-bindings (lines 346–349).
    - `Veltkamp_C_format_FLX` — same as the FLT version but for FLX.
+   - **Polarity** (`Veltkamp_p_nonneg_FLX`, `Veltkamp_x_le_p_FLX`,
+     `Veltkamp_q_nonpos_FLX`) — for `x > 0` in F, `s ≥ 0`: `0 ≤ p`,
+     `x ≤ p`, `q ≤ 0`. Direct from `round_ge_generic` /
+     `round_le_generic` against `0 ∈ F` and `x ∈ F`.
+   - **Sterbenz prerequisites** (`Veltkamp_neg_q_le_p_FLX`,
+     `Veltkamp_abs_x_minus_p_lt_FLX`, `Veltkamp_p_le_neg_2q_FLX`).
+     Lower bound trivial (`round_ge_generic` with `-p ∈ F` and
+     `-p ≤ x - p`). Magnitude bound: `|x − p| < β^(mag x + s + 1)` via
+     algebraic `x − p = -x·β^s − err_p` plus `|err_p| ≤ β^(m+s+1−prec)/2`
+     and `x·β^s < β^(m+s)`, giving `|x − p| < (3/2)·β^(m+s) ≤ β^(m+s+1)`.
+     Upper bound (the hard piece): assembles `p ≥ x·(β^s+1) − β^(m+s+1−prec)/2`
+     (from `error_le_half_ulp`) and `-q ≥ (p − x) − β^(m+s+1−prec)/2`
+     (likewise on `q = round(x − p)` using the magnitude bound to
+     control `cexp(x − p)`). For `s ≥ 2`, `s + 2 ≤ prec`, `β ≥ 2`, the
+     algebraic side `x·(β^s − 1) ≥ (3/2)·β^(m+s+1−prec)` closes via
+     `β^s ≥ 4` and `β^(m+s+1−prec) ≤ β^(m−1) ≤ x`.
+   - **`hxExact_FLX`** — the third rounding step is the identity:
+     `hx = q + p` exactly. Assembles Sterbenz on `(p, -q)` (using the
+     three prerequisites above) and applies `round_generic` to the
+     resulting `q + p ∈ F`. The keystone.
 
    **Strategy** (agreed with Danielle 2026-05-17): mirror Fast2Sum's
    path — FLX first (no underflow), then port to FLT. The Pff2Flocq
