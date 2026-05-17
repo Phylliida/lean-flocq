@@ -1046,4 +1046,71 @@ theorem Veltkamp_aux_FLX_CaseB_interior (beta : radix) (prec : ℤ) (hp : 0 < pr
     rw [ulp_neq_0 beta _ hq_zero] at h
     linarith
 
+/-! ### Pff's J1: `p ≤ β^(s+m) + β^m`
+
+A tight upper bound on `p = round(x · C)` from `x < β^m` and `β^(s+m) + β^m ∈ F`.
+The key fact for the boundary subcase. -/
+
+/-- **Pff `J1` at FLX**: `p ≤ β^(s+m) + β^m`, where `m = mag x`. -/
+private theorem Veltkamp_p_le_J1_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 1 ≤ s) (hs_hi : s + 1 < prec) :
+    Veltkamp_p_FLX beta prec choice s x
+      ≤ bpow beta (s + mag beta x) + bpow beta (mag beta x) := by
+  unfold Veltkamp_p_FLX
+  set m := mag beta x with hm_def
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  -- x · C < β^m · C, where C = β^s + 1.
+  have h_x_lt : x < bpow beta m := by
+    have := bpow_mag_gt beta x
+    rwa [abs_of_pos hx_pos] at this
+  have hC_pos : 0 < Veltkamp_C beta s := by
+    unfold Veltkamp_C; linarith [bpow_gt_0 beta s]
+  have h_xC_lt : x * Veltkamp_C beta s ≤ bpow beta m * Veltkamp_C beta s :=
+    mul_le_mul_of_nonneg_right (le_of_lt h_x_lt) (le_of_lt hC_pos)
+  -- β^m · C = β^(s+m) + β^m.
+  have h_pow_C_eq : bpow beta m * Veltkamp_C beta s
+                  = bpow beta (s + m) + bpow beta m := by
+    unfold Veltkamp_C
+    have h1 : bpow beta (s + m) = bpow beta s * bpow beta m := by rw [bpow_plus]
+    rw [h1]; ring
+  -- β^m · C ∈ F. Mantissa β^s + 1 at exponent m, |mantissa| = β^s + 1 ≤ β^(prec-1) + 1 < β^prec.
+  have h_F : generic_format beta (FLX_exp prec)
+                (bpow beta (s + m) + bpow beta m) := by
+    apply generic_format_FLX beta prec hp
+    refine ⟨⟨(beta.val : ℤ) ^ s.toNat + 1, m⟩, ?_, ?_⟩
+    · show bpow beta (s + m) + bpow beta m
+            = ((((beta.val : ℤ) ^ s.toNat + 1 : ℤ) : ℝ) * bpow beta m)
+      rw [show bpow beta (s + m) = bpow beta s * bpow beta m from by rw [bpow_plus]]
+      rw [Int.cast_add, Int.cast_one, IZR_Zpower beta (by linarith : (0 : ℤ) ≤ s)]
+      ring
+    · show |(beta.val : ℤ) ^ s.toNat + 1| < (beta.val : ℤ) ^ prec.toNat
+      have hβ_int_ge_2 : (2 : ℤ) ≤ beta.val := beta.prop
+      have h_pow_s_pos : (1 : ℤ) ≤ beta.val ^ s.toNat := by
+        have h1 : (1 : ℤ) = 1 ^ s.toNat := (one_pow _).symm
+        rw [h1]; exact pow_le_pow_left₀ (by linarith) (by linarith) _
+      have h_sum_pos : (0 : ℤ) < beta.val ^ s.toNat + 1 := by linarith
+      rw [abs_of_pos h_sum_pos]
+      -- β^s + 1 ≤ 2·β^s ≤ β·β^s = β^(s+1) ≤ β^(prec-1) < β^prec.
+      have h_two_pow : (2 : ℤ) * beta.val ^ s.toNat ≤ beta.val ^ (s.toNat + 1) := by
+        rw [pow_succ]; nlinarith
+      have h_succ_lt : s.toNat + 1 < prec.toNat := by
+        have : (s.toNat : ℤ) + 1 < (prec.toNat : ℤ) := by
+          rw [Int.toNat_of_nonneg (le_of_lt hp), Int.toNat_of_nonneg (by linarith : (0 : ℤ) ≤ s)]
+          linarith
+        exact_mod_cast this
+      have h_pow_mono : beta.val ^ (s.toNat + 1) < beta.val ^ prec.toNat := by
+        apply pow_lt_pow_right₀
+        · linarith
+        · exact h_succ_lt
+      linarith
+  -- round(x · C) ≤ round(β^m · C) = β^m · C by monotonicity + round_generic.
+  have h_round_le := round_le beta (FLX_exp prec) (FLX_exp_valid prec hp)
+                       (Znearest choice) h_xC_lt
+  rw [h_pow_C_eq] at h_round_le
+  rw [round_generic beta (FLX_exp prec) (Znearest choice) h_F] at h_round_le
+  exact h_round_le
+
 end LeanFlocq
