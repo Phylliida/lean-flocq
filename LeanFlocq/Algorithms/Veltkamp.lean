@@ -157,7 +157,7 @@ noncomputable def Veltkamp_tx_FLX (beta : radix) (prec : ℤ) (choice : ℤ → 
 
 /-- The FLX-form C is in F (FLX, prec) when `0 ≤ s` and `s + 1 < prec`. -/
 theorem Veltkamp_C_format_FLX (beta : radix) (prec s : ℤ)
-    (hp : 0 < prec) (hs_lo : 0 ≤ s) (hs_hi : s + 1 < prec) :
+    (hs_lo : 0 ≤ s) (hs_hi : s + 1 < prec) :
     generic_format beta (FLX_exp prec) (Veltkamp_C beta s) := by
   unfold Veltkamp_C
   have hC_pos : 0 < bpow beta s + 1 := by linarith [bpow_gt_0 beta s]
