@@ -23,4 +23,5 @@ import LeanFlocq.Prop.Round_odd
 import LeanFlocq.Prop.Double_rounding
 import LeanFlocq.IEEE754.Bits
 import LeanFlocq.Algorithms.Fast2Sum
+import LeanFlocq.Algorithms.TwoSum
 
