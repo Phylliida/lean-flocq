@@ -403,16 +403,48 @@ to BigInt rationals.
    70 lines for TwoSum.lean (-2 from FLX version), single session
    to land all three commits.
 
-4. `Veltkamp` splitting (1 session, after the FLT port). The proof of
-   "splitting factor `C = 2^s + 1` gives a hi-part with exactly
-   `prec − s` bits" uses Sterbenz cancellation twice. **Note for
-   future-me:** unlike Fast2Sum/TwoSum, there's no simple
-   branching shortcut here — the proof has to walk through the
-   actual splitting machinery. Expect this to take the bulk of a
-   session, possibly two. The integer side fact `Zdigits(2^s + 1) =
-   s + 1` will need its own small lemma. Reference: Boldo's "Pitfalls
-   of a Full Floating-Point Proof" §3 or the Veltkamp section of
-   Pff (search `Pff.v` for `Veltkamp`).
+4. `Veltkamp` splitting — **STARTED 2026-05-17** in
+   `Algorithms/Veltkamp.lean` (~190 lines, 0 sorries). Four pieces
+   landed:
+   - `Veltkamp_C_format` (FLT) — `β^s + 1 ∈ F` matching Pff2Flocq's
+     `C_format` (lines 354–379). Uses F2R⟨β^s + 1, 0⟩, mantissa bound
+     via β^s + 1 ≤ 2·β^s ≤ β·β^s = β^(s+1) ≤ β^(prec-1) < β^prec.
+   - `mag_xC_bounds` — for `x ≠ 0`, `s ≥ 1`: `mag(x) + s ≤ mag(x·C)
+     ≤ mag(x) + s + 1`. Lower from β^s ≤ |C|, upper from |C| < β^(s+1)
+     (which is strict at s ≥ 1 since β^s > 1).
+   - FLX algorithm constants `Veltkamp_{C, p, q, hx, tx}_FLX` —
+     `noncomputable def`s of the four algorithm steps + the constant,
+     mirroring Pff2Flocq's let-bindings (lines 346–349).
+   - `Veltkamp_C_format_FLX` — same as the FLT version but for FLX.
+
+   **Strategy** (agreed with Danielle 2026-05-17): mirror Fast2Sum's
+   path — FLX first (no underflow), then port to FLT. The Pff2Flocq
+   statement is at FLT; we keep that as the goal but build the
+   keystone at FLX.
+
+   **The wall — `Veltkamp_aux_FLX`**: the keystone. For `x ∈ F(FLX, prec)`,
+   `2 ≤ s ≤ prec − 2`, the bound `|x − hx| ≤ β^(s+cexp x)/2` and
+   `hx ∈ F(prec − s)`. Pff's `Veltkamp_aux_aux` (Pff.v:13863–14110,
+   ~250 lines) splits on `Fexp p = Fexp q` vs `Fexp p = Fexp q + 1`,
+   which correspond to `mag(x·C) = mag(x) + s` vs `mag(x) + s + 1`.
+
+   **Past-me's analysis (2026-05-17)**: in Case A (`mag(x·C) = mag(x)+s`),
+   the half-ulp argument cleanly gives `q = -β^s · x` exactly because
+   `ulp(x·C) = ulp(-β^s·x)`, so `|err_p| ≤ ulp(-β^s·x)/2` lands
+   `-β^s·x` within half-ulp of `x − p`. In Case B (`mag(x·C) = mag(x)+s+1`),
+   `ulp(x·C) = β·ulp(-β^s·x)`, so the naive bound fails by a factor
+   of β. Pff handles this with explicit integer-mantissa arithmetic —
+   showing the rounding in step 1 has additional structure given
+   `M_xC = m_x · (β^s + 1)`.
+
+   **Sketch for the next session**: introduce mantissa-level objects
+   `m_x := Ztrunc(scaled_mantissa x)` and `M_xC := m_x · (β^s + 1)`,
+   prove the Case A path first (q = -β^s·x via half-ulp), then handle
+   Case B with the structural bound on `M_xC mod β^{s+1}`. Reference:
+   Boldo's "Pitfalls of a Full Floating-Point Proof" §3 if accessible;
+   otherwise `Pff.v` `Velt` section (13053–14776). Expected size:
+   ~400–600 Lean lines for the FLX keystone, then ~100–200 for the
+   FLT lift.
 5. `Dekker`/`TwoProduct` (1 session, builds on Veltkamp).
 6. `ErrFMA` (1 session, builds on TwoProduct + TwoSum).
 7. Compensated discriminant (1 session, applies the above).
