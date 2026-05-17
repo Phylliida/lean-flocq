@@ -364,7 +364,81 @@ to BigInt rationals.
    CAD's needs and ~5× smaller. **API**: exposes `s` and `e` as named
    `let`-bindings and returns the conjunction `e ∈ F ∧ a + b = s + e`,
    making it drop-in usable downstream.
-3. `Veltkamp` splitting (1 session, **next up**). The proof of
+3. **FLX → FLT port of Fast2Sum/TwoSum (1 session, NEXT UP).** Decided
+   2026-05-17 with Danielle: the existing Fast2Sum/TwoSum live at
+   radix-2 FLX. Veltkamp (next theorem after this) lives at radix-2
+   FLT — Boldo's `Pff2Flocq.v` puts the whole error-free-transformation
+   family at FLT. For foundational consistency across the CAD-direction
+   roadmap, port the existing Fast2Sum/TwoSum to FLT first, then
+   stack Veltkamp/Dekker on top in their natural setting.
+
+   **Why this is real work, not a trivial s/FLX/FLT/:** under FLT with
+   denormals, `a/2 ∈ F` is no longer automatic for `a ∈ F`. The current
+   FLX proof of `Fast2Sum_step1_pos` Case 1 (`b ≥ -a/2`) uses
+   `round_ge_generic` with `a/2 ∈ F` as the F-side lower bound when
+   applying Sterbenz on `(s, a)`. Under FLT, when `a` is boundary-normal
+   with odd mantissa or denormal with odd mantissa, `a/2 ∉ F`. Concrete
+   counterexample: `prec=3, emin=-2, a=0.75`; then `a/2=0.375 ∉ F`.
+
+   **Pff's solution** (`Pff.v` `Dekker1_FTS`/`Dekker2_FTS`/`Dekker3`,
+   referenced from `MDekker` and `Dekker_FTS`):
+   - **Dekker1** (`b ≥ 0`): Sterbenz on `(s, a)` with `a ≤ s ≤ 2a`,
+     where the lower bound is `a` itself (not `a/2`!). No `a/2 ∈ F`
+     needed.
+   - **Dekker2** (`b < 0, |b| ≥ a/radix`, i.e., `-q ≤ p ≤ 2(-q)`):
+     Sterbenz on `(a, -b)` gives `a + b ∈ F` directly. Same as our
+     existing FLX Case 2.
+   - **Dekker3** (`b < 0, |b| < a/radix`): Sterbenz on `(a, s)` with
+     `s/2 ≤ a ≤ 2s`. The non-obvious bound `s ≥ a/2` (which needs
+     `a/2 ∉ F` to not break things) comes from **`FmultRadixInv`**:
+     for `x ∈ F` and `y > x/2`, `round_N(y) ≥ x/2`. This holds
+     even when `x/2 ∉ F`, via the midpoint-symmetry of `x/2`'s
+     neighbors in radix-2 F.
+
+   **Lean port plan, ordered by checkpoint:**
+   1. `two_mul_in_FLT_radix2` helper (~30 lines): for `a ∈ FLT (radix 2)`,
+      `2a ∈ FLT`. Direct construction via `generic_format_F2R` with
+      `cexp(2a) ≤ cexp(a) + 1`. (Note: cannot use `mult_bpow_exact_FLT`
+      directly — its precondition `mag(a) ≥ emin + prec - 1` fails for
+      small denormals. The direct construction works unconditionally.)
+   2. `round_N_ge_half_FLT_radix2` helper (~80 lines): for `a ∈ FLT
+      (radix 2), 0 < a, a/2 ≤ v`, then `a/2 ≤ round_N(v)`. Case split
+      on whether `a/2 ∈ F` (use `round_ge_generic`) or `a/2 ∉ F` (use
+      `round_N_ge_midp` from `Core/Ulp.lean:2220` with the radix-2
+      midpoint-symmetry sub-lemma). The sub-lemma: for `a ∈ F (radix 2
+      FLT)` with `a/2 ∉ F`, `a/2 = (pred(u) + u)/2` where `u =
+      round_UP(a/2)`. This holds because `a/2 ∉ F` only when `a` has
+      cexp = emin with odd mantissa, and the neighbors of `a/2` at
+      exponent `emin` differ by exactly `bpow emin` with `a/2` exactly
+      between them.
+   3. Refactor `Fast2Sum_step1_pos` into three Pff-style cases
+      (`b ≥ 0`, `b ≤ -a/2`, `-a/2 < b < 0`) — ~80-120 lines.
+      Cases 1 and 3 use the helpers; Case 2 ports almost directly
+      from the existing FLX proof.
+   4. Propagate to `Fast2Sum_step1` (general — `round_N_opp` symmetry,
+      already in place, just needs FLT instead of FLX) and
+      `Fast2Sum_correct` — ~20 lines.
+   5. Refactor `TwoSum_correct` — just imports + format change,
+      maybe ~10 lines.
+
+   **Total estimate**: ~200-300 lines of fresh Lean, one focused
+   session, possibly bleeding into a second. Reference for the
+   midpoint-symmetry argument: Pff's `FmultRadixInv` proof
+   (`Pff.v:8713`) and `div2IsBetween` (search Pff.v). Reference for
+   `round_N_ge_midp`: `Core/Ulp.lean:2220`.
+
+   **Why not skip and stay at FLX**: the inconsistency would propagate
+   — Veltkamp at FLT can't use FLX results directly. Better to pay
+   this cost once, up front, so Veltkamp/Dekker/ErrFMA all sit cleanly
+   at FLT.
+
+   **API after the port**: same shape as current, but with
+   `FLT_exp emin prec` and an `emin_neg : emin ≤ 0` hypothesis added
+   throughout. The choice function stays arbitrary (Pff requires
+   `choice_sym`; we don't, thanks to our `round_N_opp` flipped-choice
+   trick).
+
+4. `Veltkamp` splitting (1 session, after the FLT port). The proof of
    "splitting factor `C = 2^s + 1` gives a hi-part with exactly
    `prec − s` bits" uses Sterbenz cancellation twice. **Note for
    future-me:** unlike Fast2Sum/TwoSum, there's no simple
@@ -374,9 +448,9 @@ to BigInt rationals.
    s + 1` will need its own small lemma. Reference: Boldo's "Pitfalls
    of a Full Floating-Point Proof" §3 or the Veltkamp section of
    Pff (search `Pff.v` for `Veltkamp`).
-4. `Dekker`/`TwoProduct` (1 session, builds on Veltkamp).
-5. `ErrFMA` (1 session, builds on TwoProduct + TwoSum).
-6. Compensated discriminant (1 session, applies the above).
+5. `Dekker`/`TwoProduct` (1 session, builds on Veltkamp).
+6. `ErrFMA` (1 session, builds on TwoProduct + TwoSum).
+7. Compensated discriminant (1 session, applies the above).
 
 Probably **5–6 focused sessions** for the whole layer. Then Shewchuk-
 style predicates (`orient2d`, etc.) become "definition + correctness
