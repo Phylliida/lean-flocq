@@ -80,6 +80,214 @@ private theorem two_mul_in_FLT_radix2 (emin prec : ℤ)
     rw [hea_eq]
     omega
 
+/-- For `d` with `0 ≤ d < bpow(emin + prec)` (i.e., in the subnormal regime),
+the next F-value above `d` is `d + bpow(emin)`. -/
+private theorem succ_FLT_subnormal_step (emin prec : ℤ) (hp : 0 < prec) {d : ℝ}
+    (hd_nn : 0 ≤ d) (hd_bound : d < bpow radix2 (emin + prec)) :
+    succ radix2 (FLT_exp emin prec) d = d + bpow radix2 emin := by
+  rw [succ_eq_pos radix2 (FLT_exp emin prec) hd_nn]
+  congr 1
+  exact ulp_FLT_small radix2 emin prec hp
+    (by rw [abs_of_nonneg hd_nn]; exact hd_bound)
+
+/-- For `a ∈ FLT (radix 2), 0 < a, a/2 < v` (strict), `a/2 ≤ round_N(v)`.
+
+The "strict" precondition is essential — the weak version is false when
+`a/2 ∉ F` and tie-breaking picks the floor of the two F-neighbors of `a/2`.
+With strict `a/2 < v`, round-to-nearest is forced to pick the ceiling.
+
+Proof strategy: case split on whether `a/2 ∈ F`. If yes, direct via
+`round_ge_generic`. If no, then `cexp(a) = emin` and the mantissa `ma` of
+`a` is odd. Define `d := k · bpow(emin)` and `u := (k+1) · bpow(emin)`
+where `ma = 2k + 1`. These are consecutive F-values with `a/2` exactly
+at their midpoint (radix-2 symmetry). Apply `round_N_ge_midp`. -/
+private theorem round_N_gt_half_FLT_radix2 (emin prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {a v : ℝ}
+    (Fa : generic_format radix2 (FLT_exp emin prec) a)
+    (Ha : 0 < a) (Hv : a / 2 < v) :
+    a / 2 ≤ round radix2 (FLT_exp emin prec) (Znearest choice) v := by
+  have hValid := FLT_exp_valid emin prec hp
+  -- Case A: a/2 ∈ F. Direct.
+  by_cases Fhalf : generic_format radix2 (FLT_exp emin prec) (a / 2)
+  · exact round_ge_generic radix2 (FLT_exp emin prec) hValid (Znearest choice)
+      Fhalf (le_of_lt Hv)
+  -- Case B: a/2 ∉ F.
+  set ma := Ztrunc (scaled_mantissa radix2 (FLT_exp emin prec) a) with hma_def
+  set ea := cexp radix2 (FLT_exp emin prec) a with hea_def
+  have ha_F2R : a = (ma : ℝ) * bpow radix2 ea := Fa
+  have ha_ne : a ≠ 0 := ne_of_gt Ha
+  have hea_form : ea = max (mag radix2 a - prec) emin := by
+    rw [hea_def]; show cexp radix2 (FLT_exp emin prec) a = _
+    unfold cexp FLT_exp; rfl
+  -- Step 1: ea = emin (else a/2 ∈ F at exponent ea - 1).
+  have hea_emin : ea = emin := by
+    have hea_ge : emin ≤ ea := by rw [hea_form]; exact le_max_right _ _
+    by_contra hne
+    have hea_gt : emin < ea := lt_of_le_of_ne hea_ge (Ne.symm hne)
+    apply Fhalf
+    -- a/2 = ma * bpow(ea - 1).
+    have ha_half_eq : a / 2 = (ma : ℝ) * bpow radix2 (ea - 1) := by
+      rw [ha_F2R]
+      have hbpow : bpow radix2 ea = bpow radix2 (ea - 1) * 2 := by
+        have h_split : bpow radix2 ea = bpow radix2 ((ea - 1) + 1) := by
+          congr 1; ring
+        rw [h_split, bpow_plus, bpow_one, radix2_val_cast]
+      rw [hbpow]; ring
+    rw [ha_half_eq]
+    refine generic_format_F2R radix2 (FLT_exp emin prec) ma (ea - 1) ?_
+    intro _
+    show FLT_exp emin prec (mag radix2 (F2R (⟨ma, ea - 1⟩ : float radix2))) ≤ ea - 1
+    have h_F2R : F2R (⟨ma, ea - 1⟩ : float radix2) = a / 2 := by
+      show (ma : ℝ) * bpow radix2 (ea - 1) = a / 2
+      rw [← ha_half_eq]
+    rw [h_F2R]
+    have h_mag_half : mag radix2 (a / 2) = mag radix2 a - 1 := by
+      rw [div_two_eq_mul_bpow a, mag_mult_bpow radix2 ha_ne (-1)]; ring
+    rw [h_mag_half]
+    -- ea = mag a - prec since ea > emin.
+    have h_ea_normal : ea = mag radix2 a - prec := by
+      rw [hea_form]
+      apply max_eq_left
+      by_contra hlt
+      push_neg at hlt
+      have : ea = emin := by rw [hea_form]; exact max_eq_right (le_of_lt hlt)
+      linarith
+    unfold FLT_exp
+    have h_lhs : mag radix2 a - 1 - prec = ea - 1 := by linarith
+    rw [h_lhs]
+    exact max_le (le_refl _) (by linarith)
+  -- Step 2: ma > 0.
+  have hma_pos : 0 < ma := by
+    have h_bpow_pos : (0 : ℝ) < bpow radix2 ea := bpow_gt_0 _ _
+    have h_ma_pos_R : 0 < (ma : ℝ) := by
+      have h := ha_F2R ▸ Ha
+      exact (mul_pos_iff_of_pos_right h_bpow_pos).mp h
+    exact_mod_cast h_ma_pos_R
+  -- Step 3: ma is odd (else a/2 = (ma/2) * bpow(emin) ∈ F).
+  have h_mag_a_le : mag radix2 a ≤ emin + prec := by
+    rw [hea_form] at hea_emin
+    rcases le_or_gt (mag radix2 a - prec) emin with h | h
+    · linarith
+    · rw [max_eq_left (le_of_lt h)] at hea_emin; linarith
+  have h_a_lt : a < bpow radix2 (emin + prec) := by
+    have h_a_lt_mag : a < bpow radix2 (mag radix2 a) := by
+      have h_abs := bpow_mag_gt radix2 a
+      rwa [abs_of_pos Ha] at h_abs
+    have h_mag_le : bpow radix2 (mag radix2 a) ≤ bpow radix2 (emin + prec) :=
+      bpow_le radix2 h_mag_a_le
+    linarith
+  have hma_odd : Odd ma := by
+    rcases Int.even_or_odd ma with hma_ev | hma_od
+    · exfalso
+      apply Fhalf
+      obtain ⟨j, hj⟩ := hma_ev
+      have ha_half_eq : a / 2 = (j : ℝ) * bpow radix2 emin := by
+        rw [ha_F2R, hea_emin, hj]
+        push_cast; ring
+      rw [ha_half_eq]
+      refine generic_format_F2R radix2 (FLT_exp emin prec) j emin ?_
+      intro _
+      show FLT_exp emin prec (mag radix2 (F2R (⟨j, emin⟩ : float radix2))) ≤ emin
+      have h_F2R : F2R (⟨j, emin⟩ : float radix2) = a / 2 := by
+        show (j : ℝ) * bpow radix2 emin = a / 2
+        rw [← ha_half_eq]
+      rw [h_F2R]
+      unfold FLT_exp
+      apply max_le _ (le_refl _)
+      have h_mag_half : mag radix2 (a / 2) = mag radix2 a - 1 := by
+        rw [div_two_eq_mul_bpow a, mag_mult_bpow radix2 ha_ne (-1)]; ring
+      rw [h_mag_half]; linarith
+    · exact hma_od
+  -- Step 4: extract k from ma = 2 * k + 1.
+  obtain ⟨k, hk_eq⟩ := hma_odd
+  have hk_nn : 0 ≤ k := by linarith
+  -- Step 5: define d, u and show in F.
+  set d := (k : ℝ) * bpow radix2 emin with hd_def
+  set u := ((k + 1 : ℤ) : ℝ) * bpow radix2 emin with hu_def
+  have h_d_nn : 0 ≤ d := by
+    rw [hd_def]; exact mul_nonneg (by exact_mod_cast hk_nn) (bpow_ge_0 _ _)
+  have h_u_eq_a_sub_d : u = a - d := by
+    rw [hu_def, hd_def, ha_F2R, hea_emin]
+    have h_ma_cast : ((ma : ℤ) : ℝ) = (2 * k + 1 : ℤ) := by exact_mod_cast hk_eq
+    rw [h_ma_cast]
+    push_cast; ring
+  have h_u_pos : 0 < u := by
+    rw [hu_def]
+    have hk1_pos : (0 : ℝ) < ((k + 1 : ℤ) : ℝ) := by
+      have : (0 : ℤ) < k + 1 := by linarith
+      exact_mod_cast this
+    exact mul_pos hk1_pos (bpow_gt_0 _ _)
+  have h_d_lt_u : d < u := by
+    rw [h_u_eq_a_sub_d, hd_def]
+    -- a > 2 * k * bpow(emin) since a = (2k+1) * bpow(emin).
+    rw [ha_F2R, hea_emin]
+    have h_ma_cast : ((ma : ℤ) : ℝ) = (2 * k + 1 : ℤ) := by exact_mod_cast hk_eq
+    rw [h_ma_cast]
+    have h_bpow_pos : (0 : ℝ) < bpow radix2 emin := bpow_gt_0 _ _
+    push_cast; linarith
+  have h_d_lt : d < bpow radix2 (emin + prec) := by
+    have : d < a := by rw [← sub_pos]; linarith [h_u_eq_a_sub_d ▸ h_u_pos]
+    linarith
+  have h_u_le_a : u ≤ a := by rw [h_u_eq_a_sub_d]; linarith
+  have h_u_lt : u < bpow radix2 (emin + prec) := by linarith
+  have Fd : generic_format radix2 (FLT_exp emin prec) d := by
+    rw [hd_def]
+    refine generic_format_F2R radix2 (FLT_exp emin prec) k emin ?_
+    intro hk_ne
+    show FLT_exp emin prec (mag radix2 (F2R (⟨k, emin⟩ : float radix2))) ≤ emin
+    have h_F2R_d : F2R (⟨k, emin⟩ : float radix2) = d := by
+      show (k : ℝ) * bpow radix2 emin = d
+      rw [hd_def]
+    rw [h_F2R_d]
+    unfold FLT_exp
+    apply max_le _ (le_refl _)
+    have h_d_pos : 0 < d := by
+      have h_k_pos : 0 < (k : ℝ) := by
+        have : (0 : ℤ) < k := lt_of_le_of_ne hk_nn (Ne.symm hk_ne)
+        exact_mod_cast this
+      rw [hd_def]; exact mul_pos h_k_pos (bpow_gt_0 _ _)
+    have h_d_ne : d ≠ 0 := ne_of_gt h_d_pos
+    have h_mag_d : mag radix2 d ≤ emin + prec :=
+      mag_le_bpow radix2 h_d_ne (by rw [abs_of_pos h_d_pos]; exact h_d_lt)
+    linarith
+  have Fu : generic_format radix2 (FLT_exp emin prec) u := by
+    rw [hu_def]
+    refine generic_format_F2R radix2 (FLT_exp emin prec) (k + 1) emin ?_
+    intro _
+    show FLT_exp emin prec (mag radix2 (F2R (⟨k + 1, emin⟩ : float radix2))) ≤ emin
+    have h_F2R_u : F2R (⟨k + 1, emin⟩ : float radix2) = u := by
+      show ((k + 1 : ℤ) : ℝ) * bpow radix2 emin = u
+      rw [hu_def]
+    rw [h_F2R_u]
+    unfold FLT_exp
+    apply max_le _ (le_refl _)
+    have h_u_ne : u ≠ 0 := ne_of_gt h_u_pos
+    have h_mag_u : mag radix2 u ≤ emin + prec :=
+      mag_le_bpow radix2 h_u_ne (by rw [abs_of_pos h_u_pos]; exact h_u_lt)
+    linarith
+  -- Step 6: succ d = u.
+  have h_succ_d : succ radix2 (FLT_exp emin prec) d = u := by
+    rw [succ_FLT_subnormal_step emin prec hp h_d_nn h_d_lt]
+    rw [hd_def, hu_def]
+    push_cast; ring
+  -- Step 7: pred u = d.
+  have h_pred_u : pred radix2 (FLT_exp emin prec) u = d := by
+    rw [← h_succ_d]
+    exact pred_succ radix2 (FLT_exp emin prec) hValid Fd
+  -- Step 8: midpoint = a/2.
+  have h_midpoint : (u + pred radix2 (FLT_exp emin prec) u) / 2 = a / 2 := by
+    rw [h_pred_u, h_u_eq_a_sub_d]; ring
+  -- Step 9: a/2 < u (strict, since midpoint < u and a/2 = midpoint).
+  have h_half_lt_u : a / 2 < u := by
+    have h_mid_lt : (u + d) / 2 < u := by linarith
+    have h_eq : (u + d) / 2 = a / 2 := by rw [h_u_eq_a_sub_d]; ring
+    linarith
+  -- Step 10: apply round_N_ge_midp.
+  have h_round_ge_u : u ≤ round radix2 (FLT_exp emin prec) (Znearest choice) v :=
+    round_N_ge_midp radix2 (FLT_exp emin prec) hValid choice Fu
+      (by rw [h_midpoint]; exact Hv)
+  linarith
+
 /-! ### The Sterbenz step (positive case) -/
 
 /-- Step 1, positive case: under `0 < a` and `|b| ≤ a`, the second
