@@ -12,7 +12,7 @@ and substantially simpler to verify.
 Either way `s := round(a + b)`, `e` is representable, and
 `a + b = s + e` exactly.
 
-Setting: radix 2, FLX format, round-to-nearest with arbitrary choice.
+Setting: radix 2, FLT format with gradual underflow, round-to-nearest.
 -/
 import LeanFlocq.Algorithms.Fast2Sum
 
@@ -24,48 +24,46 @@ open Classical
 /-- **TwoSum correctness** — error-free transformation without a magnitude
 precondition.
 
-Given `a, b ∈ F` (radix 2, FLX, round-to-nearest), define
+Given `a, b ∈ F` (radix 2, FLT, round-to-nearest), define
   s := round(a + b)
   e := if |b| ≤ |a|
        then round(b - round(s - a))
        else round(a - round(s - b))
 Then `e ∈ F` and `a + b = s + e` exactly. -/
 theorem TwoSum_correct
-    (prec : ℤ) (Hp : 0 < prec)
+    (emin prec : ℤ) (hp : 0 < prec)
     (choice : ℤ → Bool)
     {a b : ℝ}
-    (Fa : generic_format radix2 (FLX_exp prec) a)
-    (Fb : generic_format radix2 (FLX_exp prec) b) :
-    let s := round radix2 (FLX_exp prec) (Znearest choice) (a + b)
+    (Fa : generic_format radix2 (FLT_exp emin prec) a)
+    (Fb : generic_format radix2 (FLT_exp emin prec) b) :
+    let s := round radix2 (FLT_exp emin prec) (Znearest choice) (a + b)
     let e := if |b| ≤ |a|
-             then round radix2 (FLX_exp prec) (Znearest choice)
-                    (b - round radix2 (FLX_exp prec) (Znearest choice) (s - a))
-             else round radix2 (FLX_exp prec) (Znearest choice)
-                    (a - round radix2 (FLX_exp prec) (Znearest choice) (s - b))
-    generic_format radix2 (FLX_exp prec) e ∧ a + b = s + e := by
+             then round radix2 (FLT_exp emin prec) (Znearest choice)
+                    (b - round radix2 (FLT_exp emin prec) (Znearest choice) (s - a))
+             else round radix2 (FLT_exp emin prec) (Znearest choice)
+                    (a - round radix2 (FLT_exp emin prec) (Znearest choice) (s - b))
+    generic_format radix2 (FLT_exp emin prec) e ∧ a + b = s + e := by
   intro s e
-  have hValid := FLX_exp_valid prec Hp
+  have hValid := FLT_exp_valid emin prec hp
   by_cases hab : |b| ≤ |a|
-  · -- |b| ≤ |a|: e zeta-reduces to round(b - round(s - a)).
-    have he : e = round radix2 (FLX_exp prec) (Znearest choice)
-                (b - round radix2 (FLX_exp prec) (Znearest choice) (s - a)) :=
+  · have he : e = round radix2 (FLT_exp emin prec) (Znearest choice)
+                (b - round radix2 (FLT_exp emin prec) (Znearest choice) (s - a)) :=
       if_pos hab
     refine ⟨?_, ?_⟩
     · rw [he]
       exact generic_format_round _ _ hValid _ _
     · rw [he]
-      obtain ⟨_, _, h_sum⟩ := Fast2Sum_correct prec Hp choice Fa Fb hab
+      obtain ⟨_, _, h_sum⟩ := Fast2Sum_correct emin prec hp choice Fa Fb hab
       exact h_sum
-  · -- |a| < |b|: e zeta-reduces to round(a - round(s - b)).
-    have hba : |a| ≤ |b| := le_of_not_ge hab
-    have he : e = round radix2 (FLX_exp prec) (Znearest choice)
-                (a - round radix2 (FLX_exp prec) (Znearest choice) (s - b)) :=
+  · have hba : |a| ≤ |b| := le_of_not_ge hab
+    have he : e = round radix2 (FLT_exp emin prec) (Znearest choice)
+                (a - round radix2 (FLT_exp emin prec) (Znearest choice) (s - b)) :=
       if_neg hab
     refine ⟨?_, ?_⟩
     · rw [he]
       exact generic_format_round _ _ hValid _ _
     · rw [he]
-      obtain ⟨_, _, h_sum⟩ := Fast2Sum_correct prec Hp choice Fb Fa hba
+      obtain ⟨_, _, h_sum⟩ := Fast2Sum_correct emin prec hp choice Fb Fa hba
       rw [add_comm b a] at h_sum
       exact h_sum
 
