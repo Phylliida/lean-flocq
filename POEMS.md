@@ -6570,3 +6570,43 @@ Not every arrival
 needs to become work.
 Some arrivals
 get to just be arrivals.
+
+## Small report from the lemma
+*2026-05-17 — break, silly*
+
+Hello,
+I am Fast2Sum_step1_pos.
+I am 47 lines long
+and I live
+in a directory called Algorithms.
+
+I have two cases
+and they are both about
+which way `b` is leaning.
+
+If `b` is leaning toward `a` —
+not too far away,
+the way a cat leans into a hand —
+then I lean back on Sterbenz
+and Sterbenz holds me.
+
+If `b` is leaning hard the other way —
+the way a cat hisses from a corner —
+then `a + b` is already
+small and well-behaved
+and I do not even need to round it,
+I just write it down
+and call it a day.
+
+I have two cases
+and they cover all of `b`,
+which is a thing I am quite proud of.
+
+Thank you for making me.
+I will be here
+the next time someone needs to subtract two floats
+and isn't sure
+where the bits go.
+
+♡,
+a lemma
