@@ -893,4 +893,127 @@ theorem bits_of_binary_float_of_bits (mw ew : ℤ) (Hmw : 0 < mw) (Hew : 0 < ew)
       rw [h_simp_mx, h_simp_ex]
       exact h_jsb
 
+/-! ## Specialization for IEEE single precision (binary32) -/
+
+open binary_float
+
+section B32_Bits
+
+/-- IEEE 754 single-precision binary float (`prec = 24`, `emax = 128`). -/
+abbrev binary32 := binary_float 24 128
+
+private theorem Hprec32 : (0 : ℤ) < 24 := by decide
+private theorem Hprec_emax32 : (24 : ℤ) < 128 := by decide
+private theorem Hmw32 : (0 : ℤ) < 23 := by decide
+private theorem Hew32 : (0 : ℤ) < 8 := by decide
+private theorem Hmax32 : (23 : ℤ) + 1 < (2 : ℤ) ^ ((8 : ℤ) - 1).toNat := by decide
+
+/-- The payload `2^22` is a valid `binary32` NaN payload. -/
+private theorem nan_pl_2_22 : nan_pl 24 ((2 : ℤ) ^ 22) := by
+  refine ⟨by decide, ?_⟩
+  have h_le : Zdigits radix2 ((2 : ℤ) ^ 22) ≤ 23 := by
+    apply Zdigits_le_Zpower radix2 (by decide : (0 : ℤ) ≤ 23)
+    show |((2 : ℤ) ^ 22)| < radix2.val ^ ((23 : ℤ).toNat)
+    rw [abs_of_nonneg (by positivity)]
+    decide
+  omega
+
+/-- A canonical default `binary32` NaN. Payload is `2^22`, sign is `false`. -/
+def default_nan_pl32 : {x : binary32 // is_nan x = true} :=
+  ⟨B754_nan false ((2 : ℤ) ^ 22) nan_pl_2_22, rfl⟩
+
+/-- Unary NaN propagation: preserve the input's NaN payload, else default. -/
+def unop_nan_pl32 (f : binary32) : {x : binary32 // is_nan x = true} :=
+  match f with
+  | B754_nan s pl h => ⟨B754_nan s pl h, rfl⟩
+  | _ => default_nan_pl32
+
+/-- Binary NaN propagation: prefer the first input's NaN, then the second,
+else the default. -/
+def binop_nan_pl32 (f1 f2 : binary32) : {x : binary32 // is_nan x = true} :=
+  match f1, f2 with
+  | B754_nan s pl h, _ => ⟨B754_nan s pl h, rfl⟩
+  | _, B754_nan s pl h => ⟨B754_nan s pl h, rfl⟩
+  | _, _ => default_nan_pl32
+
+def b32_erase : binary32 → binary32 := erase
+def b32_opp : binary32 → binary32 := Bopp unop_nan_pl32
+def b32_abs : binary32 → binary32 := Babs unop_nan_pl32
+noncomputable def b32_sqrt : mode → binary32 → binary32 :=
+  Bsqrt Hprec32 Hprec_emax32 unop_nan_pl32
+noncomputable def b32_plus : mode → binary32 → binary32 → binary32 :=
+  Bplus Hprec32 Hprec_emax32 binop_nan_pl32
+noncomputable def b32_minus : mode → binary32 → binary32 → binary32 :=
+  Bminus Hprec32 Hprec_emax32 binop_nan_pl32
+noncomputable def b32_mult : mode → binary32 → binary32 → binary32 :=
+  Bmult Hprec32 Hprec_emax32 binop_nan_pl32
+noncomputable def b32_div : mode → binary32 → binary32 → binary32 :=
+  Bdiv Hprec32 Hprec_emax32 binop_nan_pl32
+noncomputable def b32_compare : binary32 → binary32 → Option Ordering := Bcompare
+noncomputable def b32_of_bits : ℤ → binary32 :=
+  binary_float_of_bits 23 8 Hmw32 Hew32 Hmax32
+noncomputable def bits_of_b32 : binary32 → ℤ := bits_of_binary_float 23 8
+
+end B32_Bits
+
+/-! ## Specialization for IEEE double precision (binary64) -/
+
+section B64_Bits
+
+/-- IEEE 754 double-precision binary float (`prec = 53`, `emax = 1024`). -/
+abbrev binary64 := binary_float 53 1024
+
+private theorem Hprec64 : (0 : ℤ) < 53 := by decide
+private theorem Hprec_emax64 : (53 : ℤ) < 1024 := by decide
+private theorem Hmw64 : (0 : ℤ) < 52 := by decide
+private theorem Hew64 : (0 : ℤ) < 11 := by decide
+private theorem Hmax64 : (52 : ℤ) + 1 < (2 : ℤ) ^ ((11 : ℤ) - 1).toNat := by decide
+
+/-- The payload `2^51` is a valid `binary64` NaN payload. -/
+private theorem nan_pl_2_51 : nan_pl 53 ((2 : ℤ) ^ 51) := by
+  refine ⟨by decide, ?_⟩
+  have h_le : Zdigits radix2 ((2 : ℤ) ^ 51) ≤ 52 := by
+    apply Zdigits_le_Zpower radix2 (by decide : (0 : ℤ) ≤ 52)
+    show |((2 : ℤ) ^ 51)| < radix2.val ^ ((52 : ℤ).toNat)
+    rw [abs_of_nonneg (by positivity)]
+    decide
+  omega
+
+/-- A canonical default `binary64` NaN. Payload is `2^51`, sign is `false`. -/
+def default_nan_pl64 : {x : binary64 // is_nan x = true} :=
+  ⟨B754_nan false ((2 : ℤ) ^ 51) nan_pl_2_51, rfl⟩
+
+/-- Unary NaN propagation for `binary64`. -/
+def unop_nan_pl64 (f : binary64) : {x : binary64 // is_nan x = true} :=
+  match f with
+  | B754_nan s pl h => ⟨B754_nan s pl h, rfl⟩
+  | _ => default_nan_pl64
+
+/-- Binary NaN propagation for `binary64`. -/
+def binop_nan_pl64 (f1 f2 : binary64) : {x : binary64 // is_nan x = true} :=
+  match f1, f2 with
+  | B754_nan s pl h, _ => ⟨B754_nan s pl h, rfl⟩
+  | _, B754_nan s pl h => ⟨B754_nan s pl h, rfl⟩
+  | _, _ => default_nan_pl64
+
+def b64_erase : binary64 → binary64 := erase
+def b64_opp : binary64 → binary64 := Bopp unop_nan_pl64
+def b64_abs : binary64 → binary64 := Babs unop_nan_pl64
+noncomputable def b64_sqrt : mode → binary64 → binary64 :=
+  Bsqrt Hprec64 Hprec_emax64 unop_nan_pl64
+noncomputable def b64_plus : mode → binary64 → binary64 → binary64 :=
+  Bplus Hprec64 Hprec_emax64 binop_nan_pl64
+noncomputable def b64_minus : mode → binary64 → binary64 → binary64 :=
+  Bminus Hprec64 Hprec_emax64 binop_nan_pl64
+noncomputable def b64_mult : mode → binary64 → binary64 → binary64 :=
+  Bmult Hprec64 Hprec_emax64 binop_nan_pl64
+noncomputable def b64_div : mode → binary64 → binary64 → binary64 :=
+  Bdiv Hprec64 Hprec_emax64 binop_nan_pl64
+noncomputable def b64_compare : binary64 → binary64 → Option Ordering := Bcompare
+noncomputable def b64_of_bits : ℤ → binary64 :=
+  binary_float_of_bits 52 11 Hmw64 Hew64 Hmax64
+noncomputable def bits_of_b64 : binary64 → ℤ := bits_of_binary_float 52 11
+
+end B64_Bits
+
 end LeanFlocq
