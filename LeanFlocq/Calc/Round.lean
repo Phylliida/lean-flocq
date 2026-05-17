@@ -596,6 +596,31 @@ def truncate_aux (k : ℤ) (t : ℤ × ℤ × location) : ℤ × ℤ × location
   (t.1 / beta.val ^ k.toNat, t.2.1 + k,
    new_location (beta.val ^ k.toNat) (t.1 % beta.val ^ k.toNat) t.2.2)
 
+/-- `truncate_aux` composes additively in the shift parameter:
+shifting by `k1+k2` agrees with shifting by `k1` then by `k2`. -/
+theorem truncate_aux_comp (t : ℤ × ℤ × location) (k1 k2 : ℤ)
+    (Hk1 : 0 < k1) (Hk2 : 0 < k2) :
+    truncate_aux beta (k1 + k2) t
+      = truncate_aux beta k2 (truncate_aux beta k1 t) := by
+  obtain ⟨m, e, l⟩ := t
+  obtain ⟨x, Hx⟩ := inbetween_float_ex (beta := beta) m e l
+  have Hk3 : (0 : ℤ) < k1 + k2 := by omega
+  have B1 := inbetween_float_new_location (beta := beta) m e x l k1 Hk1 Hx
+  have B2 := inbetween_float_new_location (beta := beta) _ _ x _ k2 Hk2 B1
+  have B3 := inbetween_float_new_location (beta := beta) m e x l (k1 + k2) Hk3 Hx
+  -- B3's exponent is `e + (k1 + k2)`; rewrite to `(e + k1) + k2` to match B2.
+  have h_assoc : e + (k1 + k2) = (e + k1) + k2 := by ring
+  rw [h_assoc] at B3
+  obtain ⟨hm, hl⟩ := inbetween_float_unique (beta := beta) _ _ _ _ _ _ B2 B3
+  -- Component-wise equality.
+  show (_, _, _) = (_, _, _)
+  refine Prod.ext ?_ (Prod.ext ?_ ?_)
+  · show m / beta.val ^ (k1 + k2).toNat = (m / beta.val ^ k1.toNat) / beta.val ^ k2.toNat
+    exact hm.symm
+  · show e + (k1 + k2) = (e + k1) + k2
+    ring
+  · exact hl.symm
+
 /-- `truncate t = if k = fexp(Zdigits m + e) - e > 0, shift by k, else t`.
 This brings the triple to canonical exponent (or leaves it alone). -/
 noncomputable def truncate (t : ℤ × ℤ × location) : ℤ × ℤ × location :=
