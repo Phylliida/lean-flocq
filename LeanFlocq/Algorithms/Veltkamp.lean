@@ -190,4 +190,56 @@ theorem Veltkamp_C_format_FLX (beta : radix) (prec s : ℤ)
       mag_le_bpow beta hC_ne h_C_lt
     show FLX_exp prec (mag beta (bpow beta s + 1)) ≤ 0
     unfold FLX_exp; linarith
+
+/-! ### Polarity facts for the FLX algorithm
+
+For `x > 0`, the rounded results have predictable signs: `p ≥ 0`, `q ≤ 0`,
+and `x ≤ p`. These will feed the Sterbenz argument for `hx = p + q`. -/
+
+/-- For `x > 0` and `s ≥ 0`, the constant `C = β^s + 1 ≥ 1`. -/
+private theorem Veltkamp_one_le_C (beta : radix) {s : ℤ} (hs : 0 ≤ s) :
+    1 ≤ Veltkamp_C beta s := by
+  unfold Veltkamp_C
+  have : (1 : ℝ) ≤ bpow beta s := by
+    rw [← bpow_zero beta]; exact bpow_le beta hs
+  linarith
+
+/-- For `x > 0` and `s ≥ 0`, step-1 result is nonneg: `0 ≤ p`. -/
+private theorem Veltkamp_p_nonneg_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (hx_pos : 0 < x) (hs : 0 ≤ s) :
+    0 ≤ Veltkamp_p_FLX beta prec choice s x := by
+  unfold Veltkamp_p_FLX
+  have h_prod_nn : 0 ≤ x * Veltkamp_C beta s :=
+    mul_nonneg (le_of_lt hx_pos) (by linarith [Veltkamp_one_le_C beta hs])
+  exact round_ge_generic beta (FLX_exp prec) (FLX_exp_valid prec hp) _
+    (generic_format_0 beta _) h_prod_nn
+
+/-- For `x ∈ F` with `x > 0` and `s ≥ 0`: `x ≤ p`. (Comes from monotonicity
+of `round` plus `round x = x` since `x ∈ F`.) -/
+private theorem Veltkamp_x_le_p_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs : 0 ≤ s) :
+    x ≤ Veltkamp_p_FLX beta prec choice s x := by
+  unfold Veltkamp_p_FLX
+  have hC_ge_1 : 1 ≤ Veltkamp_C beta s := Veltkamp_one_le_C beta hs
+  have h_x_le_xC : x ≤ x * Veltkamp_C beta s := by
+    have := mul_le_mul_of_nonneg_left hC_ge_1 (le_of_lt hx_pos)
+    linarith
+  exact round_ge_generic beta (FLX_exp prec) (FLX_exp_valid prec hp) _
+    Fx h_x_le_xC
+
+/-- For `x ∈ F` with `x > 0` and `s ≥ 0`: `q ≤ 0`. -/
+private theorem Veltkamp_q_nonpos_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs : 0 ≤ s) :
+    Veltkamp_q_FLX beta prec choice s x ≤ 0 := by
+  unfold Veltkamp_q_FLX
+  have h_xmp_nonpos : x - Veltkamp_p_FLX beta prec choice s x ≤ 0 := by
+    linarith [Veltkamp_x_le_p_FLX beta prec hp choice Fx hx_pos hs]
+  exact round_le_generic beta (FLX_exp prec) (FLX_exp_valid prec hp) _
+    (generic_format_0 beta _) h_xmp_nonpos
+
 end LeanFlocq
