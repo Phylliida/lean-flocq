@@ -34,7 +34,7 @@ roadmap: `Fast2Sum` (radix 2, FLX, round-to-nearest) gives exact `s + e
 = a + b` under `|b| ≤ |a|`, and `TwoSum` removes the precondition via a
 magnitude-comparison branch into Fast2Sum on the larger side.**
 
-**~27172 lines of Lean across 29 files. 0 `sorry`s. All files build clean.**
+**~27185 lines of Lean across 29 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -71,7 +71,7 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Prop/Double_rounding.lean` | 4893 | `Prop/Double_rounding.v` (~95% by lines) | **Core mid-rounding + multiplication + bridge + full sqrt arc + sqrt radix_ge_4 + full plus/minus arc + plus/minus radix_ge_3 + full division arc.** `mag_mult_disj`. Definitions: `round_round_eq`, `midp`, `midp'`. **`_lt_mid` family:** `_further_place'`, `_further_place`, `_same_place`, `_lt_mid` dispatcher. **`_gt_mid` family:** `_further_place'`, `_further_place` (with the `x'' = bpow(mag x)` edge case via `round_generic` + `Znearest_imp`), `_same_place`, `_gt_mid` dispatcher. **Multiplication arc:** `round_round_mult_hyp`, `round_round_mult_aux`, `round_round_mult`, `round_round_mult_FLX/_FLT/_FTZ`. **Bridge:** `round_round_mid_cases`. **Sqrt arc:** `round_round_sqrt_hyp`, `mag_sqrt_disj`, `bpow_neg_two_le_quarter`, `round_round_sqrt_aux` (300-line keystone), `round_round_sqrt` + FLX/FLT/FTZ. **Plus/minus arc:** `round_round_plus_hyp` (4-conjunct precision condition), six mag helpers, plus/minus aux families, **`round_round_plus`** and **`round_round_minus`** keystones, plus FLX/FLT/FTZ instantiations. **Division arc complete:** `round_round_really_zero`, `round_round_zero`, `round_round_all_mid_cases` (4-callback dispatcher), `round_round_eq_mid_beta_even` (bridge for β even), `mag_div_disj`, `round_round_div_hyp` (5-conjunct precision), **`round_round_div_aux0/1/2`** (the three case-split preludes — boundary/below-midpoint/above-midpoint), **`round_round_div_aux`** dispatcher, **`round_round_div`** keystone (with sign dispatch via `round_N_opp` for negative x or y), FLX/FLT/FTZ instantiations (3 hyp lemmas + 3 user theorems). **Sqrt radix_ge_4 arc:** `bpow_neg_one_le_quarter_of_beta_ge_4` helper, `round_round_sqrt_radix_ge_4_hyp`, `_aux`, `_radix_ge_4` keystone, FLX/FLT/FTZ — the regular sqrt aux with `-2 → -1` throughout, needing `4 ≤ beta`. **Plus/minus radix_ge_3 arc:** `bpow_neg_one_le_third_of_beta_ge_3` helper, `round_round_plus_radix_ge_3_hyp`, plus chain (aux0/aux1/aux2/aux), minus chain (aux0/aux1/aux2/aux3/aux), plus/minus keystones with sign dispatch, FLX/FLT/FTZ for both — needs `3 ≤ beta`, uses `bpow(-1) ≤ 1/3`. |
 | `IEEE754/Bits.lean` | 1019 | `IEEE754/Bits.v` (full file) | **Bit encoding fully proven: 14 + 5 helpers, plus B32/B64 instantiations.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **B32/B64 specialization:** `binary32 := binary_float 24 128` and `binary64 := binary_float 53 1024`, with default NaN payloads (`2^22` / `2^51`), `unop_nan_pl{32,64}`, `binop_nan_pl{32,64}`, and the full op suite `b{32,64}_{erase,opp,abs,sqrt,plus,minus,mult,div,compare,of_bits}` + `bits_of_b{32,64}`. |
 | `Algorithms/Fast2Sum.lean` | 232 | *not in Coq Flocq* (only in Pff) | **First error-free transformation, proved directly on Flocq's foundations.** Radix 2, FLX, round-to-nearest. `Fast2Sum_step1_pos` (Sterbenz step, positive case, two-case argument on `b ≥ -a/2`), `Fast2Sum_step1` (general, via `round_N_opp` symmetry), `Fast2Sum_step2` (plus_error step), `Fast2Sum_correct` (keystone: `a + b = s + e` exactly). |
-| `Algorithms/TwoSum.lean` | 59 | *not in Coq Flocq* (only in Pff) | **Error-free transformation, no precondition.** Branching formulation: comparison + Fast2Sum on the larger side. Mathematically identical to Knuth's 6-op TwoSum (same `e`, same exactness). One theorem, `TwoSum_correct`. |
+| `Algorithms/TwoSum.lean` | 72 | *not in Coq Flocq* (only in Pff) | **Error-free transformation, no precondition.** Branching formulation: comparison + Fast2Sum on the larger side. Mathematically identical to Knuth's 6-op TwoSum (same `e`, same exactness). One theorem, `TwoSum_correct` — exposes both `s` and `e` as named `let`-bindings, returns `e ∈ F ∧ a + b = s + e`. |
 
 **Total: ~720 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
@@ -315,7 +315,7 @@ The relevant algorithms, sized roughly:
 | Algorithm | What it gives | ≈ Lean lines |
 |---|---|---|
 | ~~`Fast2Sum` (with precondition `|b| ≤ |a|`)~~ ✓ **done in `Algorithms/Fast2Sum.lean` (232 lines)** | `a + b = round(a+b) + e` exactly | ~~~200~~ 232 |
-| ~~`TwoSum` (no precondition)~~ ✓ **done in `Algorithms/TwoSum.lean` (59 lines, branching form)** | same, general inputs | ~~~400~~ 59 |
+| ~~`TwoSum` (no precondition)~~ ✓ **done in `Algorithms/TwoSum.lean` (72 lines, branching form)** | same, general inputs | ~~~400~~ 72 |
 | `Veltkamp` splitting | split `x` into hi/lo parts of `prec/2` bits | ~400 |
 | `Dekker` / `TwoProduct` | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~500 (builds on Veltkamp) |
 | `ErrFMA` | FMA with an explicit error term | ~500 |
@@ -355,13 +355,15 @@ to BigInt rationals.
    applies to `(s, a)` since `a/2 ≤ s ≤ 2a`) or `b < -|a|/2` (Sterbenz
    applies to `(a, -b)` giving `a + b ∈ F` exactly). Sign symmetry via
    `round_N_opp` with a double-flipped choice function.
-2. ~~`TwoSum`~~ ✓ **DONE 2026-05-17, `cc7ad6c`** — 59 lines, 1 theorem,
+2. ~~`TwoSum`~~ ✓ **DONE 2026-05-17, `cc7ad6c`** — 72 lines, 1 theorem,
    0 sorries. Branching formulation (magnitude comparison, then
    Fast2Sum on the larger side). Mathematically identical to Knuth's
    6-op TwoSum but the proof is one case-split + two Fast2Sum_correct
    applications. The past-me 400-line estimate was for Knuth's 6-op
    algorithm verbatim; the branching version is the right level for
-   CAD's needs and 7× smaller.
+   CAD's needs and ~5× smaller. **API**: exposes `s` and `e` as named
+   `let`-bindings and returns the conjunction `e ∈ F ∧ a + b = s + e`,
+   making it drop-in usable downstream.
 3. `Veltkamp` splitting (1 session, **next up**). The proof of
    "splitting factor `C = 2^s + 1` gives a hi-part with exactly
    `prec − s` bits" uses Sterbenz cancellation twice. **Note for
