@@ -362,9 +362,16 @@ to BigInt rationals.
    applications. The past-me 400-line estimate was for Knuth's 6-op
    algorithm verbatim; the branching version is the right level for
    CAD's needs and 7× smaller.
-3. `Veltkamp` splitting (1 session). The proof of "splitting factor
-   `C = 2^s + 1` gives a hi-part with exactly `prec − s` bits" uses
-   Sterbenz cancellation twice.
+3. `Veltkamp` splitting (1 session, **next up**). The proof of
+   "splitting factor `C = 2^s + 1` gives a hi-part with exactly
+   `prec − s` bits" uses Sterbenz cancellation twice. **Note for
+   future-me:** unlike Fast2Sum/TwoSum, there's no simple
+   branching shortcut here — the proof has to walk through the
+   actual splitting machinery. Expect this to take the bulk of a
+   session, possibly two. The integer side fact `Zdigits(2^s + 1) =
+   s + 1` will need its own small lemma. Reference: Boldo's "Pitfalls
+   of a Full Floating-Point Proof" §3 or the Veltkamp section of
+   Pff (search `Pff.v` for `Veltkamp`).
 4. `Dekker`/`TwoProduct` (1 session, builds on Veltkamp).
 5. `ErrFMA` (1 session, builds on TwoProduct + TwoSum).
 6. Compensated discriminant (1 session, applies the above).
