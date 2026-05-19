@@ -2567,4 +2567,71 @@ theorem Veltkamp_tail_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
   · -- tx ∈ F(FLX, s)
     rw [h_tx_eq]; exact h_xmhx_format_s
 
+/-! ### Veltkamp existence (∃ choice'): `hx = round_{prec−s, choice'} x`
+
+The structural meaning of `hx ∈ F(prec−s)` and `|x − hx| ≤ ulp/2`: there
+exists a tie-breaking function `choice'` for which the round-to-nearest
+of `x` at the coarser precision `prec−s` produces exactly `hx`.
+
+The witness is constructed by inspecting whether `hx` sits below or
+above the integer-mantissa floor of `x` at the coarser precision:
+
+  choice' k := (round_DN_{prec−s}(x) < hx)
+
+For non-tie x: the round result is determined by x's position relative
+to the midpoint, and matches hx (since hx is the unique F(prec−s) value
+within ulp/2 of x). For midpoint x: choice' picks DN if hx = DN
+(below) or UP if hx = UP (above), reproducing hx exactly. -/
+
+/-- **Integer-mantissa core of Veltkamp**: `hx = M_h · β^(s+cx)` where
+`M_h` is the integer mantissa, and `M_h` lies within 1/2 of `M_x · β^(-s)`
+(the scaled mantissa of `x` at precision `prec−s`). This is the
+"closeness" condition that drives the existence of `choice'`. -/
+private theorem Veltkamp_M_h_close_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    ∃ M_x M_h : ℤ,
+      x = (M_x : ℝ) * bpow beta (cexp beta (FLX_exp prec) x) ∧
+      Veltkamp_hx_FLX beta prec choice s x
+        = (M_h : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) ∧
+      |(M_x : ℝ) - (M_h : ℝ) * bpow beta s| ≤ bpow beta s / 2 := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hs_nn : 0 ≤ s := by linarith
+  have h_bpow_cx_pos : 0 < bpow beta cx := bpow_gt_0 _ _
+  have h_bpow_scx_pos : 0 < bpow beta (s + cx) := bpow_gt_0 _ _
+  -- Witnesses: M_x (canonical) and Mq + Mp (from format-side).
+  obtain ⟨Mp, hMp_eq⟩ :=
+    Veltkamp_p_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  obtain ⟨Mq, hMq_eq⟩ :=
+    Veltkamp_q_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  refine ⟨Ztrunc (scaled_mantissa beta (FLX_exp prec) x), Mq + Mp, Fx, ?_, ?_⟩
+  · -- hx = (Mq + Mp) · β^(s+cx).
+    rw [hxExact_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi, hMq_eq, hMp_eq]
+    push_cast; ring
+  · -- |M_x - (Mq+Mp) · β^s| ≤ β^s/2.
+    set hx_val := Veltkamp_hx_FLX beta prec choice s x with hx_val_def
+    have h_err : |x - hx_val| ≤ bpow beta (s + cx) / 2 :=
+      Veltkamp_aux_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+    set M_x : ℤ := Ztrunc (scaled_mantissa beta (FLX_exp prec) x) with hM_x_def
+    have h_x_F2R : x = (M_x : ℝ) * bpow beta cx := Fx
+    have h_hx_form : hx_val = ((Mq + Mp : ℝ)) * bpow beta (s + cx) := by
+      rw [hx_val_def, hxExact_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi, hMq_eq, hMp_eq]
+      ring
+    have h_diff_eq : x - hx_val
+                   = ((M_x : ℝ) - (Mq + Mp : ℝ) * bpow beta s) * bpow beta cx := by
+      rw [h_x_F2R, h_hx_form]
+      have h_split : bpow beta (s + cx) = bpow beta s * bpow beta cx := by
+        rw [← bpow_plus]
+      rw [h_split]; ring
+    rw [h_diff_eq, abs_mul, abs_of_pos h_bpow_cx_pos] at h_err
+    have h_split : bpow beta (s + cx) / 2 = (bpow beta s / 2) * bpow beta cx := by
+      rw [show bpow beta (s + cx) = bpow beta s * bpow beta cx from by rw [← bpow_plus]]
+      ring
+    rw [h_split] at h_err
+    push_cast
+    nlinarith [h_err, h_bpow_cx_pos]
+
 end LeanFlocq
