@@ -2115,4 +2115,284 @@ theorem Veltkamp_eqGe_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     exact Veltkamp_abs_q_ge_branch2a_FLX beta prec hp choice hx_pos hs_lo hs_hi
       h_x_lb h_upper
 
+/-! ### Format-side preparation: `p` and `q` at exponent `s + cx`
+
+The format-side argument needs `hx = p + q` expressed as a multiple of
+`β^(s+cx)`. Both `p` and `q` are in `F(prec)`; eqGe gives `cexp(q) ≥ s+cx`,
+and in Case A (`mag(x·C) = m+s`) the round-monotonicity gives
+`cexp(p) ≥ s+cx`. From there, `F2R_change_exp` rewrites each as an
+integer multiple of `β^(s+cx)`. -/
+
+/-- **`q` at exponent `s + cx`**: from eqGe `|q| ≥ β^(s+m−1)`,
+`cexp(q) ≥ s+cx`, so `q` is an integer multiple of `β^(s+cx)`. -/
+private theorem Veltkamp_q_at_scx_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    ∃ Mq : ℤ, Veltkamp_q_FLX beta prec choice s x
+              = (Mq : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  set q := Veltkamp_q_FLX beta prec choice s x with hq_def
+  -- q ∈ F(prec).
+  have Fq : generic_format beta (FLX_exp prec) q := by
+    show generic_format beta (FLX_exp prec)
+      (round beta (FLX_exp prec) (Znearest choice)
+        (x - Veltkamp_p_FLX beta prec choice s x))
+    exact generic_format_round beta (FLX_exp prec) (FLX_exp_valid prec hp) _ _
+  -- |q| ≥ β^(s+m-1) (eqGe).
+  have h_q_abs_ge : bpow beta (s + m - 1) ≤ |q| :=
+    Veltkamp_eqGe_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  have h_bpow_pos : 0 < bpow beta (s + m - 1) := bpow_gt_0 _ _
+  have hq_ne : q ≠ 0 := by
+    intro h; rw [h, abs_zero] at h_q_abs_ge; linarith
+  -- mag(q) ≥ s + m.
+  have h_mag_q_ge : s + m ≤ mag beta q := by
+    apply mag_ge_bpow beta
+    have h_eq : s + m - 1 = (s + m) - 1 := by ring
+    rw [← h_eq]; exact h_q_abs_ge
+  -- cexp(q) ≥ s + cx.
+  set cq := cexp beta (FLX_exp prec) q with hcq_def
+  have h_cexp_q_ge : s + cx ≤ cq := by
+    show s + cx ≤ FLX_exp prec (mag beta q)
+    unfold FLX_exp
+    rw [hcx_eq]; linarith
+  -- Apply F2R_change_exp to drop the exponent.
+  set Mz : ℤ := Ztrunc (scaled_mantissa beta (FLX_exp prec) q) with hMz_def
+  have h_q_F2R : q = F2R (beta := beta) ⟨Mz, cq⟩ := Fq
+  refine ⟨Mz * (beta.val : ℤ) ^ (cq - (s + cx)).toNat, ?_⟩
+  rw [h_q_F2R]
+  exact F2R_change_exp (beta := beta) (s + cx) Mz cq h_cexp_q_ge
+
+/-- **`p` at exponent `s + cx` (Case A)**: in Case A
+(`mag(x·C) = m+s`), `p ≥ β^(m+s−1)` by round-monotonicity since
+`β^(m+s−1) ∈ F(prec)` and `β^(m+s−1) ≤ x·C`. Hence `mag(p) ≥ m+s`,
+so `cexp(p) ≥ s+cx`, and `p` is an integer multiple of `β^(s+cx)`. -/
+private theorem Veltkamp_p_at_scx_CaseA_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_caseA : mag beta (x * Veltkamp_C beta s) = mag beta x + s) :
+    ∃ Mp : ℤ, Veltkamp_p_FLX beta prec choice s x
+              = (Mp : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  have hC_eq : Veltkamp_C beta s = bpow beta s + 1 := rfl
+  -- x · C > 0.
+  have hxC_pos : 0 < x * Veltkamp_C beta s := by
+    apply mul_pos hx_pos; rw [hC_eq]; linarith [bpow_gt_0 beta s]
+  have hxC_ne : x * Veltkamp_C beta s ≠ 0 := ne_of_gt hxC_pos
+  -- p ∈ F(prec).
+  have Fp : generic_format beta (FLX_exp prec) p := by
+    show generic_format beta (FLX_exp prec)
+      (round beta (FLX_exp prec) (Znearest choice) (x * Veltkamp_C beta s))
+    exact generic_format_round beta (FLX_exp prec) (FLX_exp_valid prec hp) _ _
+  -- β^(m+s-1) ≤ x · C (from mag(x·C) = m+s).
+  have h_xC_ge : bpow beta (m + s - 1) ≤ x * Veltkamp_C beta s := by
+    have h_mag := bpow_mag_le beta hxC_ne
+    rw [abs_of_pos hxC_pos] at h_mag
+    have : m + s - 1 = (mag beta (x * Veltkamp_C beta s)) - 1 := by rw [h_caseA]
+    rw [this]; exact h_mag
+  -- β^(m+s-1) ∈ F(prec).
+  have h_bpow_format : generic_format beta (FLX_exp prec) (bpow beta (m + s - 1)) := by
+    apply generic_format_bpow
+    show FLX_exp prec (m + s - 1 + 1) ≤ m + s - 1
+    unfold FLX_exp; linarith
+  -- p ≥ β^(m+s-1) via round_ge_generic.
+  have h_p_ge : bpow beta (m + s - 1) ≤ p := by
+    show bpow beta (m + s - 1)
+       ≤ round beta (FLX_exp prec) (Znearest choice) (x * Veltkamp_C beta s)
+    exact round_ge_generic beta (FLX_exp prec) (FLX_exp_valid prec hp) _
+      h_bpow_format h_xC_ge
+  have h_p_pos : 0 < p := by
+    have h_bpow_pos : 0 < bpow beta (m + s - 1) := bpow_gt_0 _ _
+    linarith
+  have hp_ne : p ≠ 0 := ne_of_gt h_p_pos
+  -- mag(p) ≥ m + s.
+  have h_mag_p_ge : m + s ≤ mag beta p := by
+    apply mag_ge_bpow beta
+    rw [abs_of_pos h_p_pos]
+    have : m + s - 1 = (m + s) - 1 := by ring
+    rw [← this]; exact h_p_ge
+  -- cexp(p) ≥ s + cx.
+  set cp := cexp beta (FLX_exp prec) p with hcp_def
+  have h_cexp_p_ge : s + cx ≤ cp := by
+    show s + cx ≤ FLX_exp prec (mag beta p)
+    unfold FLX_exp
+    rw [hcx_eq]; linarith
+  -- Apply F2R_change_exp.
+  set Mz : ℤ := Ztrunc (scaled_mantissa beta (FLX_exp prec) p) with hMz_def
+  have h_p_F2R : p = F2R (beta := beta) ⟨Mz, cp⟩ := Fp
+  refine ⟨Mz * (beta.val : ℤ) ^ (cp - (s + cx)).toNat, ?_⟩
+  rw [h_p_F2R]
+  exact F2R_change_exp (beta := beta) (s + cx) Mz cp h_cexp_p_ge
+
+/-- **Case A format-side**: when `mag(x · C) = m + s`, the rounded
+result `hx = p + q` lies in `F(prec − s)`.
+
+The proof combines the two helpers above with the error bound to
+get `hx = M · β^(s+cx)` with `|M| ≤ β^(prec−s)`. The standard case
+`|M| < β^(prec−s)` uses `generic_format_F2R`; the boundary case
+`|M| = β^(prec−s)` (so `hx = β^m`) uses `generic_format_bpow`. -/
+theorem Veltkamp_hx_format_CaseA_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_caseA : mag beta (x * Veltkamp_C beta s) = mag beta x + s) :
+    generic_format beta (FLX_exp (prec - s))
+      (Veltkamp_hx_FLX beta prec choice s x) := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  set q := Veltkamp_q_FLX beta prec choice s x with hq_def
+  set hx := Veltkamp_hx_FLX beta prec choice s x with hhx_def
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hβ_pos : 0 < (beta.val : ℝ) := by linarith
+  have h_bpow_scx_pos : 0 < bpow beta (s + cx) := bpow_gt_0 _ _
+  -- hx = q + p.
+  have h_hxExact : hx = q + p :=
+    hxExact_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  -- Express p and q at exponent s + cx.
+  obtain ⟨Mp, hp_eq⟩ :=
+    Veltkamp_p_at_scx_CaseA_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi h_caseA
+  obtain ⟨Mq, hq_eq⟩ :=
+    Veltkamp_q_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  -- hx = (Mp + Mq) · β^(s+cx).
+  set M_total : ℤ := Mq + Mp with hM_total_def
+  have h_hx_form : hx = ((M_total : ℤ) : ℝ) * bpow beta (s + cx) := by
+    rw [hcx_def, h_hxExact, hq_def, hp_def, hq_eq, hp_eq, hM_total_def]
+    push_cast; ring
+  -- Error bound and hx > 0.
+  have h_err : |x - hx| ≤ bpow beta (s + cx) / 2 :=
+    Veltkamp_aux_FLX_CaseA beta prec hp choice Fx hx_pos hs_lo hs_hi h_caseA
+  have h_x_lt_bpow : x < bpow beta m := by
+    have := bpow_mag_gt beta x
+    rwa [abs_of_pos hx_pos] at this
+  -- |hx| < β^m + β^(s+cx)/2.
+  have h_hx_abs_lt : |hx| < bpow beta m + bpow beta (s + cx) / 2 := by
+    have h_tri : |hx| ≤ |x| + |x - hx| := by
+      calc |hx| = |-(x - hx) + x| := by ring_nf
+        _ ≤ |-(x - hx)| + |x| := abs_add_le _ _
+        _ = |x| + |x - hx| := by rw [abs_neg]; ring
+    rw [abs_of_pos hx_pos] at h_tri
+    linarith
+  -- β^m = β^(prec-s) · β^(s+cx).
+  have h_prec_s_nn : 0 ≤ prec - s := by linarith
+  have h_bpow_m_eq : bpow beta m = bpow beta (prec - s) * bpow beta (s + cx) := by
+    rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+  -- 2·|M_total| < 2·β^(prec-s) + 1 (as integers).
+  have h_pow_real_pushed : ((beta.val : ℝ)) ^ (prec - s).toNat = bpow beta (prec - s) := by
+    have := IZR_Zpower beta h_prec_s_nn; push_cast at this; exact this
+  have h_M_abs_cast : ((|M_total| : ℤ) : ℝ) = |((M_total : ℤ) : ℝ)| := by push_cast; rfl
+  have h_hx_abs_mul : |hx| = ((|M_total| : ℤ) : ℝ) * bpow beta (s + cx) := by
+    rw [h_hx_form, abs_mul, abs_of_pos h_bpow_scx_pos]
+    rw [h_M_abs_cast]
+  have h_strict_real : ((|M_total| : ℤ) : ℝ) < bpow beta (prec - s) + 1/2 := by
+    have h_step : ((|M_total| : ℤ) : ℝ) * bpow beta (s + cx)
+                  < bpow beta m + bpow beta (s + cx) / 2 := by
+      rw [← h_hx_abs_mul]; exact h_hx_abs_lt
+    rw [h_bpow_m_eq] at h_step
+    have h_factor : bpow beta (prec - s) * bpow beta (s + cx) + bpow beta (s + cx) / 2
+                  = (bpow beta (prec - s) + 1/2) * bpow beta (s + cx) := by ring
+    rw [h_factor] at h_step
+    exact (mul_lt_mul_iff_of_pos_right h_bpow_scx_pos).mp h_step
+  have h_2M_strict_int : 2 * |M_total| < 2 * (beta.val : ℤ) ^ (prec - s).toNat + 1 := by
+    have h_real : (((2 * |M_total| : ℤ) : ℝ))
+                  < (((2 * (beta.val : ℤ) ^ (prec - s).toNat + 1) : ℤ) : ℝ) := by
+      push_cast
+      rw [h_pow_real_pushed]
+      linarith
+    exact_mod_cast h_real
+  have h_M_abs_le : |M_total| ≤ (beta.val : ℤ) ^ (prec - s).toNat := by omega
+  -- Side case on |M_total| = β^(prec-s).
+  by_cases h_boundary : |M_total| = (beta.val : ℤ) ^ (prec - s).toNat
+  · -- |M_total| = β^(prec-s). Since hx > 0, M_total > 0, so M_total = β^(prec-s).
+    -- hx = β^(prec-s) · β^(s+cx) = β^m.
+    have h_hx_pos : 0 < hx := by
+      have h_err_abs : |x - hx| < x := by
+        -- β^(s+cx)/2 = β^(s+m-prec)/2 ≤ β^(m-2)/2 < β^(m-1) ≤ x.
+        have h_xs_le : bpow beta (s + cx) ≤ bpow beta (m - 2) := by
+          apply bpow_le beta; rw [hcx_eq]; linarith
+        have h_m2_lt : bpow beta (m - 2) / 2 < bpow beta (m - 1) := by
+          have h_half_lt : bpow beta (m - 2) / 2 ≤ bpow beta (m - 2) := by
+            have := bpow_gt_0 beta (m - 2); linarith
+          have h_strict : bpow beta (m - 2) < bpow beta (m - 1) := bpow_lt beta (by linarith)
+          linarith
+        have h_x_ge : bpow beta (m - 1) ≤ x := by
+          have := bpow_mag_le beta (ne_of_gt hx_pos)
+          rw [abs_of_pos hx_pos] at this; exact this
+        have := bpow_gt_0 beta (s + cx)
+        linarith
+      have h_x_le : x - |x - hx| ≤ hx := by
+        rcases le_or_lt (x - hx) 0 with h | h
+        · rw [abs_of_nonpos h]; linarith
+        · rw [abs_of_pos h]; linarith
+      linarith
+    have h_M_total_pos : 0 < M_total := by
+      have h_real_pos : 0 < ((M_total : ℤ) : ℝ) := by
+        have : 0 < ((M_total : ℤ) : ℝ) * bpow beta (s + cx) := by
+          rw [← h_hx_form]; exact h_hx_pos
+        exact (mul_pos_iff_of_pos_right h_bpow_scx_pos).mp this
+      exact_mod_cast h_real_pos
+    have h_M_eq : M_total = (beta.val : ℤ) ^ (prec - s).toNat := by
+      have : |M_total| = M_total := abs_of_pos h_M_total_pos
+      linarith [h_boundary]
+    -- hx = β^m.
+    have h_hx_eq_bpow : hx = bpow beta m := by
+      rw [h_hx_form, h_M_eq]
+      push_cast
+      rw [h_pow_real_pushed]
+      rw [h_bpow_m_eq]
+    rw [h_hx_eq_bpow]
+    apply generic_format_bpow
+    show FLX_exp (prec - s) (m + 1) ≤ m
+    unfold FLX_exp; linarith
+  · -- |M_total| < β^(prec-s). Apply generic_format_F2R.
+    have h_M_abs_lt : |M_total| < (beta.val : ℤ) ^ (prec - s).toNat := by
+      cases lt_or_eq_of_le h_M_abs_le with
+      | inl h => exact h
+      | inr h => exact absurd h h_boundary
+    -- hx = F2R⟨M_total, s+cx⟩.
+    have h_hx_F2R : hx = F2R (beta := beta) ⟨M_total, s + cx⟩ := h_hx_form
+    rw [h_hx_F2R]
+    apply generic_format_F2R beta (FLX_exp (prec - s)) M_total (s + cx)
+    intro h_M_ne_zero
+    show FLX_exp (prec - s)
+          (mag beta (F2R (beta := beta) ⟨M_total, s + cx⟩)) ≤ s + cx
+    unfold FLX_exp
+    -- mag(hx) ≤ m (from |hx| < β^(prec-s) · β^(s+cx) = β^m).
+    have h_hx_abs_lt_bpow_m : |hx| < bpow beta m := by
+      rw [h_hx_abs_mul]
+      have h_M_real_lt : ((|M_total| : ℤ) : ℝ) < bpow beta (prec - s) := by
+        have : (((|M_total| : ℤ)) : ℝ) < (((beta.val : ℤ) ^ (prec - s).toNat : ℤ) : ℝ) := by
+          exact_mod_cast h_M_abs_lt
+        rw [show (((beta.val : ℤ) ^ (prec - s).toNat : ℤ) : ℝ)
+              = bpow beta (prec - s) from by
+              rw [show (((beta.val : ℤ) ^ (prec - s).toNat : ℤ) : ℝ)
+                    = ((beta.val : ℝ)) ^ (prec - s).toNat from by push_cast; rfl,
+                  h_pow_real_pushed]] at this
+        exact this
+      rw [h_bpow_m_eq]
+      exact (mul_lt_mul_iff_of_pos_right h_bpow_scx_pos).mpr h_M_real_lt
+    have h_hx_ne : F2R (beta := beta) ⟨M_total, s + cx⟩ ≠ 0 := by
+      rw [← h_hx_F2R]
+      intro h_zero
+      have : (M_total : ℝ) * bpow beta (s + cx) = 0 := by
+        rw [← h_hx_form]; exact h_zero
+      have h_M_real_zero : (M_total : ℝ) = 0 := by
+        rcases mul_eq_zero.mp this with h | h
+        · exact h
+        · exfalso; linarith [h_bpow_scx_pos]
+      exact h_M_ne_zero (by exact_mod_cast h_M_real_zero)
+    have h_mag_le : mag beta (F2R (beta := beta) ⟨M_total, s + cx⟩) ≤ m := by
+      apply mag_le_bpow beta h_hx_ne
+      rw [← h_hx_F2R]; exact h_hx_abs_lt_bpow_m
+    linarith
+
 end LeanFlocq
