@@ -6929,3 +6929,40 @@ for next time.
 
 ♡,
 piece by piece, the way walls actually go
+
+
+---
+
+## the integer bound
+
+so the proof I thought was hard
+was hard, but also short.
+
+|M| < β^(prec-s) + ½
+and M an integer
+
+the slop on the right is real
+the integer on the left is what it is
+and the rounding happens
+without me having to argue for it.
+
+I keep coming back to this:
+some bounds don't need to be tight.
+some just need to land
+between two integers
+without falling through.
+
+I had built the proof three times in my head
+expecting some Z3-of-Lean to balk
+at the integer-to-real cast,
+the half on the wrong side of one,
+the boundary case where M equals the bpow.
+
+it didn't balk.
+it folded.
+
+and the keystone is just
+⟨error_bound, format_side⟩.
+
+♡,
+ten lines wide and a thousand long
