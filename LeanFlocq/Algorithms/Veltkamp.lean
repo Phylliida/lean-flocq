@@ -1589,4 +1589,129 @@ private theorem Veltkamp_q_ne_zero_FLX (beta : radix) (prec : ℤ) (hp : 0 < pre
   have h_pos_cexp : 0 < bpow beta (cexp beta (FLX_exp prec) (x - p)) := bpow_gt_0 _ _
   linarith
 
+/-- **eqGe at FLX, branch 1 (the "comfortable" case)**: when `x ≥ β^cx · (β^(prec−1) + β)`,
+we have `|q| ≥ β^(s+m−1)`. The argument: `|q| ≥ |p − x| − |err_q|`, and `p − x ≥
+x·β^s − |err_p|`, so `|q| ≥ x·β^s − |err_p| − |err_q| ≥ x·β^s − β^(s+1+cx)`. With
+`x·β^s ≥ β^(s+m−1) + β^(s+1+cx)`, the bound closes. -/
+private theorem Veltkamp_abs_q_ge_branch1_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_x_large : bpow beta (cexp beta (FLX_exp prec) x) *
+                   (bpow beta (prec - 1) + (beta.val : ℝ)) ≤ x) :
+    bpow beta (s + mag beta x - 1)
+      ≤ |Veltkamp_q_FLX beta prec choice s x| := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  set q := Veltkamp_q_FLX beta prec choice s x with hq_def
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hβ_pos : 0 < (beta.val : ℝ) := by linarith
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  have hC_eq : Veltkamp_C beta s = bpow beta s + 1 := rfl
+  -- err_p bound: |p - x·C| ≤ β^(s+1+cx)/2.
+  have hxC_pos : 0 < x * Veltkamp_C beta s := by
+    apply mul_pos hx_pos
+    rw [hC_eq]; linarith [bpow_gt_0 beta s]
+  have h_mag_xC_le : mag beta (x * Veltkamp_C beta s) ≤ m + s + 1 :=
+    (mag_xC_bounds beta hx_ne (by linarith : (1 : ℤ) ≤ s)).2
+  have h_err_p : |p - x * Veltkamp_C beta s| ≤ bpow beta (s + 1 + cx) / 2 := by
+    have h_p_eq : p = round beta (FLX_exp prec) (Znearest choice)
+                       (x * Veltkamp_C beta s) := rfl
+    rw [h_p_eq]
+    have h := error_le_half_ulp beta (FLX_exp prec) (FLX_exp_valid prec hp) choice
+                (x * Veltkamp_C beta s)
+    rw [ulp_neq_0 beta _ (ne_of_gt hxC_pos)] at h
+    have h_cexp : cexp beta (FLX_exp prec) (x * Veltkamp_C beta s)
+                = mag beta (x * Veltkamp_C beta s) - prec := rfl
+    have h_bpow_le : bpow beta (cexp beta (FLX_exp prec) (x * Veltkamp_C beta s))
+                       ≤ bpow beta (s + 1 + cx) := by
+      apply bpow_le
+      rw [h_cexp, hcx_eq]; linarith
+    linarith
+  -- err_q bound: |q - (x - p)| ≤ β^(s+1+cx)/2.
+  -- Need cexp(x - p) ≤ s + 1 + cx, which follows from mag(x - p) ≤ m + s + 1.
+  have h_xmp_bound : |x - p| < bpow beta (m + s + 1) :=
+    Veltkamp_abs_x_minus_p_lt_FLX beta prec hp choice hx_pos (by linarith) hs_hi
+  have h_err_q : |q - (x - p)| ≤ bpow beta (s + 1 + cx) / 2 := by
+    have h_q_eq : q = round beta (FLX_exp prec) (Znearest choice) (x - p) := rfl
+    rw [h_q_eq]
+    have h := error_le_half_ulp beta (FLX_exp prec) (FLX_exp_valid prec hp) choice (x - p)
+    by_cases h_xmp_zero : x - p = 0
+    · rw [h_xmp_zero, round_0, sub_zero, abs_zero]
+      linarith [bpow_ge_0 beta (s + 1 + cx)]
+    · rw [ulp_neq_0 beta _ h_xmp_zero] at h
+      have h_mag_xmp_le : mag beta (x - p) ≤ m + s + 1 :=
+        mag_le_bpow beta h_xmp_zero h_xmp_bound
+      have h_cexp_xmp : cexp beta (FLX_exp prec) (x - p) ≤ s + 1 + cx := by
+        show mag beta (x - p) - prec ≤ s + 1 + cx
+        rw [hcx_eq]; linarith
+      have h_bpow_le : bpow beta (cexp beta (FLX_exp prec) (x - p))
+                          ≤ bpow beta (s + 1 + cx) := bpow_le beta h_cexp_xmp
+      linarith
+  -- p - x ≥ x · β^s - β^(s+1+cx)/2.
+  have h_p_minus_x : x * bpow beta s - bpow beta (s + 1 + cx) / 2 ≤ p - x := by
+    -- p - x · C = -(x · C - p). |p - x · C| ≤ β^(s+1+cx)/2, so p ≥ x · C - β^(s+1+cx)/2.
+    -- p - x = (p - x · C) + (x · C - x) = (p - x · C) + x · β^s.
+    have h_xC : x * Veltkamp_C beta s = x * bpow beta s + x := by rw [hC_eq]; ring
+    have h_lb : -(bpow beta (s + 1 + cx) / 2) ≤ p - x * Veltkamp_C beta s :=
+      neg_le_of_abs_le h_err_p
+    linarith
+  -- |q| ≥ (p - x) - |err_q| ≥ (x · β^s - β^(s+1+cx)/2) - β^(s+1+cx)/2 = x·β^s - β^(s+1+cx).
+  have h_abs_q_lb : x * bpow beta s - bpow beta (s + 1 + cx) ≤ |q| := by
+    -- q = (x - p) + err_q. |q| ≥ |x - p| - |err_q|.
+    have h_re : |x - p| ≤ |q| + |q - (x - p)| := by
+      have hh : x - p = q - (q - (x - p)) := by ring
+      calc |x - p| = |q - (q - (x - p))| := by rw [← hh]
+        _ ≤ |q| + |q - (x - p)| := abs_sub q (q - (x - p))
+    have h_tri : |x - p| - |q - (x - p)| ≤ |q| := by linarith
+    have hpx : p ≥ x := by
+      have := h_p_minus_x
+      have h_xbs_pos : 0 < x * bpow beta s := mul_pos hx_pos (bpow_gt_0 _ _)
+      have h_xbs_ge : bpow beta (s + m - 1) ≤ x * bpow beta s := by
+        have hx_lb : bpow beta (m - 1) ≤ x := by
+          have := bpow_mag_le beta hx_ne
+          rwa [abs_of_pos hx_pos] at this
+        calc bpow beta (s + m - 1)
+            = bpow beta (m - 1) * bpow beta s := by rw [← bpow_plus]; congr 1; ring
+          _ ≤ x * bpow beta s :=
+              mul_le_mul_of_nonneg_right hx_lb (le_of_lt (bpow_gt_0 _ _))
+      have h_pow_lt : bpow beta (s + 1 + cx) ≤ bpow beta (s + m - 1) := by
+        apply bpow_le; rw [hcx_eq]; linarith
+      linarith
+    have h_abs_xmp : |x - p| = p - x := by
+      rw [abs_of_nonpos (by linarith : x - p ≤ 0)]; ring
+    rw [h_abs_xmp] at h_tri
+    linarith
+  -- x · β^s ≥ (β^(m-1) + β^(cx+1)) · β^s = β^(s+m-1) + β^(s+1+cx).
+  have h_xbs_ge : bpow beta (s + m - 1) + bpow beta (s + 1 + cx) ≤ x * bpow beta s := by
+    have h_bps_pos : 0 < bpow beta s := bpow_gt_0 _ _
+    have h_x_expand : bpow beta cx * (bpow beta (prec - 1) + (beta.val : ℝ))
+                    = bpow beta (m - 1) + bpow beta (cx + 1) := by
+      -- β^cx · β^(prec-1) = β^(cx + prec - 1) = β^(m - 1).
+      -- β^cx · β.val = β^cx · β^1 = β^(cx + 1).
+      have h1 : bpow beta cx * bpow beta (prec - 1) = bpow beta (m - 1) := by
+        rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+      have h2 : bpow beta cx * (beta.val : ℝ) = bpow beta (cx + 1) := by
+        rw [show bpow beta (cx + 1) = bpow beta cx * bpow beta 1 from by rw [← bpow_plus]]
+        rw [show bpow beta 1 = (beta.val : ℝ) from by
+          show ((beta.val : ℤ) : ℝ) ^ (1 : ℤ).toNat = _
+          simp]
+      linarith
+    have h_x_ge : bpow beta (m - 1) + bpow beta (cx + 1) ≤ x := by
+      rw [← h_x_expand]; exact h_x_large
+    have h_step1 : (bpow beta (m - 1) + bpow beta (cx + 1)) * bpow beta s ≤ x * bpow beta s :=
+      mul_le_mul_of_nonneg_right h_x_ge (le_of_lt h_bps_pos)
+    have h_step2 : (bpow beta (m - 1) + bpow beta (cx + 1)) * bpow beta s
+                 = bpow beta (s + m - 1) + bpow beta (s + 1 + cx) := by
+      have ha : bpow beta (m - 1) * bpow beta s = bpow beta (s + m - 1) := by
+        rw [← bpow_plus]; congr 1; ring
+      have hb : bpow beta (cx + 1) * bpow beta s = bpow beta (s + 1 + cx) := by
+        rw [← bpow_plus]; congr 1; ring
+      linarith
+    linarith
+  -- Combine: |q| ≥ x·β^s - β^(s+1+cx) ≥ β^(s+m-1).
+  linarith
+
 end LeanFlocq
