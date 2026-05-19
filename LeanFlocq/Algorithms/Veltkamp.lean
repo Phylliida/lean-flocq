@@ -1714,4 +1714,116 @@ private theorem Veltkamp_abs_q_ge_branch1_FLX (beta : radix) (prec : ℤ) (hp : 
   -- Combine: |q| ≥ x·β^s - β^(s+1+cx) ≥ β^(s+m-1).
   linarith
 
+/-- **eqGe at FLX, branch 2b (the exact-bpow boundary)**: when `x = β^(m−1)` exactly,
+`x·C = β^(s+m−1) + β^(m−1)` is itself in `F(prec)`, so `p = x·C` exactly. Then
+`x − p = -β^(s+m−1)` is in `F(prec)`, so `q = −β^(s+m−1)` exactly. Hence
+`|q| = β^(s+m−1)` and the eqGe bound holds with equality. -/
+private theorem Veltkamp_abs_q_ge_branch2b_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (hx_eq : x = bpow beta (mag beta x - 1))
+    (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    bpow beta (s + mag beta x - 1)
+      ≤ |Veltkamp_q_FLX beta prec choice s x| := by
+  set m := mag beta x with hm_def
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  set q := Veltkamp_q_FLX beta prec choice s x with hq_def
+  -- Step 1: x · C = β^(s+m-1) + β^(m-1) ∈ F(prec).
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hC_eq : Veltkamp_C beta s = bpow beta s + 1 := rfl
+  have h_xC_eq : x * Veltkamp_C beta s = bpow beta (s + m - 1) + bpow beta (m - 1) := by
+    rw [hx_eq, hC_eq]
+    have h_bpow_plus : bpow beta (m - 1) * bpow beta s = bpow beta (s + m - 1) := by
+      rw [← bpow_plus]; congr 1; ring
+    have := h_bpow_plus; linarith
+  -- Step 2: x · C ∈ F(prec). It equals F2R⟨β^s + 1, m - 1⟩.
+  have h_xC_F2R : x * Veltkamp_C beta s
+                = F2R (beta := beta) ⟨(beta.val : ℤ) ^ s.toNat + 1, m - 1⟩ := by
+    rw [h_xC_eq]
+    show bpow beta (s + m - 1) + bpow beta (m - 1)
+       = ((((beta.val : ℤ) ^ s.toNat + 1 : ℤ) : ℝ)) * bpow beta (m - 1)
+    have hs_nn : 0 ≤ s := by linarith
+    have h_pow : (((beta.val : ℤ) ^ s.toNat : ℤ) : ℝ) = bpow beta s := IZR_Zpower beta hs_nn
+    have h_lhs : bpow beta (s + m - 1) = bpow beta s * bpow beta (m - 1) := by
+      rw [← bpow_plus]; congr 1; ring
+    rw [h_lhs]
+    have h_pow' : ((beta.val : ℝ) ^ s.toNat) = bpow beta s := by
+      have : ((beta.val ^ s.toNat : ℤ) : ℝ) = bpow beta s := IZR_Zpower beta hs_nn
+      push_cast at this; exact this
+    rw [show (((beta.val : ℤ) ^ s.toNat + 1 : ℤ) : ℝ) * bpow beta (m - 1)
+          = ((beta.val : ℝ) ^ s.toNat + 1) * bpow beta (m - 1) from by push_cast; ring]
+    rw [h_pow']; ring
+  have h_xC_format : generic_format beta (FLX_exp prec) (x * Veltkamp_C beta s) := by
+    rw [h_xC_F2R]
+    apply generic_format_F2R beta (FLX_exp prec) _ _
+    intro h_ne
+    -- cexp(F2R) ≤ m - 1.
+    show FLX_exp prec (mag beta _) ≤ m - 1
+    unfold FLX_exp
+    have h_F2R_pos : 0 < F2R (beta := beta) ⟨(beta.val : ℤ) ^ s.toNat + 1, m - 1⟩ := by
+      rw [← h_xC_F2R]
+      have hβs_pos : 0 < bpow beta s := bpow_gt_0 _ _
+      have hβ_m_pos : 0 < bpow beta (m - 1) := bpow_gt_0 _ _
+      rw [h_xC_eq]
+      have h_eq : bpow beta (s + m - 1) = bpow beta s * bpow beta (m - 1) := by
+        rw [← bpow_plus]; congr 1; ring
+      have h_pos : 0 < bpow beta (s + m - 1) := bpow_gt_0 _ _
+      linarith
+    -- Need: mag(x · C) ≤ m - 1 + prec = m + prec - 1.
+    -- We have x · C = β^(s+m-1) + β^(m-1) < 2 · β^(s+m-1) ≤ β · β^(s+m-1) = β^(s+m).
+    -- So mag ≤ s + m. Need s + m ≤ m + prec - 1, i.e., s ≤ prec - 1. ✓.
+    have h_F2R_lt : F2R (beta := beta) ⟨(beta.val : ℤ) ^ s.toNat + 1, m - 1⟩
+                   < bpow beta (m - 1 + prec) := by
+      rw [← h_xC_F2R, h_xC_eq]
+      -- s + m - 1 < m - 1 + prec ↔ s < prec, ✓ from s + 2 ≤ prec.
+      have h1 : bpow beta (s + m - 1) < bpow beta (m + prec - 2) := bpow_lt beta (by linarith)
+      have h2 : bpow beta (m - 1) ≤ bpow beta (m + prec - 2) := bpow_le beta (by linarith)
+      have h3 : bpow beta (m + prec - 2) + bpow beta (m + prec - 2)
+              ≤ bpow beta (m - 1 + prec) := by
+        have h_double : bpow beta (m + prec - 2) + bpow beta (m + prec - 2)
+                      = 2 * bpow beta (m + prec - 2) := by ring
+        rw [h_double]
+        have h_step : 2 * bpow beta (m + prec - 2) ≤ (beta.val : ℝ) * bpow beta (m + prec - 2) := by
+          have h_pos : 0 < bpow beta (m + prec - 2) := bpow_gt_0 _ _
+          nlinarith
+        have h_β : (beta.val : ℝ) * bpow beta (m + prec - 2) = bpow beta (m - 1 + prec) := by
+          have h_β_eq : (beta.val : ℝ) = bpow beta 1 := by
+            show _ = ((beta.val : ℤ) : ℝ) ^ (1 : ℤ).toNat
+            simp
+          rw [h_β_eq, ← bpow_plus]; congr 1; ring
+        linarith
+      linarith
+    have h_F2R_ne_zero : F2R (beta := beta) ⟨(beta.val : ℤ) ^ s.toNat + 1, m - 1⟩ ≠ 0 := by
+      have : 0 < F2R (beta := beta) ⟨(beta.val : ℤ) ^ s.toNat + 1, m - 1⟩ := h_F2R_pos
+      linarith
+    have h_abs_F2R_lt : |F2R (beta := beta) ⟨(beta.val : ℤ) ^ s.toNat + 1, m - 1⟩|
+                       < bpow beta (m - 1 + prec) := by
+      rw [abs_of_pos h_F2R_pos]; exact h_F2R_lt
+    have h_mag_le : mag beta (F2R (beta := beta) ⟨(beta.val : ℤ) ^ s.toNat + 1, m - 1⟩)
+                    ≤ m - 1 + prec :=
+      mag_le_bpow beta h_F2R_ne_zero h_abs_F2R_lt
+    linarith
+  -- Step 3: p = x · C (round is identity on F).
+  have h_p_eq : p = x * Veltkamp_C beta s := by
+    show round beta (FLX_exp prec) (Znearest choice) (x * Veltkamp_C beta s)
+       = x * Veltkamp_C beta s
+    exact round_generic beta (FLX_exp prec) (Znearest choice) h_xC_format
+  -- Step 4: x - p = -β^(s+m-1).
+  have h_xmp_eq : x - p = -bpow beta (s + m - 1) := by
+    rw [h_p_eq, h_xC_eq]
+    have h_hx_re : x = bpow beta (m - 1) := hx_eq
+    linarith
+  -- Step 5: -β^(s+m-1) ∈ F(prec).
+  have h_xmp_format : generic_format beta (FLX_exp prec) (x - p) := by
+    rw [h_xmp_eq]
+    apply generic_format_opp
+    apply generic_format_bpow
+    show FLX_exp prec (s + m - 1 + 1) ≤ s + m - 1
+    unfold FLX_exp; linarith
+  -- Step 6: q = x - p (round is identity).
+  have h_q_eq : q = x - p := by
+    show round beta (FLX_exp prec) (Znearest choice) (x - p) = (x - p)
+    exact round_generic beta (FLX_exp prec) (Znearest choice) h_xmp_format
+  -- Step 7: |q| = β^(s+m-1).
+  rw [h_q_eq, h_xmp_eq, abs_neg, abs_of_pos (bpow_gt_0 _ _)]
+
 end LeanFlocq
