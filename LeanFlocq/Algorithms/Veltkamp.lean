@@ -1826,4 +1826,191 @@ private theorem Veltkamp_abs_q_ge_branch2b_FLX (beta : radix) (prec : ℤ) (hp :
   -- Step 7: |q| = β^(s+m-1).
   rw [h_q_eq, h_xmp_eq, abs_neg, abs_of_pos (bpow_gt_0 _ _)]
 
+/-- **eqGe at FLX, branch 2a (β−1 specific mantissa values)**: when
+`x` lies in the half-open interval `[β^(m−1) + β^cx, β^(m−1) + β^(cx+1))`
+(equivalently, `x ∈ F` with mantissa `M_x ∈ {β^(prec−1)+1, …, β^(prec−1)+β−1}`),
+the explicit float `g₁ = β^(s+m−1) + β^(m−1) + β^(s+cx)`
+(= `F2R⟨β^(prec−1) + β^(prec−s−1) + 1, s+cx⟩`) lies in `F(prec)` and satisfies
+`g₁ ≤ x · C`. Hence `p = round(x · C) ≥ g₁`, so `p − x ≥ β^(s+m−1)`, and
+`round_le_generic` applied to `−β^(s+m−1) ∈ F(prec)` gives
+`q ≤ −β^(s+m−1)`, so `|q| ≥ β^(s+m−1)`. -/
+private theorem Veltkamp_abs_q_ge_branch2a_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_x_lb : bpow beta (mag beta x - 1) + bpow beta (cexp beta (FLX_exp prec) x) ≤ x)
+    (h_x_ub : x < bpow beta (mag beta x - 1)
+                + bpow beta (cexp beta (FLX_exp prec) x + 1)) :
+    bpow beta (s + mag beta x - 1)
+      ≤ |Veltkamp_q_FLX beta prec choice s x| := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  set q := Veltkamp_q_FLX beta prec choice s x with hq_def
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hβ_pos : 0 < (beta.val : ℝ) := by linarith
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  have hC_eq : Veltkamp_C beta s = bpow beta s + 1 := rfl
+  have hβs_pos : 0 < bpow beta s := bpow_gt_0 _ _
+  have h_xC_pos : 0 < x * Veltkamp_C beta s := by
+    apply mul_pos hx_pos; rw [hC_eq]; linarith
+  -- Useful bpow positivity facts.
+  have h_bpow_sm1 : 0 < bpow beta (s + m - 1) := bpow_gt_0 _ _
+  have h_bpow_m1 : 0 < bpow beta (m - 1) := bpow_gt_0 _ _
+  have h_bpow_scx : 0 < bpow beta (s + cx) := bpow_gt_0 _ _
+  have h_bpow_cx : 0 < bpow beta cx := bpow_gt_0 _ _
+  have h_bpow_cx1 : 0 < bpow beta (cx + 1) := bpow_gt_0 _ _
+  -- Cast/exponent helpers.
+  have h_prec_sub_1_nn : 0 ≤ prec - 1 := by linarith
+  have h_prec_sub_s_1_nn : 0 ≤ prec - s - 1 := by linarith
+  have h_s_nn : 0 ≤ s := by linarith
+  have h_pow_prec_1 : ((beta.val : ℝ)) ^ (prec - 1).toNat = bpow beta (prec - 1) := by
+    have := IZR_Zpower beta h_prec_sub_1_nn
+    push_cast at this; exact this
+  have h_pow_prec_s_1 : ((beta.val : ℝ)) ^ (prec - s - 1).toNat
+                      = bpow beta (prec - s - 1) := by
+    have := IZR_Zpower beta h_prec_sub_s_1_nn
+    push_cast at this; exact this
+  -- Step 1: g₁ value as a real number.
+  -- Mg = β^(prec-1) + β^(prec-s-1) + 1, viewed as an integer.
+  set Mg : ℤ := (beta.val : ℤ) ^ (prec - 1).toNat
+              + (beta.val : ℤ) ^ (prec - s - 1).toNat + 1 with hMg_def
+  have h_Mg_real : (Mg : ℝ) = bpow beta (prec - 1) + bpow beta (prec - s - 1) + 1 := by
+    show (((beta.val : ℤ) ^ (prec - 1).toNat
+          + (beta.val : ℤ) ^ (prec - s - 1).toNat + 1 : ℤ) : ℝ)
+       = bpow beta (prec - 1) + bpow beta (prec - s - 1) + 1
+    push_cast
+    rw [h_pow_prec_1, h_pow_prec_s_1]
+  -- g₁ as a real number.
+  set g₁ : ℝ := F2R (beta := beta) ⟨Mg, s + cx⟩ with hg₁_def
+  -- Closed form for g₁.
+  have h_g₁_value : g₁ = bpow beta (s + m - 1)
+                       + bpow beta (m - 1) + bpow beta (s + cx) := by
+    show (Mg : ℝ) * bpow beta (s + cx)
+       = bpow beta (s + m - 1) + bpow beta (m - 1) + bpow beta (s + cx)
+    rw [h_Mg_real]
+    have h_t1 : bpow beta (prec - 1) * bpow beta (s + cx) = bpow beta (s + m - 1) := by
+      rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+    have h_t2 : bpow beta (prec - s - 1) * bpow beta (s + cx) = bpow beta (m - 1) := by
+      rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+    have h_expand :
+        (bpow beta (prec - 1) + bpow beta (prec - s - 1) + 1) * bpow beta (s + cx)
+        = bpow beta (prec - 1) * bpow beta (s + cx)
+        + bpow beta (prec - s - 1) * bpow beta (s + cx)
+        + bpow beta (s + cx) := by ring
+    rw [h_expand, h_t1, h_t2]
+  have h_g₁_pos : 0 < g₁ := by rw [h_g₁_value]; linarith
+  -- Step 2: g₁ < β^(s+m), so mag(g₁) ≤ s+m and cexp(g₁) ≤ s+cx.
+  -- Key inequality: β^(m-1) + β^(s+cx) < (β-1) · β^(s+m-1).
+  -- Both LHS terms are ≤ β^(m-1) since s+cx = s+m-prec ≤ m-2 ≤ m-1.
+  -- Also β^(s+m-1) ≥ β^s · β^(m-1) ≥ 4·β^(m-1) (s ≥ 2). So:
+  --   β^(m-1) + β^(s+cx) ≤ 2·β^(m-1) ≤ (β-1)·β^(s+m-1) when (β-1)·β^s ≥ 2.
+  -- For β=2, s≥2: (β-1)·β^s = 1·4 = 4 ≥ 2 ✓.
+  -- For β≥3, s≥2: (β-1)·β^s ≥ 2·9 = 18 ≥ 2 ✓.
+  have h_scx_le_m1 : s + cx ≤ m - 1 := by rw [hcx_eq]; linarith
+  have h_bpow_scx_le_m1 : bpow beta (s + cx) ≤ bpow beta (m - 1) :=
+    bpow_le beta h_scx_le_m1
+  have h_bps_ge_4 : 4 ≤ bpow beta s := by
+    have h2 : bpow beta 2 ≤ bpow beta s := bpow_le beta hs_lo
+    have h_pow2 : bpow beta 2 = (beta.val : ℝ) * (beta.val : ℝ) := by
+      show ((beta.val : ℤ) : ℝ) ^ (2 : ℤ).toNat = _
+      simp; ring
+    have h2_ge_4 : 4 ≤ bpow beta 2 := by rw [h_pow2]; nlinarith
+    linarith
+  -- g₁ < β · β^(s+m-1) = β^(s+m).
+  have h_g₁_lt : g₁ < bpow beta (s + m) := by
+    rw [h_g₁_value]
+    have h_β_sm : bpow beta (s + m) = (beta.val : ℝ) * bpow beta (s + m - 1) := by
+      have : bpow beta (s + m) = bpow beta 1 * bpow beta (s + m - 1) := by
+        rw [← bpow_plus]; congr 1; ring
+      rw [this, bpow_one]
+    rw [h_β_sm]
+    -- β · β^(s+m-1) - β^(s+m-1) = (β-1) · β^(s+m-1).
+    -- Want: β^(m-1) + β^(s+cx) < (β-1) · β^(s+m-1).
+    -- Use β^(s+m-1) = β^s · β^(m-1), and β^s ≥ 4 (s ≥ 2).
+    have h_bps_factor : bpow beta (s + m - 1) = bpow beta s * bpow beta (m - 1) := by
+      rw [← bpow_plus]; congr 1; ring
+    -- β^(m-1) + β^(s+cx) ≤ 2·β^(m-1).
+    have h_two_terms : bpow beta (m - 1) + bpow beta (s + cx) ≤ 2 * bpow beta (m - 1) := by
+      linarith
+    -- (β-1)·β^(s+m-1) = (β-1)·β^s·β^(m-1) ≥ (β-1)·4·β^(m-1).
+    -- For β=2: (β-1)·4 = 4 ≥ 2 ✓.
+    -- For β≥3: (β-1)·4 ≥ 8 ≥ 2 ✓.
+    have h_β_m_1 : 1 ≤ (beta.val : ℝ) - 1 := by linarith
+    have h_β_4 : 4 ≤ (beta.val : ℝ) * bpow beta s - bpow beta s := by
+      have : ((beta.val : ℝ) - 1) * bpow beta s ≥ 1 * 4 := by
+        apply mul_le_mul h_β_m_1 h_bps_ge_4 (by norm_num) (by linarith)
+      nlinarith [bpow_gt_0 beta s]
+    nlinarith [h_two_terms, h_bps_factor, h_bpow_m1, h_bpow_scx, h_bpow_sm1, h_bps_ge_4]
+  -- g₁ ∈ F(prec).
+  have h_g₁_ne_zero : g₁ ≠ 0 := ne_of_gt h_g₁_pos
+  have h_abs_g₁_lt : |g₁| < bpow beta (s + m) := by
+    rw [abs_of_pos h_g₁_pos]; exact h_g₁_lt
+  have h_mag_g₁_le : mag beta g₁ ≤ s + m := mag_le_bpow beta h_g₁_ne_zero h_abs_g₁_lt
+  have h_g₁_format : generic_format beta (FLX_exp prec) g₁ := by
+    apply generic_format_F2R beta (FLX_exp prec) Mg (s + cx)
+    intro _
+    show FLX_exp prec (mag beta g₁) ≤ s + cx
+    unfold FLX_exp
+    rw [hcx_eq]; linarith
+  -- Step 3: g₁ ≤ x · C.
+  -- x · C = x · (β^s + 1) = x · β^s + x.
+  -- We have x ≥ β^(m-1) + β^cx, so:
+  --   x · β^s ≥ β^(s+m-1) + β^(s+cx)
+  --   x ≥ β^(m-1) + β^cx
+  -- Sum: x · C ≥ β^(s+m-1) + β^(s+cx) + β^(m-1) + β^cx = g₁ + β^cx > g₁.
+  have h_g₁_le_xC : g₁ ≤ x * Veltkamp_C beta s := by
+    rw [hC_eq]
+    have h_xC_expand : x * (bpow beta s + 1) = x * bpow beta s + x := by ring
+    rw [h_xC_expand]
+    -- x · β^s ≥ (β^(m-1) + β^cx) · β^s = β^(s+m-1) + β^(s+cx).
+    have h1 : (bpow beta (m - 1) + bpow beta cx) * bpow beta s ≤ x * bpow beta s :=
+      mul_le_mul_of_nonneg_right h_x_lb (le_of_lt hβs_pos)
+    have h_dist : (bpow beta (m - 1) + bpow beta cx) * bpow beta s
+                = bpow beta (s + m - 1) + bpow beta (s + cx) := by
+      have ha : bpow beta (m - 1) * bpow beta s = bpow beta (s + m - 1) := by
+        rw [← bpow_plus]; congr 1; ring
+      have hb : bpow beta cx * bpow beta s = bpow beta (s + cx) := by
+        rw [← bpow_plus]; congr 1; ring
+      linarith
+    -- Now g₁ + β^cx ≤ x · β^s + x (using x ≥ β^(m-1) + β^cx).
+    rw [h_g₁_value]
+    linarith [h_x_lb, h_bpow_cx]
+  -- Step 4: p ≥ g₁ via round_ge_generic.
+  have h_p_ge : g₁ ≤ p := by
+    show g₁ ≤ round beta (FLX_exp prec) (Znearest choice) (x * Veltkamp_C beta s)
+    exact round_ge_generic beta (FLX_exp prec) (FLX_exp_valid prec hp) _
+      h_g₁_format h_g₁_le_xC
+  -- Step 5: p - x ≥ β^(s+m-1).
+  -- g₁ - x = β^(s+m-1) + β^(m-1) + β^(s+cx) - x.
+  -- Using x < β^(m-1) + β^(cx+1):
+  --   g₁ - x > β^(s+m-1) + β^(s+cx) - β^(cx+1) = β^(s+m-1) + β^(cx+1)·(β^(s-1) - 1).
+  -- For s ≥ 2, β ≥ 2: β^(s-1) ≥ β ≥ 2 > 1, so β^(s+cx) - β^(cx+1) > 0.
+  have h_β_pow_s_cx_ge_cx_1 : bpow beta (cx + 1) ≤ bpow beta (s + cx) := by
+    apply bpow_le beta; linarith
+  have h_p_minus_x_ge : bpow beta (s + m - 1) ≤ p - x := by
+    have h_g_diff : bpow beta (s + m - 1) ≤ g₁ - x := by
+      rw [h_g₁_value]
+      -- β^(s+m-1) ≤ (β^(s+m-1) + β^(m-1) + β^(s+cx)) - x
+      -- ↔ x ≤ β^(m-1) + β^(s+cx)
+      -- We have x < β^(m-1) + β^(cx+1) ≤ β^(m-1) + β^(s+cx). ✓
+      linarith [h_x_ub, h_β_pow_s_cx_ge_cx_1]
+    linarith
+  -- Step 6: x - p ≤ -β^(s+m-1) ∈ F(prec).
+  have h_neg_bpow_format : generic_format beta (FLX_exp prec) (-bpow beta (s + m - 1)) := by
+    apply generic_format_opp
+    apply generic_format_bpow
+    show FLX_exp prec (s + m - 1 + 1) ≤ s + m - 1
+    unfold FLX_exp; linarith
+  have h_xmp_le : x - p ≤ -bpow beta (s + m - 1) := by linarith
+  -- Step 7: q ≤ -β^(s+m-1) via round_le_generic.
+  have h_q_le : q ≤ -bpow beta (s + m - 1) := by
+    show round beta (FLX_exp prec) (Znearest choice) (x - p) ≤ -bpow beta (s + m - 1)
+    exact round_le_generic beta (FLX_exp prec) (FLX_exp_valid prec hp) _
+      h_neg_bpow_format h_xmp_le
+  -- Step 8: |q| ≥ β^(s+m-1).
+  have h_q_neg : q ≤ 0 := by linarith
+  rw [abs_of_nonpos h_q_neg]
+  linarith
+
 end LeanFlocq
