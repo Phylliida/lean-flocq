@@ -2908,4 +2908,29 @@ theorem Veltkamp_Even_FLX_odd (beta : radix) (prec : ℤ) (hp : 0 < prec)
   exact Veltkamp_Even_FLX_odd_radix beta prec hp choice h_odd_beta
     Fx hx_pos hs_lo hs_hi _
 
+/-! ### Veltkamp's `hx` is a closest representable at coarser precision
+
+Foundation for `Veltkamp_Even` at any radix: by `Veltkamp_FLX` existence
+plus `round_N_pt`, the algorithm's `hx` is a `Rnd_N_pt` at the coarser
+precision `prec − s`. The remaining gap to `Rnd_NE_pt` is the parity of
+the canonical mantissa of `hx` at ties — vacuous for odd radix, and a
+substantial algorithmic argument for even radix (Pff `VeltkampEven1`). -/
+
+/-- **Veltkamp's output is at a `Rnd_N_pt` of the coarser precision.**
+This combines `Veltkamp_FLX` existence with `round_N_pt`: since some
+`Znearest` rounding at precision `prec − s` produces exactly `hx`, the
+value `hx` is a closest representable at that precision. -/
+theorem Veltkamp_hx_Rnd_N_pt_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    Rnd_N_pt (generic_format beta (FLX_exp (prec - s))) x
+             (Veltkamp_hx_FLX beta prec choice s x) := by
+  have hp_minus_s_pos : 0 < prec - s := by linarith
+  obtain ⟨choice', h_eq⟩ :=
+    Veltkamp_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  have h_pt := round_N_pt beta (FLX_exp (prec - s))
+    (FLX_exp_valid (prec - s) hp_minus_s_pos) choice' x
+  rw [← h_eq]; exact h_pt
+
 end LeanFlocq
