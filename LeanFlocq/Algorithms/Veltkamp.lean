@@ -2634,4 +2634,149 @@ private theorem Veltkamp_M_h_close_FLX (beta : radix) (prec : ℤ) (hp : 0 < pre
     push_cast
     nlinarith [h_err, h_bpow_cx_pos]
 
+/-- **Veltkamp existence (FLX)**: for `x > 0` in F(FLX, prec), `2 ≤ s ≤ prec − 2`,
+there exists a tie-breaking function `choice'` such that
+`round_{prec−s, Znearest choice'} x = Veltkamp_hx_FLX beta prec choice s x`.
+
+This is Pff's `Veltkamp` theorem (Pff2Flocq.v:381–419): the result that `hx`
+is reachable by a single round-to-nearest at the coarser precision `prec − s`.
+
+Construction: `choice' k := decide (round_{prec−s, Zfloor} x < hx)`.
+The half-ulp bound on `|x − hx|` plus `hx ∈ F(prec−s)` forces `M_h ∈ {q, q+1}`
+where `q = ⌊M_x · β^(−s)⌋`. For non-tie x, Znearest picks the unique closest
+regardless of choice; at tie, `choice'` flips correctly via `q < M_h`. -/
+theorem Veltkamp_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    ∃ choice' : ℤ → Bool,
+      round beta (FLX_exp (prec - s)) (Znearest choice') x
+        = Veltkamp_hx_FLX beta prec choice s x := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  set cx_s := s + cx with hcx_s_def
+  set hx_val := Veltkamp_hx_FLX beta prec choice s x with hx_val_def
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hβ_pos : (0 : ℝ) < (beta.val : ℝ) := by linarith
+  have hp_minus_s_pos : 0 < prec - s := by linarith
+  have hcx_eq : cx = m - prec := rfl
+  have h_bpow_cx_pos : (0 : ℝ) < bpow beta cx := bpow_gt_0 _ _
+  have h_bpow_s_pos : (0 : ℝ) < bpow beta s := bpow_gt_0 _ _
+  have h_bpow_cxs_pos : (0 : ℝ) < bpow beta cx_s := bpow_gt_0 _ _
+  have h_bpow_neg_s_pos : (0 : ℝ) < bpow beta (-s) := bpow_gt_0 _ _
+  have h_bpow_s_inv : bpow beta s * bpow beta (-s) = 1 := by
+    rw [← bpow_plus, show s + -s = 0 from by ring, bpow_zero]
+  -- Extract M_x, M_h from M_h_close.
+  obtain ⟨M_x, M_h, h_x_F2R, h_hx_eq, h_close⟩ :=
+    Veltkamp_M_h_close_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  -- cexp at the coarser precision: m - (prec - s) = s + cx.
+  have hcexp_s : cexp beta (FLX_exp (prec - s)) x = cx_s := by
+    show FLX_exp (prec - s) (mag beta x) = s + cx
+    rw [hcx_eq]; unfold FLX_exp; ring
+  -- Scaled mantissa at the coarser precision is `M_x · β^(-s)`.
+  set sm : ℝ := (M_x : ℝ) * bpow beta (-s) with hsm_def
+  have h_sm_eq : scaled_mantissa beta (FLX_exp (prec - s)) x = sm := by
+    show x * bpow beta (-cexp beta (FLX_exp (prec - s)) x) = sm
+    rw [hcexp_s, h_x_F2R, mul_assoc, ← bpow_plus]
+    have h_arg : cexp beta (FLX_exp prec) x + -cx_s = -s := by rw [hcx_s_def]; ring
+    rw [h_arg]
+  -- DN := round_{prec-s, Zfloor} x = ⌊sm⌋ · β^cx_s.
+  set q : ℤ := ⌊sm⌋ with hq_def
+  set DN : ℝ := round beta (FLX_exp (prec - s)) (fun y : ℝ => ⌊y⌋) x with hDN_def
+  have h_DN_eq : DN = (q : ℝ) * bpow beta cx_s := by
+    show F2R (beta := beta) ⟨⌊scaled_mantissa beta (FLX_exp (prec - s)) x⌋,
+                             cexp beta (FLX_exp (prec - s)) x⟩
+        = (q : ℝ) * bpow beta cx_s
+    rw [h_sm_eq, hcexp_s]; rfl
+  -- The witness.
+  refine ⟨fun _ => decide (DN < hx_val), ?_⟩
+  set choice' : ℤ → Bool := fun _ => decide (DN < hx_val) with hchoice'_def
+  -- Unfold the LHS round.
+  show F2R (beta := beta) ⟨Znearest choice' (scaled_mantissa beta (FLX_exp (prec - s)) x),
+                           cexp beta (FLX_exp (prec - s)) x⟩ = hx_val
+  rw [h_sm_eq, hcexp_s]
+  show ((Znearest choice' sm : ℤ) : ℝ) * bpow beta cx_s
+       = Veltkamp_hx_FLX beta prec choice s x
+  rw [h_hx_eq]
+  show ((Znearest choice' sm : ℤ) : ℝ) * bpow beta cx_s = (M_h : ℝ) * bpow beta cx_s
+  -- Reduce to integer equality.
+  suffices h_target : Znearest choice' sm = M_h by rw [h_target]
+  -- Translate h_close to `|sm − M_h| ≤ 1/2`.
+  have h_close_norm : |sm - (M_h : ℝ)| ≤ 1/2 := by
+    have h_eq : sm - (M_h : ℝ)
+              = ((M_x : ℝ) - (M_h : ℝ) * bpow beta s) * bpow beta (-s) := by
+      rw [hsm_def]
+      have h_dist : ((M_x : ℝ) - (M_h : ℝ) * bpow beta s) * bpow beta (-s)
+                  = (M_x : ℝ) * bpow beta (-s)
+                      - (M_h : ℝ) * (bpow beta s * bpow beta (-s)) := by ring
+      rw [h_dist, h_bpow_s_inv, mul_one]
+    rw [h_eq, abs_mul, abs_of_pos h_bpow_neg_s_pos]
+    have h_bound : (bpow beta s / 2) * bpow beta (-s) = 1/2 := by
+      field_simp; rw [h_bpow_s_inv]
+    have h_mul_le : |(M_x : ℝ) - (M_h : ℝ) * bpow beta s| * bpow beta (-s)
+                  ≤ (bpow beta s / 2) * bpow beta (-s) :=
+      mul_le_mul_of_nonneg_right h_close (le_of_lt h_bpow_neg_s_pos)
+    linarith
+  -- Case-split: strict bound or exact tie.
+  rcases lt_or_eq_of_le h_close_norm with h_strict | h_eq_abs
+  · -- Strict |sm − M_h| < 1/2: any choice works (Znearest_imp).
+    exact Znearest_imp choice' h_strict
+  · -- Tie: |sm − M_h| = 1/2. Two subcases.
+    have h_pair : sm - (M_h : ℝ) = 1/2 ∨ sm - (M_h : ℝ) = -1/2 := by
+      have h := (abs_eq (by norm_num : (0:ℝ) ≤ 1/2)).mp h_eq_abs
+      rcases h with h | h
+      · left; exact h
+      · right; linarith
+    rcases h_pair with h_above | h_below
+    · -- sm = M_h + 1/2: q = M_h, ⌈sm⌉ = M_h + 1.
+      have h_floor : (⌊sm⌋ : ℤ) = M_h := by
+        apply Int.floor_eq_iff.mpr
+        refine ⟨by linarith, by push_cast; linarith⟩
+      have h_ceil : (⌈sm⌉ : ℤ) = M_h + 1 := by
+        apply Int.ceil_eq_iff.mpr
+        refine ⟨by push_cast; linarith, by push_cast; linarith⟩
+      -- DN = q · β^cx_s = M_h · β^cx_s = hx_val. So choice' M_h = false.
+      have hqM : (q : ℝ) = (M_h : ℝ) := by
+        rw [hq_def]; exact_mod_cast h_floor
+      have h_DN_eq_hx : DN = hx_val := by
+        rw [h_DN_eq]
+        show (q : ℝ) * bpow beta cx_s = Veltkamp_hx_FLX beta prec choice s x
+        rw [h_hx_eq, hqM]
+      have h_choice'_eq : choice' M_h = false := by
+        show decide (DN < hx_val) = false
+        apply decide_eq_false
+        rw [h_DN_eq_hx]; exact lt_irrefl _
+      -- Unfold Znearest at the tie.
+      unfold Znearest
+      simp only [h_floor, h_ceil]
+      have h_frac : sm - (M_h : ℝ) = 1/2 := h_above
+      rw [h_frac]
+      simp only [lt_self_iff_false, ↓reduceIte, h_choice'_eq, Bool.false_eq_true]
+    · -- sm = M_h − 1/2: q = M_h − 1, ⌈sm⌉ = M_h.
+      have h_floor : (⌊sm⌋ : ℤ) = M_h - 1 := by
+        apply Int.floor_eq_iff.mpr
+        refine ⟨by push_cast; linarith, by push_cast; linarith⟩
+      have h_ceil : (⌈sm⌉ : ℤ) = M_h := by
+        apply Int.ceil_eq_iff.mpr
+        refine ⟨by linarith, by push_cast; linarith⟩
+      -- DN = q · β^cx_s = (M_h−1) · β^cx_s < M_h · β^cx_s = hx_val. So choice' (M_h−1) = true.
+      have hqM : (q : ℝ) = ((M_h - 1 : ℤ) : ℝ) := by
+        rw [hq_def]; exact_mod_cast h_floor
+      have h_DN_lt_hx : DN < hx_val := by
+        rw [h_DN_eq]
+        show (q : ℝ) * bpow beta cx_s < Veltkamp_hx_FLX beta prec choice s x
+        rw [h_hx_eq, hqM]
+        show ((M_h - 1 : ℤ) : ℝ) * bpow beta (s + cx) < (M_h : ℝ) * bpow beta (s + cx)
+        have h_int_lt : ((M_h - 1 : ℤ) : ℝ) < (M_h : ℝ) := by push_cast; linarith
+        exact (mul_lt_mul_iff_of_pos_right (bpow_gt_0 _ _)).mpr h_int_lt
+      have h_choice'_eq : choice' (M_h - 1) = true := by
+        show decide (DN < hx_val) = true
+        exact decide_eq_true h_DN_lt_hx
+      -- Unfold Znearest at the tie.
+      unfold Znearest
+      simp only [h_floor, h_ceil]
+      have h_frac : sm - ((M_h - 1 : ℤ) : ℝ) = 1/2 := by push_cast; linarith
+      rw [h_frac]
+      simp only [lt_self_iff_false, ↓reduceIte, h_choice'_eq]
+
 end LeanFlocq
