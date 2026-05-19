@@ -2402,4 +2402,21 @@ theorem Veltkamp_hx_format_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
       rw [← h_hx_F2R]; exact h_hx_abs_lt_bpow_m
     linarith
 
+/-- **The keystone `Veltkamp_aux` at FLX** (Pff's `Veltkamp_aux`,
+line 14114, no underflow): for `x > 0` in `F(FLX, prec)`,
+`2 ≤ s ≤ prec − 2`, the head `hx = round(round(x − round(x·C)) + round(x·C))`
+satisfies both the error bound `|x − hx| ≤ β^(s + cexp x)/2` **and** the
+format constraint `hx ∈ F(prec − s)`. This is the bundled form matching
+the Coq/Pff theorem statement. -/
+theorem Veltkamp_aux_FLX_complete (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    |x - Veltkamp_hx_FLX beta prec choice s x|
+        ≤ bpow beta (s + cexp beta (FLX_exp prec) x) / 2 ∧
+      generic_format beta (FLX_exp (prec - s))
+        (Veltkamp_hx_FLX beta prec choice s x) :=
+  ⟨Veltkamp_aux_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi,
+   Veltkamp_hx_format_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi⟩
+
 end LeanFlocq
