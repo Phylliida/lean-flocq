@@ -25,6 +25,7 @@ TODO (FLX first, then port to FLT):
 - `Veltkamp_Even`     — with round-to-nearest-even, the equality holds.
 -/
 import LeanFlocq.Core.FLT
+import LeanFlocq.Core.Round_NE
 import LeanFlocq.Prop.Sterbenz
 import LeanFlocq.Prop.Mult_error
 
@@ -2778,5 +2779,133 @@ theorem Veltkamp_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
       have h_frac : sm - ((M_h - 1 : ℤ) : ℝ) = 1/2 := by push_cast; linarith
       rw [h_frac]
       simp only [lt_self_iff_false, ↓reduceIte, h_choice'_eq]
+
+/-! ### Veltkamp_Even at FLX (odd-radix case)
+
+For odd radix `β`, `β^s` is an odd integer and `β^s/2` is non-integer; the
+half-ulp bound `|M_x − M_h · β^s| ≤ β^s/2` on integers forces the strict
+inequality `< β^s/2`. Hence at the coarser precision `prec − s`, the
+scaled mantissa `sm = M_x · β^(−s)` is *never* at a midpoint, so any
+`Znearest choice'` (including `ZnearestE`) yields `M_h`. The algorithm's
+output `hx` therefore matches `round_NE_{prec−s} x` regardless of the
+internal tie-breaker. -/
+
+/-- For odd radix, the algorithm's coarse-precision target is reachable
+by *any* `Znearest choice'` at precision `prec − s` — including
+round-to-nearest-even. This is the easy half of `Veltkamp_Even`: when
+`β` is odd, ties cannot occur at the coarser precision. -/
+theorem Veltkamp_Even_FLX_odd_radix (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (h_odd_beta : Odd beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    ∀ choice' : ℤ → Bool,
+      round beta (FLX_exp (prec - s)) (Znearest choice') x
+        = Veltkamp_hx_FLX beta prec choice s x := by
+  intro choice'
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  set cx_s := s + cx with hcx_s_def
+  set hx_val := Veltkamp_hx_FLX beta prec choice s x with hx_val_def
+  have hs_nn : 0 ≤ s := by linarith
+  have h_bpow_s_pos : (0 : ℝ) < bpow beta s := bpow_gt_0 _ _
+  have h_bpow_neg_s_pos : (0 : ℝ) < bpow beta (-s) := bpow_gt_0 _ _
+  have h_bpow_s_inv : bpow beta s * bpow beta (-s) = 1 := by
+    rw [← bpow_plus, show s + -s = 0 from by ring, bpow_zero]
+  -- Extract M_x, M_h from the half-ulp core.
+  obtain ⟨M_x, M_h, h_x_F2R, h_hx_eq, h_close⟩ :=
+    Veltkamp_M_h_close_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  -- β^s as an odd integer.
+  set βs : ℤ := beta.val ^ s.toNat with hβs_def
+  have h_βs_real : (βs : ℝ) = bpow beta s := by
+    show ((beta.val ^ s.toNat : ℤ) : ℝ) = bpow beta s
+    exact IZR_Zpower beta hs_nn
+  have h_βs_odd : Odd βs := h_odd_beta.pow
+  -- cexp at coarser precision and scaled mantissa.
+  have hcexp_s : cexp beta (FLX_exp (prec - s)) x = cx_s := by
+    show FLX_exp (prec - s) (mag beta x) = s + cx
+    have hcx_eq : cx = mag beta x - prec := rfl
+    rw [hcx_eq]; unfold FLX_exp; ring
+  set sm : ℝ := (M_x : ℝ) * bpow beta (-s) with hsm_def
+  have h_sm_eq : scaled_mantissa beta (FLX_exp (prec - s)) x = sm := by
+    show x * bpow beta (-cexp beta (FLX_exp (prec - s)) x) = sm
+    rw [hcexp_s, h_x_F2R, mul_assoc, ← bpow_plus]
+    have h_arg : cexp beta (FLX_exp prec) x + -cx_s = -s := by rw [hcx_s_def]; ring
+    rw [h_arg]
+  -- Strict closeness: |sm − M_h| < 1/2.
+  have h_close_strict : |sm - (M_h : ℝ)| < 1/2 := by
+    -- Step 1: convert h_close to an integer inequality.
+    have h_diff_int : (M_x : ℝ) - (M_h : ℝ) * bpow beta s
+                    = ((M_x - M_h * βs : ℤ) : ℝ) := by
+      push_cast; rw [h_βs_real]
+    rw [h_diff_int, ← h_βs_real] at h_close
+    -- h_close : |((M_x − M_h * βs : ℤ) : ℝ)| ≤ (βs : ℝ) / 2
+    -- Step 2: turn into 2 * |M_x − M_h * βs| ≤ βs (integer).
+    have h_abs_real : |((M_x - M_h * βs : ℤ) : ℝ)| = ((|M_x - M_h * βs| : ℤ) : ℝ) := by
+      push_cast; rfl
+    rw [h_abs_real] at h_close
+    have h_2D_le : 2 * |M_x - M_h * βs| ≤ βs := by
+      have h_step : 2 * ((|M_x - M_h * βs| : ℤ) : ℝ) ≤ ((βs : ℤ) : ℝ) := by linarith
+      have h_cast : ((2 * |M_x - M_h * βs| : ℤ) : ℝ) ≤ ((βs : ℤ) : ℝ) := by
+        rw [show ((2 * |M_x - M_h * βs| : ℤ) : ℝ)
+              = 2 * ((|M_x - M_h * βs| : ℤ) : ℝ) by push_cast; ring]
+        exact h_step
+      exact_mod_cast h_cast
+    -- Step 3: parity forces strict.
+    have h_D_nn : 0 ≤ |M_x - M_h * βs| := abs_nonneg _
+    have h_2D_lt : 2 * |M_x - M_h * βs| < βs := by
+      obtain ⟨k, hk⟩ := h_βs_odd
+      -- βs = 2k + 1; 2D ≤ 2k + 1 with 2D even ⟹ 2D ≤ 2k < 2k+1.
+      have hD : 2 * |M_x - M_h * βs| ≤ 2 * k + 1 := hk ▸ h_2D_le
+      have : 2 * |M_x - M_h * βs| ≤ 2 * k := by omega
+      omega
+    -- Step 4: lift back to reals: |sm − M_h| < 1/2.
+    rw [hsm_def]
+    have h_sub : (M_x : ℝ) * bpow beta (-s) - (M_h : ℝ)
+               = ((M_x : ℝ) - (M_h : ℝ) * bpow beta s) * bpow beta (-s) := by
+      have h_dist : ((M_x : ℝ) - (M_h : ℝ) * bpow beta s) * bpow beta (-s)
+                  = (M_x : ℝ) * bpow beta (-s)
+                      - (M_h : ℝ) * (bpow beta s * bpow beta (-s)) := by ring
+      rw [h_dist, h_bpow_s_inv, mul_one]
+    rw [h_sub, h_diff_int, abs_mul, abs_of_pos h_bpow_neg_s_pos, h_abs_real]
+    -- Goal: ((|M_x − M_h * βs| : ℤ) : ℝ) * bpow beta (-s) < 1/2.
+    have h_lt_real : ((|M_x - M_h * βs| : ℤ) : ℝ) * bpow beta (-s)
+                   < ((βs : ℤ) : ℝ) * bpow beta (-s) / 2 := by
+      have h_step : 2 * ((|M_x - M_h * βs| : ℤ) : ℝ) < ((βs : ℤ) : ℝ) := by
+        exact_mod_cast h_2D_lt
+      have h_mul : 2 * ((|M_x - M_h * βs| : ℤ) : ℝ) * bpow beta (-s)
+                 < ((βs : ℤ) : ℝ) * bpow beta (-s) :=
+        (mul_lt_mul_iff_of_pos_right h_bpow_neg_s_pos).mpr h_step
+      linarith
+    have h_rhs : ((βs : ℤ) : ℝ) * bpow beta (-s) = 1 := by
+      rw [show ((βs : ℤ) : ℝ) = bpow beta s from h_βs_real]
+      exact h_bpow_s_inv
+    rw [h_rhs] at h_lt_real
+    linarith
+  -- Apply Znearest_imp.
+  have h_target : Znearest choice' sm = M_h :=
+    Znearest_imp choice' h_close_strict
+  -- Combine into the round formula.
+  show F2R (beta := beta)
+        ⟨Znearest choice' (scaled_mantissa beta (FLX_exp (prec - s)) x),
+         cexp beta (FLX_exp (prec - s)) x⟩
+       = hx_val
+  rw [h_sm_eq, hcexp_s, h_target]
+  show ((M_h : ℤ) : ℝ) * bpow beta cx_s = Veltkamp_hx_FLX beta prec choice s x
+  rw [h_hx_eq]
+
+/-- **Veltkamp_Even at FLX (odd-radix specialization)**: when `β` is odd,
+the algorithm with *any* internal tie-breaker `choice` produces an `hx`
+that equals `round_NE_{prec − s} x`. This is the easy half of
+`Veltkamp_Even`. -/
+theorem Veltkamp_Even_FLX_odd (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (h_odd_beta : Odd beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    round_NE beta (FLX_exp (prec - s)) x
+      = Veltkamp_hx_FLX beta prec choice s x := by
+  unfold round_NE ZnearestE
+  exact Veltkamp_Even_FLX_odd_radix beta prec hp choice h_odd_beta
+    Fx hx_pos hs_lo hs_hi _
 
 end LeanFlocq
