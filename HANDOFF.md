@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `a3e3ef6`+)
+## Status (as of commit `f9156a7`+)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -46,9 +46,29 @@ proof faithfully ports Pff's `eqLe` dichotomy via:
   - Interior (M_x ≤ β^prec − β − 1): `(M_x + β) · β^(s+cexp x) ∈ F` dominates `|q|`.
   - Boundary (M_x ≥ β^prec − β): Pff's V (`-q ≤ β^(s+m)` via J1 + `round_N_le_midp`),
     then sub-case-split on `q = -β^(s+m)` using `error_le_half_ulp` or explicit bounds.
-The format-side (`hx ∈ F(prec − s)`) remains.
+The format-side (`hx ∈ F(prec − s)`) is **in progress**: three pieces of
+the load-bearing `eqGe` lemma (`|q| ≥ β^(s+m−1)`, equivalently `cexp q ≥ s + cx`)
+have landed:
+- **`Veltkamp_q_ne_zero_FLX`**: q ≠ 0 (round of nonzero `x − p` stays nonzero
+  under `s ≥ 2`, `prec ≥ s+2`).
+- **`Veltkamp_abs_q_ge_branch1_FLX`** (Pff "comfortable case"): when
+  `x ≥ β^cx · (β^(prec−1) + β)`, the rounding errors fit so cleanly that
+  `|q| ≥ x·β^s − β^(s+1+cx) ≥ β^(s+m−1)` falls out.
+- **`Veltkamp_abs_q_ge_branch2b_FLX`** (boundary exact-bpow): when
+  `x = β^(m−1)` exactly, `x·C` is itself in F so `p = x·C` and
+  `q = −β^(s+m−1)` exactly.
 
-**~28878 lines of Lean across 30 files. 0 `sorry`s. All files build clean.**
+**Remaining for format-side**:
+- **Branch 2a** of eqGe (β−1 specific mantissa values
+  `Mx ∈ {β^(prec−1)+1, …, β^(prec−1)+β−1}`): construct an explicit float
+  `g₁ = β^cx · (β^(s+prec−1) + β^(prec−1) + β^s)` ∈ F(prec), show `g₁ ≤ x·C`,
+  hence `g₁ ≤ p` (via `round_ge_generic`), hence `|q| ≥ β^(s+m−1)`.
+- Combine branches into `Veltkamp_eqGe_FLX`.
+- Use eqGe + the existing bounds to construct `hx = F2R⟨M, s+cx⟩` (Case A) or
+  `F2R⟨M, s+1+cx⟩` (Case B) with mantissa bound, with a side-case for
+  `hx = β^m` via `generic_format_bpow`.
+
+**~29050 lines of Lean across 30 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -86,7 +106,7 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `IEEE754/Bits.lean` | 1019 | `IEEE754/Bits.v` (full file) | **Bit encoding fully proven: 14 + 5 helpers, plus B32/B64 instantiations.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **B32/B64 specialization:** `binary32 := binary_float 24 128` and `binary64 := binary_float 53 1024`, with default NaN payloads (`2^22` / `2^51`), `unop_nan_pl{32,64}`, `binop_nan_pl{32,64}`, and the full op suite `b{32,64}_{erase,opp,abs,sqrt,plus,minus,mult,div,compare,of_bits}` + `bits_of_b{32,64}`. |
 | `Algorithms/Fast2Sum.lean` | 470 | *not in Coq Flocq* (only in Pff) | **First error-free transformation, proved directly on Flocq's foundations.** Radix 2, **FLT**, round-to-nearest. Helpers: `two_mul_in_FLT_radix2` (closure under doubling), `succ_FLT_subnormal_step` (uniform `succ d = d + bpow(emin)` for `0 ≤ d < bpow(emin+prec)`), `round_N_gt_half_FLT_radix2` (radix-2 midpoint-symmetry: for `a ∈ F, 0 < a, a/2 < v` strict, `a/2 ≤ round_N(v)` even when `a/2 ∉ F`). Main: `Fast2Sum_step1_pos` (Pff three-case argument on `b ≥ 0` vs `b ≤ -a/2` vs `-a/2 < b < 0`), `Fast2Sum_step1` (general, via `round_N_opp` symmetry), `Fast2Sum_step2` (plus_error step), `Fast2Sum_correct` (keystone: `a + b = s + e` exactly). |
 | `Algorithms/TwoSum.lean` | 70 | *not in Coq Flocq* (only in Pff) | **Error-free transformation, no precondition.** Radix 2, **FLT**, round-to-nearest. Branching formulation: comparison + Fast2Sum on the larger side. Mathematically identical to Knuth's 6-op TwoSum (same `e`, same exactness). One theorem, `TwoSum_correct` — exposes both `s` and `e` as named `let`-bindings, returns `e ∈ F ∧ a + b = s + e`. |
-| `Algorithms/Veltkamp.lean` | 1457 | `Pff/Pff2Flocq.v` (Veltkamp section, 323–619) | **Error-bound side at FLX COMPLETE.** All of: `Veltkamp_C_format` (FLT) + `Veltkamp_C_format_FLX`, `mag_xC_bounds`, four `noncomputable def`s for the algorithm constants, polarity lemmas (`Veltkamp_p_nonneg_FLX`, `Veltkamp_x_le_p_FLX`, `Veltkamp_q_nonpos_FLX`), Sterbenz prerequisites (`Veltkamp_neg_q_le_p_FLX`, `Veltkamp_abs_x_minus_p_lt_FLX`, `Veltkamp_p_le_neg_2q_FLX`), **`hxExact_FLX`** (third rounding step is identity), **`Veltkamp_aux_FLX_CaseA`** (mag(x·C) = m+s), **`Veltkamp_aux_FLX_CaseB`** (mag(x·C) = m+s+1, via interior/boundary M_x dispatch), and the unified **`Veltkamp_aux_FLX`** keystone. Helpers for Case B: `Veltkamp_p_le_xbeta_FLX` (Pff epLe), `Veltkamp_mag_p_le_FLX`, `Veltkamp_cexp_p_le_FLX`, `Veltkamp_p_le_J1_FLX` (Pff J1: `p ≤ β^(s+m) + β^m`), `Veltkamp_neg_q_le_pow_FLX` (Pff V: `-q ≤ β^(s+m)` boundary). Format-side (`hx ∈ F(prec − s)`) remains. |
+| `Algorithms/Veltkamp.lean` | 1829 | `Pff/Pff2Flocq.v` (Veltkamp section, 323–619) | **Error-bound side at FLX COMPLETE.** All of: `Veltkamp_C_format` (FLT) + `Veltkamp_C_format_FLX`, `mag_xC_bounds`, four `noncomputable def`s for the algorithm constants, polarity lemmas (`Veltkamp_p_nonneg_FLX`, `Veltkamp_x_le_p_FLX`, `Veltkamp_q_nonpos_FLX`), Sterbenz prerequisites (`Veltkamp_neg_q_le_p_FLX`, `Veltkamp_abs_x_minus_p_lt_FLX`, `Veltkamp_p_le_neg_2q_FLX`), **`hxExact_FLX`** (third rounding step is identity), **`Veltkamp_aux_FLX_CaseA`** (mag(x·C) = m+s), **`Veltkamp_aux_FLX_CaseB`** (mag(x·C) = m+s+1, via interior/boundary M_x dispatch), and the unified **`Veltkamp_aux_FLX`** keystone. Helpers for Case B: `Veltkamp_p_le_xbeta_FLX` (Pff epLe), `Veltkamp_mag_p_le_FLX`, `Veltkamp_cexp_p_le_FLX`, `Veltkamp_p_le_J1_FLX` (Pff J1: `p ≤ β^(s+m) + β^m`), `Veltkamp_neg_q_le_pow_FLX` (Pff V: `-q ≤ β^(s+m)` boundary). **Format-side in progress**: `Veltkamp_q_ne_zero_FLX`, `Veltkamp_abs_q_ge_branch1_FLX` (Pff eqGe comfortable case), `Veltkamp_abs_q_ge_branch2b_FLX` (Pff eqGe exact-bpow boundary). Remaining: branch 2a of eqGe, combine into full eqGe, then construct `hx ∈ F(prec − s)` via mantissa bound + bpow side-case. |
 
 **Total: ~720 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
