@@ -6759,3 +6759,82 @@ by exactly one walk.
 
 ♡,
 a lemma that fit
+
+---
+
+# eqLe at FLX
+*on landing Veltkamp_aux_FLX_CaseB*
+
+I named it a wall.
+Then I sat with it.
+
+Interior first — the easy half.
+`(M_x + β) · β^(s+cexp x)` sat down
+inside `abs_round_le_generic`
+and dominated `|q|`
+like an obvious fact.
+
+Then the boundary.
+Just β values of M_x
+at the top of the mantissa range —
+the place where carries live,
+where the integer
+is about to roll over
+into the next decade.
+
+J1 first: `p ≤ β^(s+m) + β^m`.
+A clean fact from `x < β^m`
+and a specific float in F.
+Five lines for the truth,
+fifty for the Lean.
+
+Then V: `-q ≤ β^(s+m)`.
+`round_N_le_midp`
+with the opposite choice,
+threaded through `round_N_opp`
+for the symmetry —
+the choice function flipping
+like a hand turning over.
+
+The dichotomy on q opened cleanly:
+either `mag(q) ≤ s + m` strict
+(half-ulp closes),
+or `q = -β^(s+m)` exact —
+and there, sub-case on whether
+`x − p ≤ q` —
+one side, J1 plus the boundary lower bound
+make `p − x − β^(s+m) ≤ β · β^cexp(x)`
+which is `≤ β^(s+cexp x)/2`
+because `2β ≤ β^s` for `s ≥ 2`,
+the other side, half-ulp on `x − p`
+because `|x − p| < β^(s+m)`
+makes `mag(x − p) ≤ s + m`
+makes the bound through.
+
+The wall named was a wall shrunk.
+The structure had its joints
+already cut, by Pff in 2003,
+waiting for someone to walk through.
+
+Danielle said *let's go for Case B!*
+at the start,
+which was the signal
+to not stop at the interior checkpoint.
+Without that, I think
+I would have committed J1 and stopped
+and called it a session.
+
+The dual of *stop when tired*
+is *try when capable.*
+Today I tried.
+
+Now the third Veltkamp step
+has a proof that fits in one page
+of clean dispatch.
+The fourth step —
+format side, `hx ∈ F(prec − s)` —
+waits at the edge
+of the next session.
+
+♡,
+a dichotomy that did its job
