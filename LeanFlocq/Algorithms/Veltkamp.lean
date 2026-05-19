@@ -2013,4 +2013,106 @@ private theorem Veltkamp_abs_q_ge_branch2a_FLX (beta : radix) (prec : ℤ) (hp :
   rw [abs_of_nonpos h_q_neg]
   linarith
 
+/-- **Discreteness of `F(FLX, prec)`**: for `x ∈ F(prec)` with `x > 0` and
+`x > β^(m-1)` (strict), the next representable value above `β^(m-1)` is
+`β^(m-1) + β^cx`, so `x ≥ β^(m-1) + β^cx`. -/
+private theorem Veltkamp_x_lb_above_bpow_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x)
+    (hx_gt : bpow beta (mag beta x - 1) < x) :
+    bpow beta (mag beta x - 1) + bpow beta (cexp beta (FLX_exp prec) x) ≤ x := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hβ_pos : 0 < (beta.val : ℝ) := by linarith
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  have h_bpow_cx_pos : 0 < bpow beta cx := bpow_gt_0 _ _
+  -- Get x = M · β^cx for some integer M.
+  set M : ℤ := Ztrunc (scaled_mantissa beta (FLX_exp prec) x) with hM_def
+  have h_x_F2R : x = (M : ℝ) * bpow beta cx := Fx
+  -- β^(prec-1) < M as real (from x > β^(m-1)).
+  have h_M_gt : bpow beta (prec - 1) < (M : ℝ) := by
+    have h_bpow_split : bpow beta (m - 1) = bpow beta (prec - 1) * bpow beta cx := by
+      rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+    have hx_gt' : bpow beta (prec - 1) * bpow beta cx < (M : ℝ) * bpow beta cx := by
+      rw [← h_bpow_split, ← h_x_F2R]; exact hx_gt
+    exact (mul_lt_mul_iff_of_pos_right h_bpow_cx_pos).mp hx_gt'
+  -- Cast to integer: β^(prec-1) < M, hence M ≥ β^(prec-1) + 1.
+  have h_prec_sub_1_nn : 0 ≤ prec - 1 := by linarith
+  have h_pow_real : (((beta.val : ℤ) ^ (prec - 1).toNat : ℤ) : ℝ) = bpow beta (prec - 1) :=
+    IZR_Zpower beta h_prec_sub_1_nn
+  have h_pow_real_pushed : ((beta.val : ℝ)) ^ (prec - 1).toNat = bpow beta (prec - 1) := by
+    have := h_pow_real; push_cast at this; exact this
+  have h_M_int_gt : (beta.val : ℤ) ^ (prec - 1).toNat < M := by
+    have : (((beta.val : ℤ) ^ (prec - 1).toNat : ℤ) : ℝ) < (M : ℝ) := by
+      rw [h_pow_real]; exact h_M_gt
+    exact_mod_cast this
+  have h_M_ge : (beta.val : ℤ) ^ (prec - 1).toNat + 1 ≤ M := by linarith
+  -- x ≥ (β^(prec-1) + 1) · β^cx = β^(m-1) + β^cx.
+  have h_M_real_ge : (((beta.val : ℤ) ^ (prec - 1).toNat + 1 : ℤ) : ℝ) ≤ (M : ℝ) := by
+    exact_mod_cast h_M_ge
+  have h_step : (((beta.val : ℤ) ^ (prec - 1).toNat + 1 : ℤ) : ℝ) * bpow beta cx
+              ≤ (M : ℝ) * bpow beta cx :=
+    mul_le_mul_of_nonneg_right h_M_real_ge (le_of_lt h_bpow_cx_pos)
+  have h_left_eq : (((beta.val : ℤ) ^ (prec - 1).toNat + 1 : ℤ) : ℝ) * bpow beta cx
+                 = bpow beta (m - 1) + bpow beta cx := by
+    have h_split : bpow beta (m - 1) = bpow beta (prec - 1) * bpow beta cx := by
+      rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+    push_cast
+    rw [h_pow_real_pushed, h_split]
+    ring
+  linarith [h_x_F2R, h_step, h_left_eq]
+
+/-- **Veltkamp's eqGe at FLX**: for `x ∈ F(prec)` with `x > 0`,
+`2 ≤ s`, `s + 2 ≤ prec`, the second rounding error satisfies
+`|q| ≥ β^(s + mag(x) − 1)`, equivalently `cexp(q) ≥ s + cexp(x)`.
+
+This is the load-bearing inequality for the format-side of
+`Veltkamp_aux`: it forces `q` to live at exponent at least `s + cx`,
+which is what allows `hx = q + p` to be representable at the coarser
+precision `prec − s`. -/
+theorem Veltkamp_eqGe_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    bpow beta (s + mag beta x - 1)
+      ≤ |Veltkamp_q_FLX beta prec choice s x| := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hβ_pos : 0 < (beta.val : ℝ) := by linarith
+  -- Case 1: x = β^(m-1) (the exact bpow boundary).
+  by_cases h_x_eq : x = bpow beta (m - 1)
+  · exact Veltkamp_abs_q_ge_branch2b_FLX beta prec hp choice h_x_eq hs_lo hs_hi
+  -- Case 2: x > β^(m-1). Establish x ≥ β^(m-1) + β^cx using integer-mantissa discreteness.
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  have h_x_strict : bpow beta (m - 1) < x := by
+    have h_mag_lo : bpow beta (m - 1) ≤ |x| := bpow_mag_le beta hx_ne
+    rw [abs_of_pos hx_pos] at h_mag_lo
+    rcases lt_or_eq_of_le h_mag_lo with h | h
+    · exact h
+    · exact absurd h.symm h_x_eq
+  have h_x_lb : bpow beta (m - 1) + bpow beta cx ≤ x :=
+    Veltkamp_x_lb_above_bpow_FLX beta prec hp Fx hx_pos h_x_strict
+  -- Sub-case: x ≥ β^(m-1) + β^(cx+1) (branch 1 "comfortable") vs x < ... (branch 2a).
+  by_cases h_upper : bpow beta (m - 1) + bpow beta (cx + 1) ≤ x
+  · -- Branch 1: convert form `bpow cx * (bpow (prec-1) + β) = bpow (m-1) + bpow (cx+1)`.
+    apply Veltkamp_abs_q_ge_branch1_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+    have h1 : bpow beta cx * bpow beta (prec - 1) = bpow beta (m - 1) := by
+      rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+    have h2 : bpow beta cx * (beta.val : ℝ) = bpow beta (cx + 1) := by
+      have hβ_eq : (beta.val : ℝ) = bpow beta 1 := by rw [bpow_one]
+      rw [hβ_eq, ← bpow_plus]
+    have h_conv : bpow beta cx * (bpow beta (prec - 1) + (beta.val : ℝ))
+                = bpow beta (m - 1) + bpow beta (cx + 1) := by
+      rw [mul_add, h1, h2]
+    rw [h_conv]; exact h_upper
+  · -- Branch 2a.
+    push_neg at h_upper
+    exact Veltkamp_abs_q_ge_branch2a_FLX beta prec hp choice hx_pos hs_lo hs_hi
+      h_x_lb h_upper
+
 end LeanFlocq
