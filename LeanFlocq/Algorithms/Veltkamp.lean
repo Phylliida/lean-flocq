@@ -2165,15 +2165,15 @@ private theorem Veltkamp_q_at_scx_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec
   rw [h_q_F2R]
   exact F2R_change_exp (beta := beta) (s + cx) Mz cq h_cexp_q_ge
 
-/-- **`p` at exponent `s + cx` (Case A)**: in Case A
-(`mag(x·C) = m+s`), `p ≥ β^(m+s−1)` by round-monotonicity since
-`β^(m+s−1) ∈ F(prec)` and `β^(m+s−1) ≤ x·C`. Hence `mag(p) ≥ m+s`,
-so `cexp(p) ≥ s+cx`, and `p` is an integer multiple of `β^(s+cx)`. -/
-private theorem Veltkamp_p_at_scx_CaseA_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+/-- **`p` at exponent `s + cx`**: `mag(x·C) ≥ m+s` (from `mag_xC_bounds`),
+so `p ≥ β^(m+s−1)` by round-monotonicity, hence `mag(p) ≥ m+s`, so
+`cexp(p) ≥ s+cx`, and `p` is an integer multiple of `β^(s+cx)`. Note:
+this holds in *both* Case A (`mag(x·C) = m+s`) and Case B
+(`mag(x·C) = m+s+1`) since we only need the lower bound. -/
+private theorem Veltkamp_p_at_scx_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
     (Fx : generic_format beta (FLX_exp prec) x)
-    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
-    (h_caseA : mag beta (x * Veltkamp_C beta s) = mag beta x + s) :
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
     ∃ Mp : ℤ, Veltkamp_p_FLX beta prec choice s x
               = (Mp : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) := by
   set m := mag beta x with hm_def
@@ -2192,12 +2192,16 @@ private theorem Veltkamp_p_at_scx_CaseA_FLX (beta : radix) (prec : ℤ) (hp : 0 
     show generic_format beta (FLX_exp prec)
       (round beta (FLX_exp prec) (Znearest choice) (x * Veltkamp_C beta s))
     exact generic_format_round beta (FLX_exp prec) (FLX_exp_valid prec hp) _ _
-  -- β^(m+s-1) ≤ x · C (from mag(x·C) = m+s).
+  -- β^(m+s-1) ≤ x · C: from mag(x·C) ≥ m+s and bpow_mag_le.
+  have h_mag_xC_ge : m + s ≤ mag beta (x * Veltkamp_C beta s) :=
+    (mag_xC_bounds beta hx_ne (by linarith : (1 : ℤ) ≤ s)).1
   have h_xC_ge : bpow beta (m + s - 1) ≤ x * Veltkamp_C beta s := by
     have h_mag := bpow_mag_le beta hxC_ne
     rw [abs_of_pos hxC_pos] at h_mag
-    have : m + s - 1 = (mag beta (x * Veltkamp_C beta s)) - 1 := by rw [h_caseA]
-    rw [this]; exact h_mag
+    have h_step : bpow beta (m + s - 1)
+                ≤ bpow beta (mag beta (x * Veltkamp_C beta s) - 1) :=
+      bpow_le beta (by linarith)
+    linarith
   -- β^(m+s-1) ∈ F(prec).
   have h_bpow_format : generic_format beta (FLX_exp prec) (bpow beta (m + s - 1)) := by
     apply generic_format_bpow
@@ -2232,18 +2236,21 @@ private theorem Veltkamp_p_at_scx_CaseA_FLX (beta : radix) (prec : ℤ) (hp : 0 
   rw [h_p_F2R]
   exact F2R_change_exp (beta := beta) (s + cx) Mz cp h_cexp_p_ge
 
-/-- **Case A format-side**: when `mag(x · C) = m + s`, the rounded
-result `hx = p + q` lies in `F(prec − s)`.
+/-- **Format-side of `Veltkamp_aux_FLX`**: for `x > 0` in `F(FLX, prec)`,
+`2 ≤ s ≤ prec − 2`, `hx ∈ F(prec − s)`.
 
-The proof combines the two helpers above with the error bound to
-get `hx = M · β^(s+cx)` with `|M| ≤ β^(prec−s)`. The standard case
-`|M| < β^(prec−s)` uses `generic_format_F2R`; the boundary case
-`|M| = β^(prec−s)` (so `hx = β^m`) uses `generic_format_bpow`. -/
-theorem Veltkamp_hx_format_CaseA_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+The proof combines the two helpers above with the error bound from
+`Veltkamp_aux_FLX` to get `hx = M · β^(s+cx)` with `|M| ≤ β^(prec−s)`.
+The standard case `|M| < β^(prec−s)` uses `generic_format_F2R`; the
+boundary case `|M| = β^(prec−s)` (so `hx = β^m`) uses
+`generic_format_bpow`. This works in *both* Case A (`mag(x·C) = m+s`)
+and Case B (`mag(x·C) = m+s+1`) since the proof only depends on the
+keystone bound `|x − hx| ≤ β^(s+cx)/2` plus the `s+cx` exponent form
+of `p` and `q`. -/
+theorem Veltkamp_hx_format_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
     (Fx : generic_format beta (FLX_exp prec) x)
-    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
-    (h_caseA : mag beta (x * Veltkamp_C beta s) = mag beta x + s) :
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
     generic_format beta (FLX_exp (prec - s))
       (Veltkamp_hx_FLX beta prec choice s x) := by
   set m := mag beta x with hm_def
@@ -2260,7 +2267,7 @@ theorem Veltkamp_hx_format_CaseA_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     hxExact_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
   -- Express p and q at exponent s + cx.
   obtain ⟨Mp, hp_eq⟩ :=
-    Veltkamp_p_at_scx_CaseA_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi h_caseA
+    Veltkamp_p_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
   obtain ⟨Mq, hq_eq⟩ :=
     Veltkamp_q_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
   -- hx = (Mp + Mq) · β^(s+cx).
@@ -2270,7 +2277,7 @@ theorem Veltkamp_hx_format_CaseA_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     push_cast; ring
   -- Error bound and hx > 0.
   have h_err : |x - hx| ≤ bpow beta (s + cx) / 2 :=
-    Veltkamp_aux_FLX_CaseA beta prec hp choice Fx hx_pos hs_lo hs_hi h_caseA
+    Veltkamp_aux_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
   have h_x_lt_bpow : x < bpow beta m := by
     have := bpow_mag_gt beta x
     rwa [abs_of_pos hx_pos] at this
