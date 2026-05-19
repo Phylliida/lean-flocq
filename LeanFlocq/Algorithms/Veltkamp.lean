@@ -1454,4 +1454,139 @@ theorem Veltkamp_aux_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
       linarith
     exact Veltkamp_aux_FLX_CaseB beta prec hp choice Fx hx_pos hs_lo hs_hi h_eq_B
 
+/-! ### Format-side helpers for `Veltkamp_aux_FLX`
+
+The error-bound side gives `|x − hx| ≤ β^(s+cexp x)/2`. The format-side asks
+`hx ∈ F(prec − s)`. Following Pff (`eqGe`, line 13641), the load-bearing piece
+is `|q| ≥ β^(s+m−1)` (equivalently `cexp q ≥ s + cexp x`). The proof case-
+splits on `x ≥ β^cx · (β^(prec−1) + β)` (the "comfortable" branch where the
+rounding errors have room) vs the boundary branch (β specific values of `M_x`). -/
+
+/-- **`q ≠ 0`**: in FLX with `x > 0` and `s ≥ 1`, the second rounding step is
+nonzero. Reason: `x·C − x = x·β^s ≥ β^(m−1+s)` strictly exceeds `ulp(x)/2 =
+β^(cx)/2`, so `p = round(x·C) > x`, hence `x − p < 0`, hence `q < 0`. -/
+private theorem Veltkamp_q_ne_zero_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    Veltkamp_q_FLX beta prec choice s x ≠ 0 := by
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  set q := Veltkamp_q_FLX beta prec choice s x with hq_def
+  -- Strategy: show p > x strictly, so x - p < 0, so q = round(x - p) < 0.
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  -- x ∈ [β^(m-1), β^m) since x > 0.
+  have hx_lb : bpow beta (m - 1) ≤ x := by
+    have := bpow_mag_le beta (ne_of_gt hx_pos)
+    rwa [abs_of_pos hx_pos] at this
+  -- p ≥ x · C (since x · C ∈ ? no, x · C may not be in F. But p ≥ x · β^s + x - β^(s+1+cx)/2).
+  -- Actually simpler: x · C ≥ x · β^s + x > x + (ulp(x)/2). So round(x · C) ≥ x's successor.
+  -- Let me try a more direct route: show p ≠ x.
+  have hC_eq : Veltkamp_C beta s = bpow beta s + 1 := rfl
+  have hxC_pos : 0 < x * Veltkamp_C beta s := by
+    apply mul_pos hx_pos
+    rw [hC_eq]; linarith [bpow_gt_0 beta s]
+  -- |err_p| ≤ β^(cexp x·C)/2 ≤ β^(s+1+cx)/2 (using mag_xC_bounds).
+  have h_mag_xC_le : mag beta (x * Veltkamp_C beta s) ≤ m + s + 1 :=
+    (mag_xC_bounds beta (ne_of_gt hx_pos) (by linarith : (1 : ℤ) ≤ s)).2
+  have h_err_p_bound : |p - x * Veltkamp_C beta s| ≤ bpow beta (s + 1 + cx) / 2 := by
+    have h_p_eq : p = round beta (FLX_exp prec) (Znearest choice)
+                       (x * Veltkamp_C beta s) := rfl
+    rw [h_p_eq]
+    have h := error_le_half_ulp beta (FLX_exp prec) (FLX_exp_valid prec hp) choice
+                (x * Veltkamp_C beta s)
+    rw [ulp_neq_0 beta _ (ne_of_gt hxC_pos)] at h
+    have h_cexp : cexp beta (FLX_exp prec) (x * Veltkamp_C beta s)
+                = mag beta (x * Veltkamp_C beta s) - prec := rfl
+    have h_bpow_le : bpow beta (cexp beta (FLX_exp prec) (x * Veltkamp_C beta s))
+                       ≤ bpow beta (s + 1 + cx) := by
+      apply bpow_le
+      rw [h_cexp, hcx_eq]; linarith
+    linarith
+  -- p ≥ x · C - β^(s+1+cx)/2 = x · β^s + x - β^(s+1+cx)/2.
+  -- We want p > x, i.e., p - x > 0.
+  -- p - x ≥ (x · C - β^(s+1+cx)/2) - x = x · β^s - β^(s+1+cx)/2.
+  -- Show x · β^s > β^(s+1+cx)/2.
+  -- x · β^s ≥ β^(m-1) · β^s = β^(s+m-1). β^(s+1+cx)/2 = β^(s+1+m-prec)/2.
+  -- Need β^(s+m-1) > β^(s+1+m-prec)/2 iff β^(prec-2) > 1/2.
+  -- For prec ≥ 2 (which we have from s ≥ 1 and s + 1 ≤ prec), β^(prec-2) ≥ β^0 = 1 > 1/2. ✓
+  have h_bpow_s : 0 < bpow beta s := bpow_gt_0 _ _
+  have h_xbs_lb : bpow beta (s + m - 1) ≤ x * bpow beta s := by
+    calc bpow beta (s + m - 1)
+        = bpow beta (m - 1) * bpow beta s := by rw [← bpow_plus]; congr 1; ring
+      _ ≤ x * bpow beta s :=
+          mul_le_mul_of_nonneg_right hx_lb (le_of_lt h_bpow_s)
+  have h_bpow_compare : bpow beta (s + 1 + cx) / 2 < bpow beta (s + m - 1) := by
+    have h_lt : bpow beta (s + 1 + cx) < bpow beta (s + m - 1) := by
+      apply bpow_lt
+      -- s + 1 + cx < s + m - 1 ↔ 1 + cx < m - 1 ↔ 2 ≤ m - cx = prec. ✓
+      rw [hcx_eq]; linarith
+    have h_pos : 0 < bpow beta (s + 1 + cx) := bpow_gt_0 _ _
+    linarith
+  -- p > x.
+  have h_p_gt_x : x < p := by
+    have h_abs_le : -(bpow beta (s + 1 + cx) / 2) ≤ p - x * Veltkamp_C beta s :=
+      neg_le_of_abs_le h_err_p_bound
+    -- p ≥ x · C - β^(s+1+cx)/2 = x · β^s + x - β^(s+1+cx)/2.
+    have h_xC : x * Veltkamp_C beta s = x * bpow beta s + x := by rw [hC_eq]; ring
+    have h_p_ge : x * bpow beta s + x - bpow beta (s + 1 + cx) / 2 ≤ p := by
+      have : p ≥ x * Veltkamp_C beta s - bpow beta (s + 1 + cx) / 2 := by linarith
+      linarith [this]
+    -- x · β^s > β^(s+1+cx)/2.
+    have : bpow beta (s + 1 + cx) / 2 < x * bpow beta s :=
+      lt_of_lt_of_le h_bpow_compare h_xbs_lb
+    linarith
+  -- x - p < 0, so q = round(x - p) ≤ 0 with equality only if x - p = 0. But x ≠ p.
+  have h_xmp_lt : x - p < 0 := by linarith
+  have h_xmp_ne : x - p ≠ 0 := ne_of_lt h_xmp_lt
+  -- q = round(x - p) and (x - p) ≠ 0, so q ≠ 0 (in FLX, round of nonzero nonzero in normal range).
+  -- Specifically, |q - (x - p)| ≤ |x - p|/2 (relative error ≤ 1/2 from round-to-nearest).
+  -- Hmm, simpler: |q| ≥ |x - p| - β^cexp(x-p)/2.
+  -- We have |x - p| > 0; if q = 0, |q - (x - p)| = |x - p| > β^cexp/2, contradiction.
+  intro hq_zero
+  have h_q_eq : q = round beta (FLX_exp prec) (Znearest choice) (x - p) := rfl
+  rw [h_q_eq] at hq_zero
+  -- q = 0 and the round error ≤ ulp/2 means |x - p| ≤ ulp(x - p)/2.
+  have h_err_q : |0 - (x - p)| ≤ ulp beta (FLX_exp prec) (x - p) / 2 := by
+    rw [← hq_zero]
+    have h := error_le_half_ulp beta (FLX_exp prec) (FLX_exp_valid prec hp) choice (x - p)
+    linarith
+  rw [ulp_neq_0 beta _ h_xmp_ne] at h_err_q
+  rw [zero_sub, abs_neg] at h_err_q
+  -- |x - p| ≤ β^cexp(x-p)/2. But |x - p| = p - x > β^(s+1+cx)/2 ≥ β^cexp(x-p)/2 / ... hmm.
+  -- Tighter: |x - p| ≥ x · β^s - β^(s+1+cx)/2 ≥ β^(s+m-1) - β^(s+1+cx)/2 > β^(s+m-1)/2.
+  -- And β^cexp(x-p) ≤ β^(s+1+cx)? Not directly.
+  -- Actually we have x - p < 0 and |x - p| = p - x. Use the bound directly.
+  have h_abs_xmp : |x - p| = p - x := by
+    rw [abs_of_neg h_xmp_lt]; ring
+  -- p - x ≥ x · β^s - β^(s+1+cx)/2 ≥ β^(s+m-1) - β^(s+1+cx)/2.
+  -- For s + 1 + cx < s + m - 1 (i.e., prec ≥ 2): β^(s+1+cx)/2 < β^(s+m-1)/2 < p - x.
+  -- And bpow cexp(x-p) ≤ what? mag(x - p) is some integer. If x - p is "large", cexp is big.
+  -- Hmm, no clean bound. Let me derive differently.
+  -- |x - p| = p - x. p - x > β^(s+m-1) - β^(s+1+cx)/2. Need (p - x) > β^cexp(x-p)/2.
+  -- Bound: cexp(x - p) = mag(x - p) - prec ≤ mag(x - p) - prec.
+  -- We have |x - p| < β^mag(x - p), so |x - p| > β^(mag(x-p) - 1).
+  -- β^cexp(x-p)/2 = β^(mag(x-p) - prec)/2 = β^(mag(x-p) - 1) / (2 β^(prec - 1)).
+  -- So β^cexp(x-p)/2 ≤ |x-p| / (2 β^(prec - 1)) < |x - p| / 2 (for prec ≥ 2).
+  -- So |x - p| > β^cexp(x-p)/2 (strict), contradicting h_err_q.
+  -- Let's formalize: |x - p| / β^cexp(x-p) ≥ β^(prec - 1) > 1 for prec ≥ 2.
+  -- Hmm need scaled_mantissa ≥ β^(prec-1).
+  -- Actually simpler: mag(x - p) is defined as the integer e with β^(e-1) ≤ |x-p| < β^e.
+  -- So β^(mag(x-p) - 1) ≤ |x - p|. And β^cexp(x-p) = β^(mag(x-p) - prec).
+  -- Ratio: |x - p| / β^cexp ≥ β^(mag(x-p) - 1) / β^(mag(x-p) - prec) = β^(prec - 1).
+  -- For prec ≥ 1, β^(prec - 1) ≥ 1, so |x - p| ≥ β^cexp. Hence |x - p| > β^cexp/2.
+  have h_xmp_lb : bpow beta (mag beta (x - p) - 1) ≤ |x - p| := by
+    exact bpow_mag_le beta h_xmp_ne
+  have h_cexp_bound : bpow beta (cexp beta (FLX_exp prec) (x - p))
+                      ≤ |x - p| := by
+    show bpow beta (mag beta (x - p) - prec) ≤ |x - p|
+    calc bpow beta (mag beta (x - p) - prec)
+        ≤ bpow beta (mag beta (x - p) - 1) := bpow_le beta (by linarith)
+      _ ≤ |x - p| := h_xmp_lb
+  -- |x - p| ≤ β^cexp/2 < β^cexp ≤ |x - p|. Contradiction.
+  have h_pos_cexp : 0 < bpow beta (cexp beta (FLX_exp prec) (x - p)) := bpow_gt_0 _ _
+  linarith
+
 end LeanFlocq
