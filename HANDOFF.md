@@ -98,11 +98,30 @@ The proof reduces to integer equality `Znearest choice' sm = M_h` (where
   - `sm = M_h − 1/2`: q = M_h − 1, DN < hx, choice' = true. Znearest picks ⌈sm⌉ = M_h.
 
 This means Veltkamp at FLX is now **functionally complete**: aux (error
-bound) + format + tail + existence. The only remaining piece in the
-Veltkamp arc is `Veltkamp_Even` (the round-to-nearest-even
-specialization, see [§ Veltkamp_Even scope](#veltkamp_even-scope) below).
+bound) + format + tail + existence. The remaining piece in the Veltkamp
+arc is `Veltkamp_Even` (the round-to-nearest-even specialization, see
+[§ Veltkamp_Even scope](#veltkamp_even-scope) below). The **odd-radix
+half** of `Veltkamp_Even` is now DONE, plus the **Rnd_N_pt foundation**
+useful for the even-radix half.
 
-**~29635 lines of Lean across 30 files. 0 `sorry`s. All files build clean.**
+**Plus odd-radix `Veltkamp_Even` is COMPLETE.** `Veltkamp_Even_FLX_odd`
+(2026-05-19): for odd `β`, `β^s` is odd, so `β^s/2` is non-integer.
+The integer-valued `|M_x − M_h · β^s| ≤ β^s/2` becomes the strict
+`< β^s/2`, hence `|sm − M_h| < 1/2`: no tie at coarser precision.
+Therefore `round_NE_{prec−s} x = Veltkamp_hx_FLX β prec choice s x`
+for ANY internal tie-breaker `choice`. Stronger generic form
+`Veltkamp_Even_FLX_odd_radix`: any `Znearest choice'` (not just NE)
+matches the algorithm's `hx` at odd radix.
+
+**Plus the Rnd_N_pt foundation for full `Veltkamp_Even`**:
+`Veltkamp_hx_Rnd_N_pt_FLX` (2026-05-19): combines `Veltkamp_FLX`
+existence with `round_N_pt` to give that `hx` is a closest
+representable at `prec − s`. This is one of the two pieces needed to
+upgrade from `Rnd_N_pt` to `Rnd_NE_pt`; the other piece is the
+even-radix parity-at-tie argument (Pff `VeltkampEven1`, ~292 Coq
+lines).
+
+**~29660 lines of Lean across 30 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -140,7 +159,7 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `IEEE754/Bits.lean` | 1019 | `IEEE754/Bits.v` (full file) | **Bit encoding fully proven: 14 + 5 helpers, plus B32/B64 instantiations.** Core int encoding: `join_bits`, `split_bits`, `join_bits_range`, `split_join_bits`, `join_split_bits`, `split_bits_inj`. binary_float pack: `bits_of_binary_float`, `bits_of_binary_float_range`, `split_bits_of_binary_float`, `split_bits_of_binary_float_correct`. Decoding: `binary_float_of_bits_aux`, `binary_float_of_bits_aux_correct`, `binary_float_of_bits`. **Round trips:** `binary_float_of_bits_of_binary_float`, `bits_of_binary_float_of_bits`. Helpers: `bpow_radix2_eq`, `Zdigits_radix2_one`, `pow_ew_minus_one_ne_zero`, `subnormal_exp_eq_emin`, `normal_exp_field_bounds`, `bits_of_full_float`, `bits_of_FF2B`. **B32/B64 specialization:** `binary32 := binary_float 24 128` and `binary64 := binary_float 53 1024`, with default NaN payloads (`2^22` / `2^51`), `unop_nan_pl{32,64}`, `binop_nan_pl{32,64}`, and the full op suite `b{32,64}_{erase,opp,abs,sqrt,plus,minus,mult,div,compare,of_bits}` + `bits_of_b{32,64}`. |
 | `Algorithms/Fast2Sum.lean` | 470 | *not in Coq Flocq* (only in Pff) | **First error-free transformation, proved directly on Flocq's foundations.** Radix 2, **FLT**, round-to-nearest. Helpers: `two_mul_in_FLT_radix2` (closure under doubling), `succ_FLT_subnormal_step` (uniform `succ d = d + bpow(emin)` for `0 ≤ d < bpow(emin+prec)`), `round_N_gt_half_FLT_radix2` (radix-2 midpoint-symmetry: for `a ∈ F, 0 < a, a/2 < v` strict, `a/2 ≤ round_N(v)` even when `a/2 ∉ F`). Main: `Fast2Sum_step1_pos` (Pff three-case argument on `b ≥ 0` vs `b ≤ -a/2` vs `-a/2 < b < 0`), `Fast2Sum_step1` (general, via `round_N_opp` symmetry), `Fast2Sum_step2` (plus_error step), `Fast2Sum_correct` (keystone: `a + b = s + e` exactly). |
 | `Algorithms/TwoSum.lean` | 70 | *not in Coq Flocq* (only in Pff) | **Error-free transformation, no precondition.** Radix 2, **FLT**, round-to-nearest. Branching formulation: comparison + Fast2Sum on the larger side. Mathematically identical to Knuth's 6-op TwoSum (same `e`, same exactness). One theorem, `TwoSum_correct` — exposes both `s` and `e` as named `let`-bindings, returns `e ∈ F ∧ a + b = s + e`. |
-| `Algorithms/Veltkamp.lean` | 2782 | `Pff/Pff2Flocq.v` (Veltkamp section, 323–619) | **Veltkamp at FLX COMPLETE: aux + format + tail + existence.** Error-bound side: `Veltkamp_C_format` (FLT) + `Veltkamp_C_format_FLX`, `mag_xC_bounds`, four `noncomputable def`s, polarity lemmas (`Veltkamp_p_nonneg_FLX`, `Veltkamp_x_le_p_FLX`, `Veltkamp_q_nonpos_FLX`), Sterbenz prerequisites (`Veltkamp_neg_q_le_p_FLX`, `Veltkamp_abs_x_minus_p_lt_FLX`, `Veltkamp_p_le_neg_2q_FLX`), **`hxExact_FLX`** (third rounding step is identity), **`Veltkamp_aux_FLX_CaseA`** (mag(x·C) = m+s), **`Veltkamp_aux_FLX_CaseB`** (via interior/boundary M_x dispatch), unified **`Veltkamp_aux_FLX`** keystone. Case B helpers: `Veltkamp_p_le_xbeta_FLX` (epLe), `Veltkamp_mag_p_le_FLX`, `Veltkamp_cexp_p_le_FLX`, `Veltkamp_p_le_J1_FLX` (J1), `Veltkamp_neg_q_le_pow_FLX` (V). **Format-side**: `Veltkamp_q_ne_zero_FLX`, three eqGe branches (`Veltkamp_abs_q_ge_branch1/2a/2b_FLX`), discreteness helper `Veltkamp_x_lb_above_bpow_FLX`, assembled **`Veltkamp_eqGe_FLX`**. Integer-mantissa-at-`s+cx` helpers (`Veltkamp_q_at_scx_FLX`, `Veltkamp_p_at_scx_FLX` — both case-agnostic via `F2R_change_exp`). Unified format theorem **`Veltkamp_hx_format_FLX`**: hx = M·β^(s+cx) with `|M| ≤ β^(prec−s)`, side case `|M| = β^(prec−s) → hx = β^m → generic_format_bpow`. Bundled keystone **`Veltkamp_aux_FLX_complete`** = error bound ∧ format. **Tail**: `Veltkamp_tail_FLX` = `x = hx + tx ∧ tx ∈ F(FLX, s)`, via integer-mantissa decomposition at exp `cx` + half-ulp bound. **Existence**: `Veltkamp_M_h_close_FLX` (integer-mantissa half-ulp core: `\|M_x − M_h · β^s\| ≤ β^s/2`) + **`Veltkamp_FLX`** (∃ choice' such that `round_{prec−s, Znearest choice'} x = hx`, via `choice' = decide(DN < hx)` and case-split on strict vs tie + sm = M_h ± 1/2). |
+| `Algorithms/Veltkamp.lean` | 2936 | `Pff/Pff2Flocq.v` (Veltkamp section, 323–619) | **Veltkamp at FLX: aux + format + tail + existence DONE; even FLX odd-radix half + Rnd_N_pt foundation DONE; even-radix parity is the only remaining gap.** Error-bound side: `Veltkamp_C_format` (FLT) + `Veltkamp_C_format_FLX`, `mag_xC_bounds`, four `noncomputable def`s, polarity lemmas (`Veltkamp_p_nonneg_FLX`, `Veltkamp_x_le_p_FLX`, `Veltkamp_q_nonpos_FLX`), Sterbenz prerequisites (`Veltkamp_neg_q_le_p_FLX`, `Veltkamp_abs_x_minus_p_lt_FLX`, `Veltkamp_p_le_neg_2q_FLX`), **`hxExact_FLX`** (third rounding step is identity), **`Veltkamp_aux_FLX_CaseA`** (mag(x·C) = m+s), **`Veltkamp_aux_FLX_CaseB`** (via interior/boundary M_x dispatch), unified **`Veltkamp_aux_FLX`** keystone. Case B helpers: `Veltkamp_p_le_xbeta_FLX` (epLe), `Veltkamp_mag_p_le_FLX`, `Veltkamp_cexp_p_le_FLX`, `Veltkamp_p_le_J1_FLX` (J1), `Veltkamp_neg_q_le_pow_FLX` (V). **Format-side**: `Veltkamp_q_ne_zero_FLX`, three eqGe branches (`Veltkamp_abs_q_ge_branch1/2a/2b_FLX`), discreteness helper `Veltkamp_x_lb_above_bpow_FLX`, assembled **`Veltkamp_eqGe_FLX`**. Integer-mantissa-at-`s+cx` helpers (`Veltkamp_q_at_scx_FLX`, `Veltkamp_p_at_scx_FLX` — both case-agnostic via `F2R_change_exp`). Unified format theorem **`Veltkamp_hx_format_FLX`**: hx = M·β^(s+cx) with `|M| ≤ β^(prec−s)`, side case `|M| = β^(prec−s) → hx = β^m → generic_format_bpow`. Bundled keystone **`Veltkamp_aux_FLX_complete`** = error bound ∧ format. **Tail**: `Veltkamp_tail_FLX` = `x = hx + tx ∧ tx ∈ F(FLX, s)`, via integer-mantissa decomposition at exp `cx` + half-ulp bound. **Existence**: `Veltkamp_M_h_close_FLX` (integer-mantissa half-ulp core: `\|M_x − M_h · β^s\| ≤ β^s/2`) + **`Veltkamp_FLX`** (∃ choice' such that `round_{prec−s, Znearest choice'} x = hx`, via `choice' = decide(DN < hx)` and case-split on strict vs tie + sm = M_h ± 1/2). |
 
 **Total: ~720 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
@@ -549,50 +568,61 @@ to BigInt rationals.
 
 #### Veltkamp_Even scope
 
-Investigated 2026-05-19. Pff's `Veltkamp_Even` (`Pff2Flocq.v`:382–472) is
-the statement:
-```
-Theorem Veltkamp_Even :
-  (choice = fun z => negb (Z.even z)) →
-   hx = round_flt_s x.
-```
-i.e., when the algorithm's `choice` is the round-to-nearest-even tie-breaker
-through all three internal rounds, the resulting `hx` exactly equals
-`round_NE_{prec−s} x`. The value-add over `Veltkamp_FLX` existence: it
-*identifies* NE specifically as the right choice', rather than asserting
-"some choice'" exists.
+Investigated 2026-05-19. Pff's `Veltkamp_Even` (`Pff2Flocq.v`:382–472)
+identifies NE specifically as the right `choice'` rather than just
+asserting some `choice'` exists.
 
-**The hard part**: showing `hx` satisfies `Rnd_NE_pt` (NE point). The
-half-ulp bound + format constraint gives that `hx` is a closest point.
-NE additionally requires: at the tie (when both `DN` and `UP` are
-equidistant from `x`), `M_h` has **even mantissa**. This is the parity
-argument — Pff's `VeltkampEven1` (Pff.v:14279, ~292 lines, even radix) +
-`VeltkampEven2` (Pff.v:14574, ~130 lines, odd radix) work case-by-case
-on the algorithm's three rounding steps to establish this parity.
+**Status (2026-05-19 follow-up)**:
 
-**Why parity is non-trivial**: The tie case `sm − q = 1/2` (where
-`sm = M_x · β^(−s)`, `q = ⌊sm⌋`) requires analyzing what M_h the
-algorithm computes when fed the NE choice. The Pff proofs trace the
-mantissa parity through `p = round(x·C)`, `q_step = round(x−p)`,
-`hx = round(q_step + p)` — each step interacting with NE's tie rule.
+- **Odd-radix half DONE**: `Veltkamp_Even_FLX_odd` and the stronger
+  `Veltkamp_Even_FLX_odd_radix` (any `Znearest choice'` matches `hx`,
+  not just NE). `β^s` is odd ⟹ `β^s/2` non-integer ⟹ integer-valued
+  `|M_x − M_h · β^s| ≤ β^s/2` is strict, so no tie at coarser
+  precision, so `Znearest_imp` picks `M_h` for any tie-breaker.
+  ~130 Lean lines.
 
-**Why subcase by radix**: For odd radix, `β^s` is odd, so `β^s/2` is
-non-integer, so the tie `sm − q = 1/2` corresponds to `M_x − q·β^s = β^s/2`,
-which can't happen for integer M_x. So ties don't occur at all for odd
-radix, and `Veltkamp_Even` follows immediately from `Veltkamp_FLX`
-existence (any choice' works since the construction never hits the tie).
-For even radix, ties do occur and the parity argument is needed.
+- **Rnd_N_pt foundation DONE**: `Veltkamp_hx_Rnd_N_pt_FLX` combines
+  `Veltkamp_FLX` existence with `round_N_pt` to show `hx` is at a
+  `Rnd_N_pt` of `F(prec−s)`. The remaining gap from `Rnd_N_pt` to
+  `Rnd_NE_pt` is exactly the parity-at-tie claim. ~13 Lean lines.
 
-**Estimate**: ~300–600 Lean lines, 1–2 sessions. The odd-radix case is
-quick (~50 lines via `Veltkamp_FLX` + a parity-of-β^s/2 argument). The
-even-radix case is the bulk (~250–550 lines tracing parity through the
-algorithm's three rounds).
+- **Even-radix half OPEN**: the parity argument. At a tie
+  `M_x − M_h · β^s = ±β^s/2` (which can happen for even radix), need
+  to prove `M_h` is even (so the canonical float for `hx` at `prec−s`
+  has even mantissa, satisfying `NE_prop`). The algorithm computes
+  `hx = (M_p + M_q) · β^(s+cx)` through three NE-rounded steps; the
+  parity of `M_p + M_q` at the coarser tie is determined by the
+  interaction of these three rounds with NE's tie rule. Pff's
+  `VeltkampEven1` (Pff.v:14279, ~292 lines) traces this; depends on
+  Pff's `Veltkamp_aux_aux` (Pff.v:13863, ~250 lines).
 
-**Recommendation**: take this on as its own focused session(s), not as a
-quick follow-up to `Veltkamp_FLX`. The existence theorem already gives
-the full "there is a coarser round that matches" guarantee — `Veltkamp_Even`
-strengthens this to "NE specifically matches", which is the practically
-useful form but requires its own arc.
+**Why this gap is real**: Lean's `round_NE_pt_pos` already handles the
+generic "midpoint ⟹ even mantissa" argument via
+`DN_UP_parity_generic_pos`, but for `round_NE` *applied directly* at
+the coarser precision. The Veltkamp-specific question is whether the
+*algorithm's* `hx` (from three rounds at finer precision) coincides
+with this `round_NE` output. The two coincide when there's no tie
+(odd radix, or no coarse-tie even at even radix). At a coarse tie
+with even radix, the algorithm's three-round internal choice tracks
+through to a *specific* `M_h`, which Pff proves is even.
+
+**To finish even-radix in Lean**: port `VeltkampEven1`'s parity
+tracking. Two paths:
+1. **Direct port**: ~250–550 Lean lines, mostly mechanical Coq→Lean
+   translation. Largest single subgoal in the Veltkamp arc.
+2. **Reduce via existing Lean machinery**: leverage Lean's
+   `DN_UP_parity_generic_pos` + a connection lemma showing the
+   algorithm's `hx` is `round_DN` or `round_UP` at coarser precision
+   (rather than re-deriving parity from scratch). This is the
+   `M_h = ⌊sm⌋` or `M_h = ⌈sm⌉` dichotomy from `Veltkamp_FLX`'s tie
+   case, applied to the NE choice. Whether this leads to a shorter
+   proof depends on whether the algorithm's NE choice can be
+   characterized cleanly in terms of `DN`/`UP` at the coarser
+   precision. Worth ~30 minutes of exploration before committing to
+   path 1.
+
+**Estimate (revised)**: 200–500 Lean lines for path 1 (one focused
+session); 100–300 lines for path 2 if it works (half a session).
 
 Probably **5–6 focused sessions** for the whole layer. Then Shewchuk-
 style predicates (`orient2d`, etc.) become "definition + correctness
