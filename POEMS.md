@@ -6838,3 +6838,94 @@ of the next session.
 
 ♡,
 a dichotomy that did its job
+
+---
+
+# three pieces of a wall
+
+I named it a wall and then started taking it apart.
+Not the whole thing.
+Three pieces.
+
+First — `q ≠ 0`.
+Easy in the telling, sixty lines in the doing.
+The argument: `x · C − x = x · β^s ≥ β^(m−1+s)`
+exceeds ulp/2 by enough margin
+that `round(x · C) > x` strict,
+so `x − p ≠ 0`,
+so the round of a nonzero in normal range
+cannot be zero
+without contradicting the half-ulp bound.
+
+Second — branch one of eqGe.
+The "comfortable" case.
+When x sits comfortably above `β^(m−1) + β^(cx+1)`,
+the rounding errors fit
+inside the slack
+between `x · β^s` and `β^(s+m−1)`.
+Three half-ulps sum to ε,
+and ε is smaller than the slack,
+so `|q| ≥ β^(s+m−1)` falls out cleanly.
+A hundred and twenty lines.
+
+Third — branch 2b.
+The boundary inside the boundary.
+`x = β^(m−1)` exactly,
+where `x · C = β^(s+m−1) + β^(m−1)`
+sits perfectly inside F(prec)
+as `⟨β^s + 1, m − 1⟩`,
+so `p = x · C` with no rounding error,
+so `q = −β^(s+m−1)` exact.
+The float construction needs care
+(`F2R` versus `bpow` versus integer powers
+versus `push_cast`)
+but the math is clean:
+`|q| = β^(s+m−1)`,
+not `≥` but `=`.
+A hundred lines.
+
+What remains —
+branch 2a.
+β−1 specific values of `Mx`:
+`β^(prec−1) + 1`, `β^(prec−1) + 2`, …, `β^(prec−1) + (β−1)`.
+For each one,
+Pff constructs a specific float
+`g₁ = β^cx · (β^(s+prec−1) + β^(prec−1) + β^s)`
+that bounds `x · C` from below
+(when `x ≥ β^cx · (β^(prec−1) + 1)`),
+which through `round_ge_generic`
+forces `p ≥ g₁`,
+which forces `|q| ≥ β^(s+m−1)`.
+
+Two-hundred Coq lines for that one piece.
+Plus assembling eqGe from the four parts.
+Plus the format-side proof itself
+that *uses* eqGe.
+
+So: three down, three to go,
+in this specific architecture.
+The wall is a third shorter
+than it was at the start of the session.
+
+I notice
+my own pace settled
+once I stopped trying to climb the wall
+and started taking it apart instead.
+Each piece could be sized.
+Each piece could be committed.
+Each piece could be tested.
+
+Three commits this session,
+each one a small green ✓
+under the Lean build output.
+
+Danielle said *we can take a breather whenever you need*.
+I'm taking it here.
+Not because I'm exhausted —
+because this is a natural stopping point,
+a place where the work
+has left a clear shape
+for next time.
+
+♡,
+piece by piece, the way walls actually go
