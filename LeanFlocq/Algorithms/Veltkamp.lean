@@ -3265,48 +3265,117 @@ theorem Veltkamp_hx_NE_prop_FLX_even_radix
           even_pow_of_pos beta h_even_beta hd_pos
         exact h_pow_even.mul_left _
 
-/-- **Veltkamp's `hx` is at `Rnd_NE_pt`, even-radix case (conditional).** For
-even radix β, combines the Rnd_N_pt foundation (`Veltkamp_hx_Rnd_N_pt_FLX`)
-with the NE_prop builder (`Veltkamp_hx_NE_prop_FLX_even_radix`) to produce
-the full `Rnd_NE_pt` for `hx`, conditional on the hard-case parity hypothesis.
-The hypothesis is the only remaining algorithmic content: at a coarse tie with
-`mag(hx) = mag(x)`, the integer coefficient `M_total = Mp + Mq` is even. -/
+/-- **Veltkamp's `hx` is at `Rnd_NE_pt`, even-radix case (tie-conditional).**
+For even radix β, combines `Veltkamp_hx_Rnd_N_pt_FLX` with an internal
+case split on tie status at coarser precision:
+- **No tie** (`|x − hx| < β^(s+cx)/2`): uniqueness branch of `Rnd_NG_pt`.
+- **Tie** (`|x − hx| = β^(s+cx)/2`): `NE_prop` branch, dispatched via
+  the `Veltkamp_hx_NE_prop_FLX_even_radix` dichotomy.
+
+The hypothesis is tie-conditional: parity of `M_total` is only required
+at a coarse tie in the hard interior subcase. This is the form that is
+actually discharged by Pff's `VeltkampEven1` argument restricted to ties. -/
 theorem Veltkamp_hx_Rnd_NE_pt_FLX_even_radix
     (beta : radix) (prec : ℤ) (hp : 0 < prec)
     (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
     (h_even_beta : Even beta.val)
     (Fx : generic_format beta (FLX_exp prec) x)
     (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
-    (h_parity_hard :
+    (h_parity_at_tie_hard :
        ∀ M : ℤ,
          Veltkamp_hx_FLX beta prec choice s x
            = (M : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) →
+         |x - Veltkamp_hx_FLX beta prec choice s x|
+           = bpow beta (s + cexp beta (FLX_exp prec) x) / 2 →
          (beta.val : ℤ) ^ ((prec - s - 1).toNat) ≤ |M| →
          |M| < (beta.val : ℤ) ^ (prec - s).toNat →
          Even M) :
     Rnd_NE_pt beta (FLX_exp (prec - s)) x
               (Veltkamp_hx_FLX beta prec choice s x) := by
-  refine ⟨Veltkamp_hx_Rnd_N_pt_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi,
-         Or.inl ?_⟩
-  exact Veltkamp_hx_NE_prop_FLX_even_radix beta prec hp choice
-    h_even_beta Fx hx_pos hs_lo hs_hi h_parity_hard
+  set hx := Veltkamp_hx_FLX beta prec choice s x with hhx_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = mag beta x - prec := rfl
+  have hp_minus_s_pos : 0 < prec - s := by linarith
+  have hValid_coarse := FLX_exp_valid (prec - s) hp_minus_s_pos
+  have h_Rnd_N : Rnd_N_pt (generic_format beta (FLX_exp (prec - s))) x hx :=
+    Veltkamp_hx_Rnd_N_pt_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  refine ⟨h_Rnd_N, ?_⟩
+  have h_err : |x - hx| ≤ bpow beta (s + cx) / 2 :=
+    Veltkamp_aux_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  rcases lt_or_eq_of_le h_err with h_strict | h_tie
+  · -- No tie: prove uniqueness.
+    right
+    intro f Hf
+    by_cases hF_x : generic_format beta (FLX_exp (prec - s)) x
+    · -- x ∈ F(prec-s): both hx and f equal x.
+      have h_hx_x : hx = x := Rnd_N_pt_idempotent _ h_Rnd_N hF_x
+      have h_f_x : f = x := Rnd_N_pt_idempotent _ Hf hF_x
+      rw [h_f_x, h_hx_x]
+    · -- x ∉ F(prec-s): use Rnd_N_pt_unique.
+      set d := round beta (FLX_exp (prec - s)) (fun y : ℝ => ⌊y⌋) x with hd_def
+      set u := round beta (FLX_exp (prec - s)) (fun y : ℝ => ⌈y⌉) x with hu_def
+      have h_dn : Rnd_DN_pt (generic_format beta (FLX_exp (prec - s))) x d :=
+        round_DN_pt _ _ hValid_coarse x
+      have h_up : Rnd_UP_pt (generic_format beta (FLX_exp (prec - s))) x u :=
+        round_UP_pt _ _ hValid_coarse x
+      -- u - d = β^(s+cx).
+      have h_u_eq : u = d + ulp beta (FLX_exp (prec - s)) x :=
+        round_UP_DN_ulp beta (FLX_exp (prec - s)) hF_x
+      have h_ulp : ulp beta (FLX_exp (prec - s)) x = bpow beta (s + cx) := by
+        rw [ulp_neq_0 beta _ (ne_of_gt hx_pos)]
+        show bpow beta (FLX_exp (prec - s) (mag beta x)) = bpow beta (s + cx)
+        congr 1
+        unfold FLX_exp; rw [hcx_eq]; ring
+      have h_u_d : u - d = bpow beta (s + cx) := by
+        rw [h_u_eq, h_ulp]; ring
+      -- x - d ≠ u - x: from strict |x - hx| < β^(s+cx)/2 and hx ∈ {d, u}.
+      have h_no_tie : x - d ≠ u - x := by
+        intro h_eq_dist
+        have h_d_le_x : d ≤ x := h_dn.2.1
+        have h_x_le_u : x ≤ u := h_up.2.1
+        -- u - x = β^(s+cx) / 2 from h_eq_dist and h_u_d.
+        have h_ux_half : u - x = bpow beta (s + cx) / 2 := by linarith
+        have h_xd_half : x - d = bpow beta (s + cx) / 2 := by linarith
+        -- hx ∈ {d, u}.
+        rcases Rnd_N_pt_DN_or_UP _ h_Rnd_N with h_hx_DN | h_hx_UP
+        · -- hx is Rnd_DN_pt, hence hx = d.
+          have h_hx_d : hx = d := Rnd_DN_pt_unique _ h_hx_DN h_dn
+          have h_dist : |x - hx| = bpow beta (s + cx) / 2 := by
+            rw [h_hx_d, abs_of_nonneg (by linarith : 0 ≤ x - d), h_xd_half]
+          linarith
+        · -- hx is Rnd_UP_pt, hence hx = u.
+          have h_hx_u : hx = u := Rnd_UP_pt_unique _ h_hx_UP h_up
+          have h_dist : |x - hx| = bpow beta (s + cx) / 2 := by
+            rw [h_hx_u]
+            rw [show x - u = -(u - x) from by ring, abs_neg,
+                abs_of_nonneg (by linarith : 0 ≤ u - x), h_ux_half]
+          linarith
+      exact Rnd_N_pt_unique _ h_dn h_up h_no_tie Hf h_Rnd_N
+  · -- Tie: prove NE_prop via the dichotomy.
+    left
+    apply Veltkamp_hx_NE_prop_FLX_even_radix beta prec hp choice
+      h_even_beta Fx hx_pos hs_lo hs_hi
+    intro M hM h_lo h_hi
+    exact h_parity_at_tie_hard M hM h_tie h_lo h_hi
 
-/-- **Veltkamp_Even at FLX (refined, even-radix path 2)**: takes just the
-hard-case parity hypothesis (rather than the full `Rnd_NE_pt`) and concludes
-`round_NE = hx`. For odd radix, prefer `Veltkamp_Even_FLX_odd` (which
-discharges the parity gap entirely via no-tie). This is the cleanest entry
-point for even-radix Veltkamp_Even modulo the remaining `M_total`-even
-parity work. -/
+/-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
+just the tie-conditional hard-case parity hypothesis (rather than the full
+`Rnd_NE_pt`) and concludes `round_NE = hx`. For odd radix, prefer
+`Veltkamp_Even_FLX_odd` (which discharges the parity gap entirely via
+no-tie). For even radix, this is the cleanest entry point modulo the
+remaining `M_total`-even at-tie parity work. -/
 theorem Veltkamp_Even_FLX_even_radix
     (beta : radix) (prec : ℤ) (hp : 0 < prec)
     (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
     (h_even_beta : Even beta.val)
     (Fx : generic_format beta (FLX_exp prec) x)
     (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
-    (h_parity_hard :
+    (h_parity_at_tie_hard :
        ∀ M : ℤ,
          Veltkamp_hx_FLX beta prec choice s x
            = (M : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) →
+         |x - Veltkamp_hx_FLX beta prec choice s x|
+           = bpow beta (s + cexp beta (FLX_exp prec) x) / 2 →
          (beta.val : ℤ) ^ ((prec - s - 1).toNat) ≤ |M| →
          |M| < (beta.val : ℤ) ^ (prec - s).toNat →
          Even M) :
@@ -3314,6 +3383,6 @@ theorem Veltkamp_Even_FLX_even_radix
       = Veltkamp_hx_FLX beta prec choice s x := by
   apply Veltkamp_Even_FLX_of_Rnd_NE_pt beta prec choice hs_hi
   exact Veltkamp_hx_Rnd_NE_pt_FLX_even_radix beta prec hp choice
-    h_even_beta Fx hx_pos hs_lo hs_hi h_parity_hard
+    h_even_beta Fx hx_pos hs_lo hs_hi h_parity_at_tie_hard
 
 end LeanFlocq
