@@ -3543,6 +3543,84 @@ private theorem ZnearestE_even_at_midpoint {mx : ℝ}
     obtain ⟨k, hk⟩ := h_odd
     refine ⟨k + 1, ?_⟩; rw [hk]; ring
 
+/-- **Pff helper (cexp(p) bound)**: when `mag(x · C) = m+s+1` (the high-mag
+case), `p = round(x · C)` has `cexp(p) ≥ s+cx+1`. Argument: `β^(m+s) ∈ F`
+and `β^(m+s) ≤ x · C`, so `round_DN(x · C) ≥ β^(m+s)` via
+`round_ge_generic`. For Rnd_N round, `p ≥ round_DN ≥ β^(m+s)`, hence
+`mag(p) ≥ m+s+1`, hence `cexp(p) ≥ s+cx+1`.
+
+Contrapositive form used in the parity argument: `cexp(p) = s+cx` forces
+`mag(x · C) = m+s`, which puts `x · C` at fine-precision midpoint (since
+`scaled_mantissa = (odd)/2`).
+
+`choice` is general (the round_DN bound doesn't depend on tie-breaking). -/
+private theorem Veltkamp_p_cexp_high_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_mag_xC_high : mag beta x + s + 1 ≤ mag beta (x * Veltkamp_C beta s)) :
+    s + cexp beta (FLX_exp prec) x + 1
+      ≤ cexp beta (FLX_exp prec) (Veltkamp_p_FLX beta prec choice s x) := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  have hcx_eq : cx = m - prec := rfl
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  -- x · C > 0.
+  have hC_eq : Veltkamp_C beta s = bpow beta s + 1 := rfl
+  have hxC_pos : 0 < x * Veltkamp_C beta s := by
+    apply mul_pos hx_pos; rw [hC_eq]; linarith [bpow_gt_0 beta s]
+  have hxC_ne : x * Veltkamp_C beta s ≠ 0 := ne_of_gt hxC_pos
+  -- |x · C| ≥ β^(m+s) (from mag(x · C) ≥ m+s+1).
+  have h_xC_ge : bpow beta (m + s) ≤ x * Veltkamp_C beta s := by
+    have h_mag := bpow_mag_le beta hxC_ne
+    rw [abs_of_pos hxC_pos] at h_mag
+    have h_step : bpow beta (m + s) ≤ bpow beta (mag beta (x * Veltkamp_C beta s) - 1) :=
+      bpow_le beta (by linarith)
+    linarith
+  -- β^(m+s) ∈ F(prec) (always for FLX with prec ≥ 1).
+  have h_bpow_format : generic_format beta (FLX_exp prec) (bpow beta (m + s)) := by
+    apply generic_format_bpow
+    show FLX_exp prec (m + s + 1) ≤ m + s
+    unfold FLX_exp; linarith
+  -- round_DN(x · C) ≥ β^(m+s).
+  have h_DN_ge : bpow beta (m + s) ≤ round beta (FLX_exp prec) (fun y : ℝ => ⌊y⌋) (x * Veltkamp_C beta s) :=
+    round_ge_generic beta (FLX_exp prec) (FLX_exp_valid prec hp) _ h_bpow_format h_xC_ge
+  -- p ≥ round_DN (Rnd_N is between DN and UP).
+  have hValid := FLX_exp_valid prec hp
+  have h_p_pt : Rnd_N_pt (generic_format beta (FLX_exp prec)) (x * Veltkamp_C beta s) p :=
+    round_N_pt beta (FLX_exp prec) hValid choice (x * Veltkamp_C beta s)
+  -- p is either round_DN or round_UP.
+  rcases Rnd_N_pt_DN_or_UP _ h_p_pt with h_p_DN | h_p_UP
+  · -- p = round_DN.
+    have h_p_eq : p = round beta (FLX_exp prec) (fun y : ℝ => ⌊y⌋) (x * Veltkamp_C beta s) :=
+      Rnd_DN_pt_unique _ h_p_DN (round_DN_pt _ _ hValid _)
+    have h_p_ge : bpow beta (m + s) ≤ p := by rw [h_p_eq]; exact h_DN_ge
+    have hp_pos : 0 < p := by linarith [bpow_gt_0 beta (m + s)]
+    have h_mag_p_ge : m + s + 1 ≤ mag beta p := by
+      apply mag_ge_bpow beta
+      have : bpow beta (m + s + 1 - 1) = bpow beta (m + s) := by congr 1; ring
+      rw [this, abs_of_pos hp_pos]; exact h_p_ge
+    show s + cx + 1 ≤ FLX_exp prec (mag beta p)
+    unfold FLX_exp; rw [hcx_eq]; linarith
+  · -- p = round_UP ≥ round_DN ≥ β^(m+s).
+    have h_p_eq : p = round beta (FLX_exp prec) (fun y : ℝ => ⌈y⌉) (x * Veltkamp_C beta s) :=
+      Rnd_UP_pt_unique _ h_p_UP (round_UP_pt _ _ hValid _)
+    -- round_UP ≥ x · C ≥ β^(m+s).
+    have h_UP_ge_xC : x * Veltkamp_C beta s
+                     ≤ round beta (FLX_exp prec) (fun y : ℝ => ⌈y⌉) (x * Veltkamp_C beta s) :=
+      (round_UP_pt _ _ hValid _).2.1
+    have h_p_ge : bpow beta (m + s) ≤ p := by
+      rw [h_p_eq]; linarith
+    have hp_pos : 0 < p := by linarith [bpow_gt_0 beta (m + s)]
+    have h_mag_p_ge : m + s + 1 ≤ mag beta p := by
+      apply mag_ge_bpow beta
+      have : bpow beta (m + s + 1 - 1) = bpow beta (m + s) := by congr 1; ring
+      rw [this, abs_of_pos hp_pos]; exact h_p_ge
+    show s + cx + 1 ≤ FLX_exp prec (mag beta p)
+    unfold FLX_exp; rw [hcx_eq]; linarith
+
 /-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
 just the tie-conditional hard-case parity hypothesis (rather than the full
 `Rnd_NE_pt`) and concludes `round_NE = hx`. For odd radix, prefer
