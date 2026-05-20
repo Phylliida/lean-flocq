@@ -4100,4 +4100,62 @@ theorem Veltkamp_Even_FLX_even_radix
   exact Veltkamp_hx_Rnd_NE_pt_FLX_even_radix beta prec hp choice
     h_even_beta Fx hx_pos hs_lo hs_hi h_parity_at_tie_hard
 
+/-- **Veltkamp_Even at FLX, even radix, NE choice (unconditional).**
+For even `β`, the NE choice in the Veltkamp algorithm satisfies
+`round_NE_{prec−s} x = hx`. The parity hypothesis from
+`Veltkamp_Even_FLX_even_radix` is discharged here by combining the Mp and
+Mq parity theorems: `M_total = Mp + Mq` (from `hx = q + p` and the at-scx
+forms), so `Even Mp ∧ Even Mq → Even M_total`. -/
+theorem Veltkamp_Even_FLX_even_radix_NE
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    {s : ℤ} {x : ℝ}
+    (h_even_beta : Even beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    round_NE beta (FLX_exp (prec - s)) x
+      = Veltkamp_hx_FLX beta prec (fun n => decide (¬ Even n)) s x := by
+  set choice : ℤ → Bool := fun n => decide (¬ Even n) with hchoice_def
+  apply Veltkamp_Even_FLX_even_radix beta prec hp choice h_even_beta Fx hx_pos hs_lo hs_hi
+  -- Discharge the parity hypothesis.
+  intros M_total h_hx_form h_tie _h_M_lo _h_M_hi
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  set q := Veltkamp_q_FLX beta prec choice s x with hq_def
+  set hx := Veltkamp_hx_FLX beta prec choice s x with hhx_def
+  -- Get Mp, Mq via the at-scx form lemmas.
+  obtain ⟨Mp, hMp_eq⟩ :=
+    Veltkamp_p_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  obtain ⟨Mq, hMq_eq⟩ :=
+    Veltkamp_q_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  -- hx = q + p (hxExact).
+  have h_hxExact : hx = q + p :=
+    hxExact_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  -- M_total = Mq + Mp from hx = (Mq + Mp) · β^(s+cx).
+  have h_bpow_scx_pos : (0 : ℝ) < bpow beta (s + cx) := bpow_gt_0 _ _
+  have h_M_total_eq : M_total = Mq + Mp := by
+    have h_hx_combo : hx = ((Mq + Mp : ℤ) : ℝ) * bpow beta (s + cx) := by
+      rw [hcx_def, h_hxExact, hq_def, hp_def, hMq_eq, hMp_eq]
+      push_cast; ring
+    have h_eq : ((M_total : ℤ) : ℝ) * bpow beta (s + cx)
+              = ((Mq + Mp : ℤ) : ℝ) * bpow beta (s + cx) := by
+      rw [← h_hx_form, h_hx_combo]
+    have h_real : (M_total : ℝ) = ((Mq + Mp : ℤ) : ℝ) :=
+      mul_right_cancel₀ (ne_of_gt h_bpow_scx_pos) h_eq
+    exact_mod_cast h_real
+  -- Get eps from the tie identity.
+  obtain ⟨eps, h_eps, h_x_eq⟩ :=
+    Veltkamp_tie_eps_FLX beta prec M_total cx h_hx_form h_tie
+  -- Apply Mp parity helper.
+  have h_Mp_even : Even Mp :=
+    Veltkamp_Mp_even_at_tie_hard_NE_FLX beta prec hp h_even_beta Fx hx_pos hs_lo hs_hi
+      M_total eps h_eps h_x_eq Mp hMp_eq
+  -- Apply Mq parity helper.
+  have h_Mq_even : Even Mq :=
+    Veltkamp_Mq_even_at_tie_hard_NE_FLX beta prec hp h_even_beta Fx hx_pos hs_lo hs_hi
+      M_total Mp eps h_eps h_x_eq hMp_eq Mq hMq_eq
+  -- Combine: Even Mq + Even Mp → Even (Mq + Mp) = Even M_total.
+  rw [h_M_total_eq]
+  exact h_Mq_even.add h_Mp_even
+
 end LeanFlocq
