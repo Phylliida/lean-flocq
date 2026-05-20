@@ -3813,6 +3813,266 @@ private theorem Veltkamp_Mp_even_at_tie_hard_NE_FLX
     rw [h_Mp_int]
     exact h_znE_even
 
+/-! ### Mq parity helpers (mirror of Mp)
+
+The Mq half of the parity argument follows the same structural template as
+Mp, just with the algebraic source `x - p` instead of `x · C`. The key
+identity (`Veltkamp_xmp_form_at_tie`): given `p = Mp · β^(s+cx)` (at-scx
+form) and `x = (M_total + ε/2) · β^(s+cx)` (tie form), then
+
+  `x - p = ((2(M_total − Mp) + ε)/2) · β^(s+cx)`.
+
+The coefficient `K' = 2(M_total − Mp) + ε` is **odd** (ε is ±1, the rest
+is even) — regardless of Mp's parity. Same midpoint structure as Mp:
+`ZnearestE` picks even at half-integers. -/
+
+/-- **Pff helper**: algebraic form of `x − p` at coarse tie.
+Given `p = Mp · β^(s+cx)` and `x = (M_total + ε/2) · β^(s+cx)`,
+
+  `x − p = ((2(M_total − Mp) + ε)/2) · β^(s+cx)`.
+
+This is just algebra. The integer coefficient `2(M_total − Mp) + ε` is the
+"K′" that plays the role analogous to `(β^s + 1)(2M_total + ε)` for `x · C`. -/
+private theorem Veltkamp_xmp_form_at_tie (beta : radix)
+    {s : ℤ} {x p : ℝ} (M_total Mp eps : ℤ) (cx : ℤ)
+    (h_x_eq : x = ((M_total : ℝ) + (eps : ℝ) / 2) * bpow beta (s + cx))
+    (hp_eq : p = (Mp : ℝ) * bpow beta (s + cx)) :
+    x - p = (((2 * (M_total - Mp) + eps : ℤ) : ℝ) / 2) * bpow beta (s + cx) := by
+  rw [h_x_eq, hp_eq]
+  push_cast; ring
+
+/-- **Pff helper**: the coefficient `2(M_total − Mp) + ε` is odd when
+`ε ∈ {−1, +1}`. Independent of Mp's parity. -/
+private theorem Veltkamp_xmp_coef_odd (M_total Mp eps : ℤ)
+    (h_eps : eps = 1 ∨ eps = -1) :
+    Odd (2 * (M_total - Mp) + eps) := by
+  rcases h_eps with h | h
+  · rw [h]; exact ⟨M_total - Mp, by ring⟩
+  · rw [h]; refine ⟨M_total - Mp - 1, by ring⟩
+
+/-- **Pff helper**: high-cexp case for q. Symmetric to
+`Veltkamp_Mp_even_via_high_cexp` but for `q < 0`. Strategy: apply the
+positive version to `-q > 0`, use that `cexp(-q) = cexp(q)` and
+`-q = (-Mq) · β^scx`. Conclude `Even (-Mq)` hence `Even Mq`. -/
+private theorem Veltkamp_Mq_even_via_high_cexp
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (h_even_beta : Even beta.val)
+    {q : ℝ} (Fq : generic_format beta (FLX_exp prec) q) (hq_neg : q < 0)
+    {scx : ℤ} (Mq : ℤ) (hMq_eq : q = (Mq : ℝ) * bpow beta scx)
+    (h_cexp_high : scx < cexp beta (FLX_exp prec) q) :
+    Even Mq := by
+  -- Set up q' = -q.
+  set q' := -q with hq'_def
+  have hq'_pos : 0 < q' := by simp [hq'_def]; linarith
+  have Fq' : generic_format beta (FLX_exp prec) q' := generic_format_opp beta _ Fq
+  -- -q = (-Mq) · β^scx.
+  have hMq'_eq : q' = ((-Mq : ℤ) : ℝ) * bpow beta scx := by
+    rw [hq'_def, hMq_eq]; push_cast; ring
+  -- cexp(-q) = cexp(q) via mag_opp.
+  have h_mag_eq : mag beta q' = mag beta q := by
+    show mag beta (-q) = mag beta q
+    exact mag_opp beta q
+  have h_cexp_eq : cexp beta (FLX_exp prec) q' = cexp beta (FLX_exp prec) q := by
+    show FLX_exp prec (mag beta q') = FLX_exp prec (mag beta q)
+    rw [h_mag_eq]
+  -- Apply Mp helper to (q', -Mq).
+  have h_neg_Mq_even : Even (-Mq) :=
+    Veltkamp_Mp_even_via_high_cexp beta prec hp h_even_beta Fq' hq'_pos
+      (-Mq) hMq'_eq (by rw [h_cexp_eq]; exact h_cexp_high)
+  -- Even (-Mq) → Even Mq.
+  obtain ⟨k, hk⟩ := h_neg_Mq_even
+  refine ⟨-k, ?_⟩
+  linarith
+
+/-- **Pff main parity claim for Mq**: at coarse tie + hard interior + NE choice,
+the at-scx coefficient `Mq` of `q` is even. Case-splits on the cexp of `x - p`
+relative to `s + cx`:
+
+- `cxmp ≥ s + cx`: `Mq = Znearest(sm_xmp) · β^(cxmp - (s+cx))`. Sub-case
+  `cxmp > s + cx` gives a β factor; sub-case `cxmp = s + cx` uses the
+  midpoint argument (sm_xmp = K'/2 with K' odd, ZnearestE picks even).
+
+- `cxmp < s + cx`: contradiction. `sm_xmp = K' · β^((s+cx) − cxmp) / 2` is an
+  integer (β even, K' odd), so `Znearest(sm_xmp) = sm_xmp`. The
+  scale-shift equation forces `Mq = K'/2`, contradicting `K'` odd.
+
+The structure mirrors `Veltkamp_Mp_even_at_tie_hard_NE_FLX` but with `x - p`
+as the algebraic source instead of `x · C`. The odd coefficient `K' =
+2(M_total − Mp) + ε` comes from the tie identity on `x − p`. -/
+private theorem Veltkamp_Mq_even_at_tie_hard_NE_FLX
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    {s : ℤ} {x : ℝ}
+    (h_even_beta : Even beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (M_total Mp eps : ℤ)
+    (h_eps : eps = 1 ∨ eps = -1)
+    (h_x_eq : x = ((M_total : ℝ) + (eps : ℝ) / 2)
+                  * bpow beta (s + cexp beta (FLX_exp prec) x))
+    (hp_eq : Veltkamp_p_FLX beta prec (fun n => decide (¬ Even n)) s x
+             = (Mp : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x))
+    (Mq : ℤ)
+    (hMq_eq : Veltkamp_q_FLX beta prec (fun n => decide (¬ Even n)) s x
+              = (Mq : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x)) :
+    Even Mq := by
+  set choice : ℤ → Bool := fun n => decide (¬ Even n) with hchoice_def
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  set q := Veltkamp_q_FLX beta prec choice s x with hq_def
+  have hcx_eq : cx = m - prec := rfl
+  have hs_pos : 1 ≤ s := by linarith
+  have hs_nn : 0 ≤ s := by linarith
+  -- K' = 2(M_total - Mp) + eps, odd integer coefficient.
+  set K' : ℤ := 2 * (M_total - Mp) + eps with hK'_def
+  have h_K'_odd : Odd K' := Veltkamp_xmp_coef_odd M_total Mp eps h_eps
+  -- x - p = K'/2 · β^(s+cx) (algebraic from tie + at-scx form of p).
+  have h_xmp_form : x - p = (((K' : ℤ) : ℝ) / 2) * bpow beta (s + cx) := by
+    rw [hK'_def]
+    exact Veltkamp_xmp_form_at_tie beta M_total Mp eps cx h_x_eq hp_eq
+  -- q = round_NE(x - p). Unfold via the round formula.
+  set cxmp := cexp beta (FLX_exp prec) (x - p) with hcxmp_def
+  set sm_xmp := scaled_mantissa beta (FLX_exp prec) (x - p) with hsm_xmp_def
+  have h_q_form : q = ((Znearest choice sm_xmp : ℤ) : ℝ) * bpow beta cxmp := rfl
+  -- Combine hMq_eq with h_q_form.
+  have h_eq_combined : (Mq : ℝ) * bpow beta (s + cx)
+                     = ((Znearest choice sm_xmp : ℤ) : ℝ) * bpow beta cxmp := by
+    rw [← hMq_eq, h_q_form]
+  -- Case split on cxmp vs s + cx.
+  rcases le_or_lt (s + cx) cxmp with h_cxmp_high | h_cxmp_low
+  · -- Case A: cxmp ≥ s + cx. Mq = Znearest(sm_xmp) · β^d where d = cxmp - (s+cx).
+    set d := cxmp - (s + cx) with hd_def
+    have hd_nn : 0 ≤ d := by omega
+    have h_bpow_split : bpow beta cxmp = bpow beta d * bpow beta (s + cx) := by
+      rw [← bpow_plus]; congr 1; simp [hd_def]
+    have h_bpow_scx_pos : (0 : ℝ) < bpow beta (s + cx) := bpow_gt_0 _ _
+    have h_Mq_real : (Mq : ℝ) = ((Znearest choice sm_xmp : ℤ) : ℝ) * bpow beta d := by
+      have h1 : (Mq : ℝ) * bpow beta (s + cx)
+              = (((Znearest choice sm_xmp : ℤ) : ℝ) * bpow beta d) * bpow beta (s + cx) := by
+        rw [h_eq_combined, h_bpow_split]; ring
+      exact mul_right_cancel₀ (ne_of_gt h_bpow_scx_pos) h1
+    have h_bpow_d_int : ((beta.val ^ d.toNat : ℤ) : ℝ) = bpow beta d :=
+      IZR_Zpower beta hd_nn
+    have h_Mq_int : Mq = (Znearest choice sm_xmp) * beta.val ^ d.toNat := by
+      have h_real : ((Mq : ℤ) : ℝ)
+                  = (((Znearest choice sm_xmp) * beta.val ^ d.toNat : ℤ) : ℝ) := by
+        rw [h_Mq_real, Int.cast_mul, h_bpow_d_int]
+      exact_mod_cast h_real
+    rw [h_Mq_int]
+    -- Two sub-cases: d ≥ 1 (β factor) or d = 0 (midpoint).
+    rcases eq_or_lt_of_le hd_nn with hd_zero | hd_pos
+    · -- d = 0: Mq = Znearest(sm_xmp). Midpoint argument.
+      have hd_zero' : d = 0 := hd_zero.symm
+      have hd_toNat_zero : d.toNat = 0 := by omega
+      rw [hd_toNat_zero, pow_zero, mul_one]
+      -- cxmp = s + cx, so sm_xmp = K'/2.
+      have h_cxmp_eq : cxmp = s + cx := by omega
+      have h_bpow_cxmp_pos : (0 : ℝ) < bpow beta cxmp := bpow_gt_0 _ _
+      have h_sm_eq : sm_xmp = ((K' : ℤ) : ℝ) / 2 := by
+        -- sm_xmp · β^cxmp = x - p (standard identity).
+        have h_id : sm_xmp * bpow beta cxmp = x - p :=
+          scaled_mantissa_mult_bpow beta (FLX_exp prec) (x - p)
+        -- (K'/2) · β^cxmp = x - p (via cxmp = s+cx and h_xmp_form).
+        have h_rhs : ((K' : ℤ) : ℝ) / 2 * bpow beta cxmp = x - p := by
+          rw [show cxmp = s + cx from h_cxmp_eq]; exact h_xmp_form.symm
+        have h_eq : sm_xmp * bpow beta cxmp
+                  = ((K' : ℤ) : ℝ) / 2 * bpow beta cxmp := by
+          rw [h_id, h_rhs]
+        exact mul_right_cancel₀ (ne_of_gt h_bpow_cxmp_pos) h_eq
+      -- sm_xmp - ⌊sm_xmp⌋ = 1/2 (since K' is odd).
+      have h_sm_mid : sm_xmp - ⌊sm_xmp⌋ = 1/2 := by
+        rw [h_sm_eq]
+        obtain ⟨j, hj⟩ := h_K'_odd
+        rw [hj]
+        have h_eq : ((2 * j + 1 : ℤ) : ℝ) / 2 = (j : ℝ) + 1/2 := by push_cast; ring
+        rw [h_eq]
+        have h_floor : ⌊(j : ℝ) + 1/2⌋ = j := by
+          apply Int.floor_eq_iff.mpr
+          refine ⟨by push_cast; linarith, by push_cast; linarith⟩
+        rw [h_floor]; push_cast; ring
+      -- ZnearestE picks even at midpoint.
+      have h_znE_even : Even (ZnearestE sm_xmp) :=
+        ZnearestE_even_at_midpoint h_sm_mid
+      show Even (Znearest choice sm_xmp)
+      exact h_znE_even
+    · -- d ≥ 1: β factor.
+      have h_pow_even : Even (beta.val ^ d.toNat) :=
+        even_pow_of_pos beta h_even_beta (by omega : (1 : ℤ) ≤ d)
+      exact h_pow_even.mul_left _
+  · -- Case B: cxmp < s + cx. Contradiction.
+    set e := s + cx - cxmp with he_def
+    have he_pos : 1 ≤ e := by omega
+    have he_nn : 0 ≤ e := by omega
+    -- bpow(s + cx) = β^e · bpow(cxmp).
+    have h_bpow_e : bpow beta (s + cx) = bpow beta e * bpow beta cxmp := by
+      rw [← bpow_plus]; congr 1; simp [he_def]
+    have h_bpow_cxmp_pos : (0 : ℝ) < bpow beta cxmp := bpow_gt_0 _ _
+    -- Znearest(sm_xmp) = Mq · β^e.
+    have h_Znr_real : ((Znearest choice sm_xmp : ℤ) : ℝ)
+                    = (Mq : ℝ) * bpow beta e := by
+      have h1 : ((Znearest choice sm_xmp : ℤ) : ℝ) * bpow beta cxmp
+              = ((Mq : ℝ) * bpow beta e) * bpow beta cxmp := by
+        rw [← h_eq_combined, h_bpow_e]; ring
+      exact mul_right_cancel₀ (ne_of_gt h_bpow_cxmp_pos) h1
+    have h_bpow_e_int : ((beta.val ^ e.toNat : ℤ) : ℝ) = bpow beta e :=
+      IZR_Zpower beta he_nn
+    -- sm_xmp = (K' · β^e) / 2 (a real form).
+    have h_K'_bpow : ((K' * beta.val ^ e.toNat : ℤ) : ℝ) = (K' : ℝ) * bpow beta e := by
+      rw [Int.cast_mul, h_bpow_e_int]
+    have h_sm_eq : sm_xmp = (((K' * beta.val ^ e.toNat : ℤ) : ℝ)) / 2 := by
+      -- sm_xmp · β^cxmp = x - p (standard identity).
+      have h_id : sm_xmp * bpow beta cxmp = x - p :=
+        scaled_mantissa_mult_bpow beta (FLX_exp prec) (x - p)
+      -- (K' β^e / 2) · β^cxmp = (K'/2) · (β^e · β^cxmp) = (K'/2) · β^(s+cx) = x - p.
+      have h_rhs : (((K' * beta.val ^ e.toNat : ℤ) : ℝ)) / 2 * bpow beta cxmp = x - p := by
+        rw [h_K'_bpow, h_xmp_form, h_bpow_e]; ring
+      have h_eq : sm_xmp * bpow beta cxmp
+                = (((K' * beta.val ^ e.toNat : ℤ) : ℝ)) / 2 * bpow beta cxmp := by
+        rw [h_id, h_rhs]
+      exact mul_right_cancel₀ (ne_of_gt h_bpow_cxmp_pos) h_eq
+    -- K' · β^e is even (β^e even since e ≥ 1, β even).
+    have h_pow_even : Even (beta.val ^ e.toNat) :=
+      even_pow_of_pos beta h_even_beta (by omega : (1 : ℤ) ≤ e)
+    have h_pow_even_int : Even ((beta.val : ℤ) ^ e.toNat) := by
+      obtain ⟨k, hk⟩ := h_pow_even
+      refine ⟨k, ?_⟩
+      exact_mod_cast hk
+    have h_prod_even : Even (K' * (beta.val : ℤ) ^ e.toNat) := h_pow_even_int.mul_left _
+    obtain ⟨n, hn⟩ := h_prod_even
+    -- sm_xmp = n (an integer).
+    have h_sm_int : sm_xmp = (n : ℝ) := by
+      rw [h_sm_eq, hn]
+      push_cast; ring
+    -- Znearest on integer = integer.
+    have h_znr_eq : Znearest choice sm_xmp = n := by
+      apply Znearest_imp
+      rw [h_sm_int]; simp
+    -- Substitute into h_Znr_real: n = Mq · β^e.
+    rw [h_znr_eq] at h_Znr_real
+    have h_Mq_bpow : (Mq : ℝ) * bpow beta e = ((Mq * beta.val ^ e.toNat : ℤ) : ℝ) := by
+      rw [Int.cast_mul, h_bpow_e_int]
+    have h_int_eq : n = Mq * beta.val ^ e.toNat := by
+      have h_real : ((n : ℤ) : ℝ) = ((Mq * beta.val ^ e.toNat : ℤ) : ℝ) := by
+        rw [h_Znr_real, h_Mq_bpow]
+      exact_mod_cast h_real
+    -- hn : K' * β^e = n + n. So 2 n = K' β^e.
+    have h_2n_eq : 2 * n = K' * (beta.val : ℤ) ^ e.toNat := by linarith
+    -- Substitute n = Mq · β^e: 2 (Mq · β^e) = K' · β^e.
+    have h_pow_ne : (beta.val : ℤ) ^ e.toNat ≠ 0 := by
+      have : 0 < (beta.val : ℤ) ^ e.toNat := by
+        apply pow_pos
+        have : 1 < beta.val := beta.prop
+        omega
+      omega
+    have h_2Mq_eq_K' : 2 * Mq = K' := by
+      rw [h_int_eq] at h_2n_eq
+      have h_factor : (2 * Mq) * (beta.val : ℤ) ^ e.toNat
+                    = K' * (beta.val : ℤ) ^ e.toNat := by linarith
+      exact mul_right_cancel₀ h_pow_ne h_factor
+    -- K' = 2 Mq means K' is even, contradicting K' odd.
+    have h_K'_even : Even K' := ⟨Mq, by linarith⟩
+    exact absurd h_K'_even (Int.not_even_iff_odd.mpr h_K'_odd)
+
 /-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
 just the tie-conditional hard-case parity hypothesis (rather than the full
 `Rnd_NE_pt`) and concludes `round_NE = hx`. For odd radix, prefer
