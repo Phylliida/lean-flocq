@@ -3011,4 +3011,309 @@ theorem Veltkamp_Even_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
   · exact Veltkamp_Even_FLX_odd beta prec hp choice h_odd Fx hx_pos hs_lo hs_hi
   · exact Veltkamp_Even_FLX_of_Rnd_NE_pt beta prec choice hs_hi h_pt
 
+/-! ### Veltkamp_Even at FLX (even-radix case) — path-2 dichotomy reduction
+
+For even radix β, the parity-at-tie argument for `Veltkamp_Even` reduces to a
+single hard subcase via the format-side dichotomy on `M_total = Mp + Mq`,
+where `hx = M_total · β^(s+cx)`:
+
+- **Boundary** (`|M_total| = β^(prec−s)`): `hx = ±β^m`. The canonical mantissa
+  at coarser precision `prec − s` is `±β^(prec−s−1)`, which is divisible by β
+  (since `prec − s − 1 ≥ 1`), hence even for even β.
+
+- **Low-mag interior** (`|M_total| < β^(prec−s−1)`): `mag(hx) < m`. The canonical
+  exponent is strictly less than `s+cx`, so the canonical mantissa is
+  `M_total · β^d` for some `d ≥ 1`, hence divisible by β, hence even.
+
+- **Hard interior** (`β^(prec−s−1) ≤ |M_total| < β^(prec−s)`): `mag(hx) = m`.
+  The canonical mantissa is exactly `M_total`. Need `M_total` even — the
+  remaining algorithmic content (Pff's `VeltkampEven1`, ~292 Coq lines of
+  parity-tracking through the three NE-rounded steps).
+-/
+
+/-- **Path-2 helper: an even mantissa `g.Fnum` via a β-factor witness.**
+If `f = N · β^e` with `β | N` and β is even, then `N` is even — and we can
+package this into an `NE_prop` witness once we know the canonical exponent
+matches `e`. This is the "easy" structural part of the dichotomy: any
+representation of `hx` at a canonical exponent strictly below `s+cx` gives
+us a multiple-of-β mantissa for free. -/
+private theorem even_pow_of_pos (beta : radix) (h_even_beta : Even beta.val)
+    {d : ℤ} (hd : 1 ≤ d) :
+    Even ((beta.val : ℤ) ^ d.toNat) := by
+  have hd_toNat_pos : 0 < d.toNat := by omega
+  rw [show d.toNat = (d.toNat - 1) + 1 from by omega, pow_succ]
+  exact Even.mul_left h_even_beta _
+
+/-- **Path-2 dichotomy: `Veltkamp_Even` at FLX, even-radix case, NE_prop part.**
+For even β, the parity-at-tie content reduces to a single hard subcase. Given
+the parity hypothesis for the hard subcase (`β^(prec−s−1) ≤ |M| < β^(prec−s)`,
+which corresponds to `mag(hx) = mag(x)`), `NE_prop` for `hx` holds. The other
+two subcases (boundary `|M| = β^(prec−s)` → `hx = ±β^m`, low-mag
+`|M| < β^(prec−s−1)` → `mag(hx) < mag(x)`) discharge automatically via the
+divisibility-by-β structure of `hx`'s canonical mantissa. -/
+theorem Veltkamp_hx_NE_prop_FLX_even_radix
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (h_even_beta : Even beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_parity_hard :
+       ∀ M : ℤ,
+         Veltkamp_hx_FLX beta prec choice s x
+           = (M : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) →
+         (beta.val : ℤ) ^ ((prec - s - 1).toNat) ≤ |M| →
+         |M| < (beta.val : ℤ) ^ (prec - s).toNat →
+         Even M) :
+    NE_prop beta (FLX_exp (prec - s)) x
+            (Veltkamp_hx_FLX beta prec choice s x) := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  set hx := Veltkamp_hx_FLX beta prec choice s x with hhx_def
+  have hcx_eq : cx = m - prec := rfl
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hβ_pos_int : (0 : ℤ) < beta.val := by have := beta.prop; linarith
+  have h_bpow_scx_pos : (0 : ℝ) < bpow beta (s + cx) := bpow_gt_0 _ _
+  have h_prec_s_nn : 0 ≤ prec - s := by linarith
+  have h_prec_s_m1_nn : 0 ≤ prec - s - 1 := by linarith
+  -- Extract M_total = Mq + Mp.
+  obtain ⟨Mp, hp_eq⟩ :=
+    Veltkamp_p_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  obtain ⟨Mq, hq_eq⟩ :=
+    Veltkamp_q_at_scx_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  have h_hxExact :
+    hx = Veltkamp_q_FLX beta prec choice s x + Veltkamp_p_FLX beta prec choice s x :=
+    hxExact_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  set M_total : ℤ := Mq + Mp with hM_def
+  have h_hx_form : hx = ((M_total : ℤ) : ℝ) * bpow beta (s + cx) := by
+    rw [h_hxExact, hq_eq, hp_eq, hM_def]; push_cast; ring
+  -- hx > 0 (already known since |x - hx| < x).
+  have h_err : |x - hx| ≤ bpow beta (s + cx) / 2 :=
+    Veltkamp_aux_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  have h_x_ge : bpow beta (m - 1) ≤ x := by
+    have := bpow_mag_le beta (ne_of_gt hx_pos); rwa [abs_of_pos hx_pos] at this
+  have h_err_lt_x : |x - hx| < x := by
+    have h_scx_le : bpow beta (s + cx) ≤ bpow beta (m - 2) := by
+      apply bpow_le; rw [hcx_eq]; linarith
+    have h_m2_lt : bpow beta (m - 2) / 2 < bpow beta (m - 1) := by
+      have h_half_le : bpow beta (m - 2) / 2 ≤ bpow beta (m - 2) := by
+        have := bpow_gt_0 beta (m - 2); linarith
+      have h_strict : bpow beta (m - 2) < bpow beta (m - 1) := bpow_lt beta (by linarith)
+      linarith
+    linarith
+  have h_hx_pos : 0 < hx := by
+    rcases le_or_lt (x - hx) 0 with h | h
+    · linarith [abs_of_nonpos h]
+    · linarith [abs_of_pos h]
+  have h_M_pos : 0 < M_total := by
+    have h_M_real_pos : 0 < ((M_total : ℤ) : ℝ) := by
+      have : 0 < ((M_total : ℤ) : ℝ) * bpow beta (s + cx) := by
+        rw [← h_hx_form]; exact h_hx_pos
+      exact (mul_pos_iff_of_pos_right h_bpow_scx_pos).mp this
+    exact_mod_cast h_M_real_pos
+  -- |M_total| ≤ β^(prec-s) from format-side (we reproduce the bound here).
+  have h_bpow_m_eq : bpow beta m = bpow beta (prec - s) * bpow beta (s + cx) := by
+    rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+  have h_x_lt_bpow : x < bpow beta m := by
+    have := bpow_mag_gt beta x; rwa [abs_of_pos hx_pos] at this
+  have h_hx_abs_lt : hx < bpow beta m + bpow beta (s + cx) / 2 := by
+    have h_tri : |hx| ≤ |x| + |x - hx| := by
+      calc |hx| = |-(x - hx) + x| := by ring_nf
+        _ ≤ |-(x - hx)| + |x| := abs_add_le _ _
+        _ = |x| + |x - hx| := by rw [abs_neg]; ring
+    rw [abs_of_pos hx_pos, abs_of_pos h_hx_pos] at h_tri; linarith
+  have h_pow_real_pushed :
+      ((beta.val : ℝ)) ^ (prec - s).toNat = bpow beta (prec - s) := by
+    have := IZR_Zpower beta h_prec_s_nn; push_cast at this; exact this
+  have h_M_strict_real : ((M_total : ℤ) : ℝ) < bpow beta (prec - s) + 1/2 := by
+    have h_step : ((M_total : ℤ) : ℝ) * bpow beta (s + cx)
+                  < bpow beta m + bpow beta (s + cx) / 2 := by
+      rw [← h_hx_form]; exact h_hx_abs_lt
+    rw [h_bpow_m_eq] at h_step
+    have h_factor : bpow beta (prec - s) * bpow beta (s + cx) + bpow beta (s + cx) / 2
+                  = (bpow beta (prec - s) + 1/2) * bpow beta (s + cx) := by ring
+    rw [h_factor] at h_step
+    exact (mul_lt_mul_iff_of_pos_right h_bpow_scx_pos).mp h_step
+  have h_2M_strict_int : 2 * M_total < 2 * (beta.val : ℤ) ^ (prec - s).toNat + 1 := by
+    have h_real : (((2 * M_total : ℤ) : ℝ))
+                < (((2 * (beta.val : ℤ) ^ (prec - s).toNat + 1 : ℤ) : ℝ)) := by
+      push_cast; rw [h_pow_real_pushed]; linarith
+    exact_mod_cast h_real
+  have h_M_le_pow : M_total ≤ (beta.val : ℤ) ^ (prec - s).toNat := by omega
+  -- |M_total| = M_total (since positive).
+  have h_M_abs : |M_total| = M_total := abs_of_pos h_M_pos
+  -- Three-way case split: boundary, hard, low-mag.
+  -- Bridge: ((beta.val ^ d.toNat : ℤ) : ℝ) = bpow beta d for d ≥ 0.
+  have h_bpow_psm1 : ((beta.val ^ (prec - s - 1).toNat : ℤ) : ℝ)
+                   = bpow beta (prec - s - 1) :=
+    IZR_Zpower beta h_prec_s_m1_nn
+  have h_bpow_ps : ((beta.val ^ (prec - s).toNat : ℤ) : ℝ) = bpow beta (prec - s) :=
+    IZR_Zpower beta h_prec_s_nn
+  by_cases h_boundary : M_total = beta.val ^ (prec - s).toNat
+  · -- BOUNDARY: M_total = β^(prec-s). hx = β^m. Canonical mantissa = β^(prec-s-1), even.
+    have h_hx_eq_bpow : hx = bpow beta m := by
+      rw [h_hx_form, h_boundary]
+      rw [show ((beta.val ^ (prec - s).toNat : ℤ) : ℝ) * bpow beta (s + cx)
+            = bpow beta (prec - s) * bpow beta (s + cx) from by rw [h_bpow_ps],
+          ← h_bpow_m_eq]
+    -- Build g = ⟨β^(prec-s-1), m+1-(prec-s)⟩.
+    refine ⟨⟨beta.val ^ (prec - s - 1).toNat, m + 1 - (prec - s)⟩, ?_, ?_, ?_⟩
+    · -- F2R g = hx = β^m.
+      show hx = ((beta.val ^ (prec - s - 1).toNat : ℤ) : ℝ)
+                * bpow beta (m + 1 - (prec - s))
+      rw [h_hx_eq_bpow, h_bpow_psm1, ← bpow_plus]
+      congr 1; ring
+    · -- canonical: cexp at exp m+1-(prec-s).
+      have h_F2R_eq : F2R (beta := beta)
+                        ⟨beta.val ^ (prec - s - 1).toNat, m + 1 - (prec - s)⟩
+                      = bpow beta m := by
+        show ((beta.val ^ (prec - s - 1).toNat : ℤ) : ℝ)
+             * bpow beta (m + 1 - (prec - s)) = bpow beta m
+        rw [h_bpow_psm1, ← bpow_plus]
+        congr 1; ring
+      show m + 1 - (prec - s) = cexp beta (FLX_exp (prec - s)) _
+      rw [h_F2R_eq]
+      show m + 1 - (prec - s) = FLX_exp (prec - s) (mag beta (bpow beta m))
+      rw [mag_bpow]
+      unfold FLX_exp; ring
+    · -- Even β^(prec-s-1) since prec-s-1 ≥ 1.
+      exact even_pow_of_pos beta h_even_beta (by linarith : (1 : ℤ) ≤ prec - s - 1)
+  · -- INTERIOR: M_total < β^(prec-s). Now subdivide on β^(prec-s-1).
+    have h_M_lt_pow : M_total < (beta.val : ℤ) ^ (prec - s).toNat := by
+      cases lt_or_eq_of_le h_M_le_pow with
+      | inl h => exact h
+      | inr h => exact absurd h h_boundary
+    by_cases h_hard : beta.val ^ (prec - s - 1).toNat ≤ M_total
+    · -- HARD INTERIOR: β^(prec-s-1) ≤ M_total < β^(prec-s). Use h_parity_hard.
+      have h_M_even : Even M_total :=
+        h_parity_hard M_total h_hx_form
+          (by rw [h_M_abs]; exact h_hard)
+          (by rw [h_M_abs]; exact h_M_lt_pow)
+      -- Build g = ⟨M_total, s+cx⟩.
+      refine ⟨⟨M_total, s + cx⟩, h_hx_form, ?_, h_M_even⟩
+      -- Canonical: mag(hx) = m, so cexp_{prec-s}(hx) = m - (prec-s) = s+cx.
+      show s + cx = cexp beta (FLX_exp (prec - s)) (F2R (beta := beta) ⟨M_total, s + cx⟩)
+      have h_F2R_eq : F2R (beta := beta) ⟨M_total, s + cx⟩ = hx := h_hx_form.symm
+      rw [h_F2R_eq]
+      show s + cx = FLX_exp (prec - s) (mag beta hx)
+      have h_mag_hx : mag beta hx = m := by
+        apply mag_unique_pos beta
+        · -- β^(m-1) ≤ hx
+          have h_lo_real : ((beta.val ^ (prec - s - 1).toNat : ℤ) : ℝ)
+                          ≤ ((M_total : ℤ) : ℝ) := by exact_mod_cast h_hard
+          have h_lo_bpow : bpow beta (prec - s - 1) ≤ ((M_total : ℤ) : ℝ) := by
+            rw [← h_bpow_psm1]; exact h_lo_real
+          calc bpow beta (m - 1)
+              = bpow beta (prec - s - 1) * bpow beta (s + cx) := by
+                rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+            _ ≤ ((M_total : ℤ) : ℝ) * bpow beta (s + cx) :=
+                mul_le_mul_of_nonneg_right h_lo_bpow (le_of_lt h_bpow_scx_pos)
+            _ = hx := h_hx_form.symm
+        · -- hx < β^m
+          have h_M_real_lt : ((M_total : ℤ) : ℝ) < bpow beta (prec - s) := by
+            have : (((M_total : ℤ)) : ℝ) < ((beta.val ^ (prec - s).toNat : ℤ) : ℝ) := by
+              exact_mod_cast h_M_lt_pow
+            rw [h_bpow_ps] at this; exact this
+          calc hx = ((M_total : ℤ) : ℝ) * bpow beta (s + cx) := h_hx_form
+            _ < bpow beta (prec - s) * bpow beta (s + cx) :=
+                (mul_lt_mul_iff_of_pos_right h_bpow_scx_pos).mpr h_M_real_lt
+            _ = bpow beta m := h_bpow_m_eq.symm
+      rw [h_mag_hx]
+      unfold FLX_exp; rw [hcx_eq]; ring
+    · -- LOW-MAG INTERIOR: M_total < β^(prec-s-1). Build g at lower canonical exp.
+      push_neg at h_hard
+      have h_M_real_lt_low : ((M_total : ℤ) : ℝ) < bpow beta (prec - s - 1) := by
+        have : (((M_total : ℤ)) : ℝ) < ((beta.val ^ (prec - s - 1).toNat : ℤ) : ℝ) := by
+          exact_mod_cast h_hard
+        rw [h_bpow_psm1] at this; exact this
+      have h_hx_lt_bpow_m1 : hx < bpow beta (m - 1) := by
+        calc hx = ((M_total : ℤ) : ℝ) * bpow beta (s + cx) := h_hx_form
+          _ < bpow beta (prec - s - 1) * bpow beta (s + cx) :=
+              (mul_lt_mul_iff_of_pos_right h_bpow_scx_pos).mpr h_M_real_lt_low
+          _ = bpow beta (m - 1) := by rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+      -- Canonical exp = mag(hx) - (prec-s) ≤ (m-1) - (prec-s) = s + cx - 1.
+      set e_can : ℤ := cexp beta (FLX_exp (prec - s)) hx with he_can_def
+      have h_e_can_lt : e_can ≤ s + cx - 1 := by
+        show FLX_exp (prec - s) (mag beta hx) ≤ s + cx - 1
+        unfold FLX_exp
+        have h_mag_le : mag beta hx ≤ m - 1 := by
+          apply mag_le_bpow beta (ne_of_gt h_hx_pos)
+          rw [abs_of_pos h_hx_pos]; exact h_hx_lt_bpow_m1
+        linarith
+      -- Build g = ⟨M_total · β^d, e_can⟩ where d = (s+cx) - e_can ≥ 1.
+      set d : ℤ := (s + cx) - e_can with hd_def
+      have hd_pos : 1 ≤ d := by simp [hd_def]; linarith
+      have hd_nn : 0 ≤ d := by linarith
+      have h_bpow_d : ((beta.val ^ d.toNat : ℤ) : ℝ) = bpow beta d :=
+        IZR_Zpower beta hd_nn
+      have h_bpow_split : bpow beta d * bpow beta e_can = bpow beta (s + cx) := by
+        rw [← bpow_plus]; congr 1; simp [hd_def]
+      refine ⟨⟨M_total * beta.val ^ d.toNat, e_can⟩, ?_, ?_, ?_⟩
+      · -- F2R g = hx
+        show hx = ((M_total * beta.val ^ d.toNat : ℤ) : ℝ) * bpow beta e_can
+        rw [Int.cast_mul, h_bpow_d, mul_assoc, h_bpow_split]
+        exact h_hx_form
+      · -- canonical
+        have h_F2R_eq : F2R (beta := beta)
+                          ⟨M_total * beta.val ^ d.toNat, e_can⟩ = hx := by
+          show ((M_total * beta.val ^ d.toNat : ℤ) : ℝ) * bpow beta e_can = hx
+          rw [Int.cast_mul, h_bpow_d, mul_assoc, h_bpow_split]
+          exact h_hx_form.symm
+        show e_can = cexp beta (FLX_exp (prec - s)) _
+        rw [h_F2R_eq]
+      · -- Even M_total · β^d.toNat since d ≥ 1.
+        have h_pow_even : Even (beta.val ^ d.toNat) :=
+          even_pow_of_pos beta h_even_beta hd_pos
+        exact h_pow_even.mul_left _
+
+/-- **Veltkamp's `hx` is at `Rnd_NE_pt`, even-radix case (conditional).** For
+even radix β, combines the Rnd_N_pt foundation (`Veltkamp_hx_Rnd_N_pt_FLX`)
+with the NE_prop builder (`Veltkamp_hx_NE_prop_FLX_even_radix`) to produce
+the full `Rnd_NE_pt` for `hx`, conditional on the hard-case parity hypothesis.
+The hypothesis is the only remaining algorithmic content: at a coarse tie with
+`mag(hx) = mag(x)`, the integer coefficient `M_total = Mp + Mq` is even. -/
+theorem Veltkamp_hx_Rnd_NE_pt_FLX_even_radix
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (h_even_beta : Even beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_parity_hard :
+       ∀ M : ℤ,
+         Veltkamp_hx_FLX beta prec choice s x
+           = (M : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) →
+         (beta.val : ℤ) ^ ((prec - s - 1).toNat) ≤ |M| →
+         |M| < (beta.val : ℤ) ^ (prec - s).toNat →
+         Even M) :
+    Rnd_NE_pt beta (FLX_exp (prec - s)) x
+              (Veltkamp_hx_FLX beta prec choice s x) := by
+  refine ⟨Veltkamp_hx_Rnd_N_pt_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi,
+         Or.inl ?_⟩
+  exact Veltkamp_hx_NE_prop_FLX_even_radix beta prec hp choice
+    h_even_beta Fx hx_pos hs_lo hs_hi h_parity_hard
+
+/-- **Veltkamp_Even at FLX (refined, even-radix path 2)**: takes just the
+hard-case parity hypothesis (rather than the full `Rnd_NE_pt`) and concludes
+`round_NE = hx`. For odd radix, prefer `Veltkamp_Even_FLX_odd` (which
+discharges the parity gap entirely via no-tie). This is the cleanest entry
+point for even-radix Veltkamp_Even modulo the remaining `M_total`-even
+parity work. -/
+theorem Veltkamp_Even_FLX_even_radix
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (h_even_beta : Even beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_parity_hard :
+       ∀ M : ℤ,
+         Veltkamp_hx_FLX beta prec choice s x
+           = (M : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) →
+         (beta.val : ℤ) ^ ((prec - s - 1).toNat) ≤ |M| →
+         |M| < (beta.val : ℤ) ^ (prec - s).toNat →
+         Even M) :
+    round_NE beta (FLX_exp (prec - s)) x
+      = Veltkamp_hx_FLX beta prec choice s x := by
+  apply Veltkamp_Even_FLX_of_Rnd_NE_pt beta prec choice hs_hi
+  exact Veltkamp_hx_Rnd_NE_pt_FLX_even_radix beta prec hp choice
+    h_even_beta Fx hx_pos hs_lo hs_hi h_parity_hard
+
 end LeanFlocq
