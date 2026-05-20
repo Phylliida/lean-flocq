@@ -164,18 +164,25 @@ piece by piece:
 - `ZnearestE_even_at_midpoint`: at `mx − ⌊mx⌋ = 1/2`, ZnearestE
   returns even integer.
 
-Remaining work for the full `Veltkamp_Even_FLX` at even radix:
-- Bound `cexp(p) ∈ {s+cx, s+cx+1}` (Pff's `Veltkamp_aux_aux` restricted
-  to p, ~250 Coq lines — boundary analysis for round_N near `β^(m+s)`).
-- Bridge: when `cexp(p) = s+cx`, derive `M_p_canonical = ZnearestE(sm)`
-  with `sm = scaled_mantissa(x·C) at FLX prec`, then apply
-  `ZnearestE_even_at_midpoint`.
-- Symmetric argument for `Mq` via `x − p`'s analogous half-integer
-  structure.
-- Combine to `Even M_total = Even (Mp + Mq)`.
+**Plus the main Mp parity theorem (2026-05-20)**:
+`Veltkamp_Mp_even_at_tie_hard_NE_FLX` proves Even Mp at coarse tie +
+hard interior + NE choice. Case-splits on cexp(p) ?= s+cx:
+- High: β factor via `Veltkamp_Mp_even_via_high_cexp`.
+- Equal: derives mag(x·C) = m+s (via `Veltkamp_p_cexp_high_FLX`
+  contrapositive), scaled_mantissa half-integer
+  (`Veltkamp_xC_sm_at_midpoint_FLX`), ZnearestE picks even
+  (`ZnearestE_even_at_midpoint`), Mp = ZnearestE(sm) via the round
+  formula expansion.
 
-Estimate: ~100-200 more Lean lines on top of the helpers, gated on the
-cexp bound.
+Remaining work:
+- Symmetric Mq parity theorem via x−p's analogous half-integer structure
+  (k_q = 2M_total + ε - 2Mp is odd regardless of Mp parity).
+- Combine `Even Mp ∧ Even Mq → Even M_total`.
+- Wire into `Veltkamp_Even_FLX_even_radix` (currently takes the parity
+  as input, with the wired version concluding `round_NE = hx`
+  unconditionally for NE choice).
+
+Estimate: ~150-200 more lines for Mq + combine.
 
 **~29790 lines of Lean across 30 files. 0 `sorry`s. All files build clean.**
 
