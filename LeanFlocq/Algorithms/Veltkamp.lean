@@ -3621,6 +3621,80 @@ private theorem Veltkamp_p_cexp_high_FLX (beta : radix) (prec : ℤ) (hp : 0 < p
     show s + cx + 1 ≤ FLX_exp prec (mag beta p)
     unfold FLX_exp; rw [hcx_eq]; linarith
 
+/-- **Bridge helper**: at coarse tie + hard interior with `cexp(p) ≤ s+cx`,
+`scaled_mantissa(x · C)` at `FLX(prec)` has `mx − ⌊mx⌋ = 1/2`. The proof:
+`cexp(p) ≤ s+cx` combined with `Veltkamp_p_cexp_high_FLX`'s contrapositive
+forces `mag(x · C) = m+s`, hence `cexp(x · C) = s+cx`. Then
+`scaled_mantissa = x · C / β^(s+cx) = (β^s + 1)(2 M_total + ε)/2`, an
+odd-integer-half (half-integer). -/
+private theorem Veltkamp_xC_sm_at_midpoint_FLX
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (h_even_beta : Even beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (M_total eps : ℤ)
+    (h_eps : eps = 1 ∨ eps = -1)
+    (h_x_eq : x = ((M_total : ℝ) + (eps : ℝ) / 2)
+                  * bpow beta (s + cexp beta (FLX_exp prec) x))
+    (h_cexp_p_le :
+      cexp beta (FLX_exp prec) (Veltkamp_p_FLX beta prec choice s x)
+        ≤ s + cexp beta (FLX_exp prec) x) :
+    scaled_mantissa beta (FLX_exp prec) (x * Veltkamp_C beta s)
+      - (⌊scaled_mantissa beta (FLX_exp prec) (x * Veltkamp_C beta s)⌋ : ℝ) = 1/2 := by
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  have hs_pos : 1 ≤ s := by linarith
+  have hs_nn : 0 ≤ s := by linarith
+  -- mag(x · C) = m+s (from contrapositive of Veltkamp_p_cexp_high_FLX).
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  have h_mag_xC_lower : m + s ≤ mag beta (x * Veltkamp_C beta s) :=
+    (mag_xC_bounds beta hx_ne hs_pos).1
+  have h_mag_xC_not_high : ¬ (m + s + 1 ≤ mag beta (x * Veltkamp_C beta s)) := by
+    intro h_high
+    have h_cexp_p_high :=
+      Veltkamp_p_cexp_high_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi h_high
+    linarith
+  have h_mag_xC : mag beta (x * Veltkamp_C beta s) = m + s := by
+    have h_lt : mag beta (x * Veltkamp_C beta s) < m + s + 1 := by
+      push_neg at h_mag_xC_not_high; exact h_mag_xC_not_high
+    linarith
+  -- cexp(x · C) = s + cx.
+  have h_cexp_xC : cexp beta (FLX_exp prec) (x * Veltkamp_C beta s) = s + cx := by
+    show FLX_exp prec (mag beta (x * Veltkamp_C beta s)) = s + cx
+    rw [h_mag_xC]
+    unfold FLX_exp; rw [hcx_eq]; ring
+  -- x · C in our explicit form.
+  have h_xC_form : x * Veltkamp_C beta s
+                 = ((((beta.val ^ s.toNat : ℤ) + 1) * (2 * M_total + eps) : ℝ) / 2)
+                   * bpow beta (s + cx) :=
+    Veltkamp_xC_form_at_tie beta M_total eps cx h_x_eq hs_nn
+  -- scaled_mantissa(x · C) = ((β^s + 1)(2 M_total + ε)) / 2.
+  set k : ℤ := ((beta.val ^ s.toNat : ℤ) + 1) * (2 * M_total + eps) with hk_def
+  have h_k_odd : Odd k := Veltkamp_xC_coef_odd beta h_even_beta hs_pos M_total eps h_eps
+  have h_sm_eq : scaled_mantissa beta (FLX_exp prec) (x * Veltkamp_C beta s)
+               = (k : ℝ) / 2 := by
+    show (x * Veltkamp_C beta s)
+         * bpow beta (-cexp beta (FLX_exp prec) (x * Veltkamp_C beta s))
+       = (k : ℝ) / 2
+    rw [h_cexp_xC, h_xC_form]
+    have h_bpow_inv : bpow beta (s + cx) * bpow beta (-(s + cx)) = 1 := by
+      rw [← bpow_plus, show s + cx + -(s + cx) = 0 from by ring, bpow_zero]
+    rw [mul_assoc, h_bpow_inv, mul_one]
+    show (((beta.val ^ s.toNat : ℤ) : ℝ) + 1) * (2 * (M_total : ℝ) + (eps : ℝ)) / 2
+       = (k : ℝ) / 2
+    rw [hk_def]; push_cast; ring
+  -- k is odd ⟹ k/2 - ⌊k/2⌋ = 1/2.
+  obtain ⟨j, hj⟩ := h_k_odd
+  rw [h_sm_eq, hj]
+  have h_eq : ((2 * j + 1 : ℤ) : ℝ) / 2 = (j : ℝ) + 1/2 := by push_cast; ring
+  rw [h_eq]
+  have h_floor : ⌊(j : ℝ) + 1/2⌋ = j := by
+    apply Int.floor_eq_iff.mpr
+    refine ⟨by push_cast; linarith, by push_cast; linarith⟩
+  rw [h_floor]; push_cast; ring
+
 /-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
 just the tie-conditional hard-case parity hypothesis (rather than the full
 `Rnd_NE_pt`) and concludes `round_NE = hx`. For odd radix, prefer
