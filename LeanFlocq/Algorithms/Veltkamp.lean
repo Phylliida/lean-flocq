@@ -3358,7 +3358,10 @@ theorem Veltkamp_hx_Rnd_NE_pt_FLX_even_radix
     intro M hM h_lo h_hi
     exact h_parity_at_tie_hard M hM h_tie h_lo h_hi
 
-/-! ### Pff parity argument at coarse tie + hard interior (sketch only)
+/-! ### Pff parity argument at coarse tie + hard interior
+
+Faithful port of Pff's `VeltkampEven1` structure, restricted to the
+hard-interior subcase. Helpers ported piece by piece.
 
 The path-2 dichotomy reduces the parity-at-tie work to: for even β and
 the NE choice, at a coarse tie in the hard interior, `M_total = Mp + Mq`
@@ -3394,6 +3397,80 @@ specific subcase of the argument, and the existing format-side helpers
 `round_NE_pt_pos` provide most of the machinery. Pending future
 session(s).
 -/
+
+/-- **Pff helper**: `β^s + 1` is odd when β is even and `s ≥ 1`. Used in
+the parity argument: `(β^s + 1)(2M ± 1)` is odd (product of two odds),
+hence `x · C` is at a half-integer multiple of `β^(s+cx)`. -/
+private theorem Veltkamp_bpow_plus_one_odd (beta : radix) (h_even_beta : Even beta.val)
+    {s : ℤ} (hs : 1 ≤ s) :
+    Odd (beta.val ^ s.toNat + 1) := by
+  have hs_toNat_pos : 0 < s.toNat := by omega
+  have h_pow_even : Even (beta.val ^ s.toNat) := by
+    rw [show s.toNat = (s.toNat - 1) + 1 from by omega, pow_succ]
+    exact Even.mul_left h_even_beta _
+  exact Even.add_one h_pow_even
+
+/-- **Pff helper**: at a coarse tie, extract the sign of the deviation.
+Given `|x − hx| = β^(s+cx)/2` and `hx = M_total · β^(s+cx)`, we get
+`x = (M_total + ε/2) · β^(s+cx)` for some `ε ∈ {−1, +1}`. -/
+private theorem Veltkamp_tie_eps_FLX (beta : radix) (prec : ℤ)
+    {s : ℤ} {x hx_val : ℝ} (M_total : ℤ) (cx : ℤ)
+    (h_hx_form : hx_val = (M_total : ℝ) * bpow beta (s + cx))
+    (h_tie : |x - hx_val| = bpow beta (s + cx) / 2) :
+    ∃ eps : ℤ, (eps = 1 ∨ eps = -1) ∧
+               x = ((M_total : ℝ) + (eps : ℝ) / 2) * bpow beta (s + cx) := by
+  have h_bpow_pos : (0 : ℝ) < bpow beta (s + cx) := bpow_gt_0 _ _
+  -- |x - hx_val| = β^(s+cx)/2 means x - hx_val = ±β^(s+cx)/2.
+  have h_sign : x - hx_val = bpow beta (s + cx) / 2 ∨
+                x - hx_val = -(bpow beta (s + cx) / 2) := by
+    rcases le_or_gt 0 (x - hx_val) with h_nn | h_neg
+    · left; rw [abs_of_nonneg h_nn] at h_tie; exact h_tie
+    · right
+      rw [abs_of_neg h_neg] at h_tie
+      linarith
+  rcases h_sign with h_pos | h_neg
+  · refine ⟨1, Or.inl rfl, ?_⟩
+    rw [h_hx_form] at h_pos
+    have : x = (M_total : ℝ) * bpow beta (s + cx) + bpow beta (s + cx) / 2 := by linarith
+    rw [this]; push_cast; ring
+  · refine ⟨-1, Or.inr rfl, ?_⟩
+    rw [h_hx_form] at h_neg
+    have : x = (M_total : ℝ) * bpow beta (s + cx) - bpow beta (s + cx) / 2 := by linarith
+    rw [this]; push_cast; ring
+
+/-- **Pff helper**: the explicit form of `x · C` at coarse tie + hard interior.
+Given `x = (M_total + ε/2) · β^(s+cx)` and `C = β^s + 1`, compute
+
+  `x · C = (β^s + 1) · (2 M_total + ε) / 2 · β^(s+cx)`.
+
+The "midpoint" structure: for even β and `s ≥ 1`, both `(β^s + 1)` and
+`(2 M_total + ε)` are odd, so the integer coefficient is odd, putting
+`x · C` at a half-integer multiple of `β^(s+cx)`. -/
+private theorem Veltkamp_xC_form_at_tie (beta : radix)
+    {s : ℤ} {x : ℝ} (M_total eps : ℤ) (cx : ℤ)
+    (h_x_eq : x = ((M_total : ℝ) + (eps : ℝ) / 2) * bpow beta (s + cx))
+    (hs_nn : 0 ≤ s) :
+    x * Veltkamp_C beta s
+      = ((((beta.val ^ s.toNat : ℤ) + 1) * (2 * M_total + eps) : ℝ) / 2)
+        * bpow beta (s + cx) := by
+  have h_bpow_s_int : bpow beta s = ((beta.val ^ s.toNat : ℤ) : ℝ) :=
+    (IZR_Zpower beta hs_nn).symm
+  have hC : Veltkamp_C beta s = bpow beta s + 1 := rfl
+  rw [h_x_eq, hC, h_bpow_s_int]
+  push_cast; ring
+
+/-- **Pff helper**: the product `(β^s + 1)(2M + ε)` is odd when `ε ∈ {−1, +1}`
+and β is even, `s ≥ 1`. -/
+private theorem Veltkamp_xC_coef_odd (beta : radix) (h_even_beta : Even beta.val)
+    {s : ℤ} (hs : 1 ≤ s) (M_total eps : ℤ) (h_eps : eps = 1 ∨ eps = -1) :
+    Odd (((beta.val ^ s.toNat : ℤ) + 1) * (2 * M_total + eps)) := by
+  have h_bpow_odd : Odd (beta.val ^ s.toNat + 1) :=
+    Veltkamp_bpow_plus_one_odd beta h_even_beta hs
+  have h_lin_odd : Odd (2 * M_total + eps) := by
+    rcases h_eps with h | h
+    · rw [h]; exact ⟨M_total, by ring⟩
+    · rw [h]; refine ⟨M_total - 1, by ring⟩
+  exact h_bpow_odd.mul h_lin_odd
 
 /-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
 just the tie-conditional hard-case parity hypothesis (rather than the full
