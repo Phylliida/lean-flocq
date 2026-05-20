@@ -380,7 +380,7 @@ private theorem NE_existence_prop_holds (beta : radix) (fexp : ℤ → ℤ)
 /-- The NE tie-breaker uniquely selects between DN and UP: at most one has
 an even canonical mantissa, so two values both satisfying `NE_prop` must
 coincide. -/
-private theorem NE_unique_prop_holds (beta : radix) (fexp : ℤ → ℤ)
+theorem NE_unique_prop_holds (beta : radix) (fexp : ℤ → ℤ)
     (hValid : Valid_exp fexp) [Exists_NE beta fexp] :
     Rnd_NG_pt_unique_prop (generic_format beta fexp) (NE_prop beta fexp) := by
   intro x d u Hd_dn _Hd_n Hu_up _Hu_n hP_d hP_u

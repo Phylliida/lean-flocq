@@ -2933,4 +2933,82 @@ theorem Veltkamp_hx_Rnd_N_pt_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     (FLX_exp_valid (prec - s) hp_minus_s_pos) choice' x
   rw [← h_eq]; exact h_pt
 
+/-! ### Bridge from `Rnd_NE_pt` to the `round_NE = hx` equality
+
+Given that `hx` satisfies `Rnd_NE_pt` at the coarser precision, the
+`round_NE = hx` equality (Pff's `Veltkamp_Even`) follows by uniqueness
+of `Rnd_NE_pt`: both `round_NE_{prec−s} x` and `hx` are `Rnd_NE_pt` of
+`x`, and `Rnd_NE_pt` is unique (`NE_unique_prop_holds`). -/
+
+/-- **Conditional `Veltkamp_Even` at FLX**: given the `Rnd_NE_pt`
+property for `hx`, the algorithm's output equals `round_NE` at the
+coarser precision. Uniqueness of `Rnd_NE_pt` does the work; this
+theorem is the bridge from "hx is the NE-rounded value" to "the round
+formula evaluates to hx". -/
+theorem Veltkamp_Even_FLX_of_Rnd_NE_pt (beta : radix) (prec : ℤ)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (hs_hi : s + 2 ≤ prec)
+    (h_pt : Rnd_NE_pt beta (FLX_exp (prec - s)) x
+              (Veltkamp_hx_FLX beta prec choice s x)) :
+    round_NE beta (FLX_exp (prec - s)) x
+      = Veltkamp_hx_FLX beta prec choice s x := by
+  have hp_minus_s_pos : 0 < prec - s := by linarith
+  have h_prec_minus_s_gt_1 : 1 < prec - s := by linarith
+  haveI : Exists_NE beta (FLX_exp (prec - s)) :=
+    exists_NE_FLX beta (prec - s) hp_minus_s_pos (Or.inr h_prec_minus_s_gt_1)
+  have h_valid := FLX_exp_valid (prec - s) hp_minus_s_pos
+  -- `round_NE x` is at `Rnd_NE_pt`.
+  have h_round_pt : Rnd_NE_pt beta (FLX_exp (prec - s)) x
+                      (round beta (FLX_exp (prec - s)) ZnearestE x) :=
+    round_NE_pt beta (FLX_exp (prec - s)) h_valid x
+  -- Uniqueness of `Rnd_NE_pt`.
+  have h_unique := NE_unique_prop_holds beta (FLX_exp (prec - s)) h_valid
+  show round_NE beta (FLX_exp (prec - s)) x
+      = Veltkamp_hx_FLX beta prec choice s x
+  unfold round_NE
+  exact Rnd_NG_pt_unique _ _ h_unique h_round_pt h_pt
+
+/-- **Veltkamp's `hx` is at `Rnd_NE_pt`, odd-radix case.** Discharges
+the parity/uniqueness disjunction in `Rnd_NG_pt` via the no-tie property
+established by `Veltkamp_Even_FLX_odd_radix`: any `Znearest` choice at
+the coarser precision produces `hx`, so `hx` is the unique closest. -/
+theorem Veltkamp_hx_Rnd_NE_pt_FLX_odd (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (h_odd_beta : Odd beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    Rnd_NE_pt beta (FLX_exp (prec - s)) x
+              (Veltkamp_hx_FLX beta prec choice s x) := by
+  have hp_minus_s_pos : 0 < prec - s := by linarith
+  have h_prec_minus_s_gt_1 : 1 < prec - s := by linarith
+  haveI : Exists_NE beta (FLX_exp (prec - s)) :=
+    exists_NE_FLX beta (prec - s) hp_minus_s_pos (Or.inr h_prec_minus_s_gt_1)
+  -- From `Veltkamp_Even_FLX_odd`: round_NE x = hx.
+  have h_eq := Veltkamp_Even_FLX_odd beta prec hp choice h_odd_beta
+    Fx hx_pos hs_lo hs_hi
+  -- round_NE x is at Rnd_NE_pt.
+  have h_pt := round_NE_pt beta (FLX_exp (prec - s))
+    (FLX_exp_valid (prec - s) hp_minus_s_pos) x
+  -- Transport.
+  rw [round_NE] at h_eq
+  rw [← h_eq]; exact h_pt
+
+/-- **Veltkamp_Even at FLX (general form, conditional)**: the algorithm's
+`hx` equals `round_NE_{prec−s} x` provided we know `hx` satisfies
+`Rnd_NE_pt`. This collapses to a single hypothesis call: either supply
+an odd-radix proof (Or.inl) or the parity-at-tie proof (Or.inr).
+For odd radix it's discharged automatically. -/
+theorem Veltkamp_Even_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (h_dispatch : Odd beta.val ∨
+                  Rnd_NE_pt beta (FLX_exp (prec - s)) x
+                            (Veltkamp_hx_FLX beta prec choice s x)) :
+    round_NE beta (FLX_exp (prec - s)) x
+      = Veltkamp_hx_FLX beta prec choice s x := by
+  rcases h_dispatch with h_odd | h_pt
+  · exact Veltkamp_Even_FLX_odd beta prec hp choice h_odd Fx hx_pos hs_lo hs_hi
+  · exact Veltkamp_Even_FLX_of_Rnd_NE_pt beta prec choice hs_hi h_pt
+
 end LeanFlocq
