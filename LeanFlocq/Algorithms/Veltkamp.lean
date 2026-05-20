@@ -3472,6 +3472,48 @@ private theorem Veltkamp_xC_coef_odd (beta : radix) (h_even_beta : Even beta.val
     · rw [h]; refine ⟨M_total - 1, by ring⟩
   exact h_bpow_odd.mul h_lin_odd
 
+/-- **Pff helper**: when `cexp(p) > scx`, the at-scx coefficient `Mp`
+has β as a factor. From the canonical form `p = M_can · β^cexp(p)` plus
+`p = Mp · β^scx`, we get `Mp = M_can · β^(cexp(p) - scx)` with the
+exponent ≥ 1. Hence Mp is divisible by β, hence even for even β. -/
+private theorem Veltkamp_Mp_even_via_high_cexp
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (h_even_beta : Even beta.val)
+    {p : ℝ} (Fp : generic_format beta (FLX_exp prec) p) (hp_pos : 0 < p)
+    {scx : ℤ} (Mp : ℤ) (hMp_eq : p = (Mp : ℝ) * bpow beta scx)
+    (h_cexp_high : scx < cexp beta (FLX_exp prec) p) :
+    Even Mp := by
+  -- Extract canonical form of p.
+  set cp : ℤ := cexp beta (FLX_exp prec) p with hcp_def
+  set M_can : ℤ := Ztrunc (scaled_mantissa beta (FLX_exp prec) p) with hMcan_def
+  have hp_canonical : p = (M_can : ℝ) * bpow beta cp := Fp
+  -- Set d = cp - scx ≥ 1.
+  set d : ℤ := cp - scx with hd_def
+  have hd_pos : 1 ≤ d := by simp [hd_def]; linarith
+  have hd_nn : 0 ≤ d := by linarith
+  have h_bpow_d : ((beta.val ^ d.toNat : ℤ) : ℝ) = bpow beta d :=
+    IZR_Zpower beta hd_nn
+  -- Derive Mp = M_can · β^d (real equation, then integer).
+  have h_bpow_scx_pos : (0 : ℝ) < bpow beta scx := bpow_gt_0 _ _
+  have h_bpow_split : bpow beta cp = bpow beta d * bpow beta scx := by
+    rw [← bpow_plus]; congr 1; simp [hd_def]
+  have h_Mp_real : (Mp : ℝ) = (M_can : ℝ) * bpow beta d := by
+    have h1 : (Mp : ℝ) * bpow beta scx = (M_can : ℝ) * (bpow beta d * bpow beta scx) := by
+      rw [← h_bpow_split, ← hp_canonical, hMp_eq]
+    have h2 : (Mp : ℝ) * bpow beta scx
+            = ((M_can : ℝ) * bpow beta d) * bpow beta scx := by
+      rw [h1]; ring
+    exact mul_right_cancel₀ (ne_of_gt h_bpow_scx_pos) h2
+  have h_Mp_int : Mp = M_can * beta.val ^ d.toNat := by
+    have h_real : ((Mp : ℤ) : ℝ) = ((M_can * beta.val ^ d.toNat : ℤ) : ℝ) := by
+      rw [h_Mp_real, Int.cast_mul, h_bpow_d]
+    exact_mod_cast h_real
+  -- β^d.toNat is even (d ≥ 1, β even).
+  have h_pow_even : Even (beta.val ^ d.toNat) :=
+    even_pow_of_pos beta h_even_beta hd_pos
+  rw [h_Mp_int]
+  exact h_pow_even.mul_left _
+
 /-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
 just the tie-conditional hard-case parity hypothesis (rather than the full
 `Rnd_NE_pt`) and concludes `round_NE = hx`. For odd radix, prefer
