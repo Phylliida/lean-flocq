@@ -3358,6 +3358,43 @@ theorem Veltkamp_hx_Rnd_NE_pt_FLX_even_radix
     intro M hM h_lo h_hi
     exact h_parity_at_tie_hard M hM h_tie h_lo h_hi
 
+/-! ### Pff parity argument at coarse tie + hard interior (sketch only)
+
+The path-2 dichotomy reduces the parity-at-tie work to: for even β and
+the NE choice, at a coarse tie in the hard interior, `M_total = Mp + Mq`
+is even. The argument (Pff's `VeltkampEven1` lines 14375-14776, ~292 Coq
+lines for the unrestricted problem; ~150-200 Lean lines for our
+restricted version) has the following key algebraic structure:
+
+At a coarse tie with `mag(hx) = mag(x)`,
+`x = (M_total + ε/2) · β^(s+cx)` for some `ε ∈ {−1, +1}`. Then
+
+  `x · C = (β^s + 1) · (2 M_total + ε) / 2 · β^(s+cx)`.
+
+For even β with `s ≥ 1`, both `(β^s + 1)` (odd since `β^s` even) and
+`(2 M_total + ε)` (odd) are odd. So `x · C` is at a half-integer
+multiple of `β^(s+cx)`.
+
+Subcases on `cexp(p)`:
+- `cexp(p) = s + cx`: `x · C` is at the prec-precision midpoint. So
+  `p = round_NE(x · C)` selects the even-canonical-mantissa side
+  (via `round_NE_pt_pos` / `Rnd_NE_pt`'s `NE_prop` branch). Hence
+  `Mp = M_p_canonical` is even.
+- `cexp(p) = s + cx + 1`: `Mp = M_p_canonical · β`, β factor → even.
+
+Symmetric argument for `Mq`: at the same coarse tie,
+`x − p = (−2 M_x ± 1) · β^(s+cx) / 2`, also a half-integer multiple of
+`β^(s+cx)`. Same subcases on `cexp(q)` give `Mq` even.
+
+Hence `M_total = Mp + Mq` is even.
+
+The work to port this is well-scoped: each Lean lemma corresponds to a
+specific subcase of the argument, and the existing format-side helpers
+(`Veltkamp_p_at_scx_FLX`, `Veltkamp_q_at_scx_FLX`, `hxExact_FLX`) plus
+`round_NE_pt_pos` provide most of the machinery. Pending future
+session(s).
+-/
+
 /-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
 just the tie-conditional hard-case parity hypothesis (rather than the full
 `Rnd_NE_pt`) and concludes `round_NE = hx`. For odd radix, prefer
