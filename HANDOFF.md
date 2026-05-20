@@ -140,13 +140,42 @@ boundary case `|M_total| = β^(prec−s)` discharges automatically since
 `hx = ±β^m` has canonical mantissa `±β^(prec−s−1)`, divisible by β; the
 low-mag case `|M_total| < β^(prec−s−1)` discharges automatically since
 `mag(hx) < m` lowers the canonical exponent by ≥1, leaving a factor of
-β in the canonical mantissa. `Veltkamp_hx_Rnd_NE_pt_FLX_even_radix`
-and `Veltkamp_Even_FLX_even_radix` package the dichotomy as
-self-contained APIs taking just the hard-case parity as input. The
-remaining work is purely Pff's parity-tracking argument
-(`ClosestImplyEven_int`-style) restricted to the hard interior — the
-bookkeeping for the boundary and low-mag cases is now Lean's, not
-ours.
+β in the canonical mantissa.
+
+The `Rnd_NE_pt` builder was then refactored to internally case-split on
+tie status at coarser precision: no-tie via uniqueness through
+`Rnd_N_pt_unique` (with sub-case for `x ∈ F(prec−s)` via idempotency),
+tie via the `NE_prop` dichotomy. The hypothesis tightened to the
+provable form "Even M_total at coarse tie + hard interior."
+`Veltkamp_Even_FLX_even_radix` is the top-level theorem taking this
+tie-conditional parity hypothesis.
+
+**Plus six Pff-style helpers for the parity port** (2026-05-20):
+faithful port of Pff `VeltkampEven1` lines 14375–14406 structure,
+piece by piece:
+- `Veltkamp_bpow_plus_one_odd`: `β^s + 1` odd for even β, `s ≥ 1`.
+- `Veltkamp_tie_eps_FLX`: at coarse tie, `x = (M_total + ε/2) · β^(s+cx)`
+  for `ε ∈ {−1, +1}`.
+- `Veltkamp_xC_form_at_tie`: `x · C = (β^s + 1)(2 M_total + ε)/2 · β^(s+cx)`.
+- `Veltkamp_xC_coef_odd`: the coefficient `(β^s + 1)(2 M_total + ε)`
+  is odd (product of two odd integers).
+- `Veltkamp_Mp_even_via_high_cexp`: when `cexp(p) > scx`, the at-scx
+  coefficient `Mp` has a β factor, hence is even.
+- `ZnearestE_even_at_midpoint`: at `mx − ⌊mx⌋ = 1/2`, ZnearestE
+  returns even integer.
+
+Remaining work for the full `Veltkamp_Even_FLX` at even radix:
+- Bound `cexp(p) ∈ {s+cx, s+cx+1}` (Pff's `Veltkamp_aux_aux` restricted
+  to p, ~250 Coq lines — boundary analysis for round_N near `β^(m+s)`).
+- Bridge: when `cexp(p) = s+cx`, derive `M_p_canonical = ZnearestE(sm)`
+  with `sm = scaled_mantissa(x·C) at FLX prec`, then apply
+  `ZnearestE_even_at_midpoint`.
+- Symmetric argument for `Mq` via `x − p`'s analogous half-integer
+  structure.
+- Combine to `Even M_total = Even (Mp + Mq)`.
+
+Estimate: ~100-200 more Lean lines on top of the helpers, gated on the
+cexp bound.
 
 **~29790 lines of Lean across 30 files. 0 `sorry`s. All files build clean.**
 
