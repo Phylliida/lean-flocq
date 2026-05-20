@@ -3695,6 +3695,124 @@ private theorem Veltkamp_xC_sm_at_midpoint_FLX
     refine ⟨by push_cast; linarith, by push_cast; linarith⟩
   rw [h_floor]; push_cast; ring
 
+/-- **Pff main parity claim for Mp**: at coarse tie + hard interior + NE choice,
+the at-scx coefficient `Mp` of `p` is even. Case-splits on `cexp(p) ?= s+cx`:
+high cexp gives Mp a β factor; equal cexp gives Mp = ZnearestE(sm) with
+`sm = scaled_mantissa(x · C)` at half-integer (midpoint). -/
+private theorem Veltkamp_Mp_even_at_tie_hard_NE_FLX
+    (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    {s : ℤ} {x : ℝ}
+    (h_even_beta : Even beta.val)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (M_total eps : ℤ)
+    (h_eps : eps = 1 ∨ eps = -1)
+    (h_x_eq : x = ((M_total : ℝ) + (eps : ℝ) / 2)
+                  * bpow beta (s + cexp beta (FLX_exp prec) x))
+    (Mp : ℤ)
+    (hMp_eq : Veltkamp_p_FLX beta prec (fun n => decide (¬ Even n)) s x
+              = (Mp : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x)) :
+    Even Mp := by
+  set choice : ℤ → Bool := fun n => decide (¬ Even n) with hchoice_def
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  set p := Veltkamp_p_FLX beta prec choice s x with hp_def
+  have hcx_eq : cx = m - prec := rfl
+  have hs_pos : 1 ≤ s := by linarith
+  have hs_nn : 0 ≤ s := by linarith
+  have hx_ne : x ≠ 0 := ne_of_gt hx_pos
+  -- p ∈ F(prec), p > 0.
+  have h_p_F : generic_format beta (FLX_exp prec) p :=
+    generic_format_round _ _ (FLX_exp_valid prec hp) _ _
+  have h_xC_pos : 0 < x * Veltkamp_C beta s := by
+    apply mul_pos hx_pos
+    show 0 < bpow beta s + 1
+    linarith [bpow_gt_0 beta s]
+  -- x · C ≥ β^(m+s-1) (from mag(x · C) ≥ m+s).
+  have h_mag_xC_ge : m + s ≤ mag beta (x * Veltkamp_C beta s) :=
+    (mag_xC_bounds beta hx_ne hs_pos).1
+  have h_xC_ge : bpow beta (m + s - 1) ≤ x * Veltkamp_C beta s := by
+    have h_mag := bpow_mag_le beta (ne_of_gt h_xC_pos)
+    rw [abs_of_pos h_xC_pos] at h_mag
+    have h_step : bpow beta (m + s - 1)
+                ≤ bpow beta (mag beta (x * Veltkamp_C beta s) - 1) :=
+      bpow_le beta (by linarith)
+    linarith
+  -- β^(m+s-1) ∈ F.
+  have h_bpow_format : generic_format beta (FLX_exp prec) (bpow beta (m + s - 1)) := by
+    apply generic_format_bpow
+    unfold FLX_exp; linarith
+  -- p ≥ β^(m+s-1).
+  have h_p_ge_pow : bpow beta (m + s - 1) ≤ p :=
+    round_ge_generic _ _ (FLX_exp_valid prec hp) _ h_bpow_format h_xC_ge
+  have h_p_pos : 0 < p := by linarith [bpow_gt_0 beta (m + s - 1)]
+  -- cexp(p) ≥ s + cx (from mag(p) ≥ m+s).
+  have h_mag_p_ge : m + s ≤ mag beta p := by
+    apply mag_ge_bpow beta
+    have : bpow beta (m + s - 1) = bpow beta ((m + s) - 1) := by congr 1
+    rw [this, abs_of_pos h_p_pos]; exact h_p_ge_pow
+  set cp : ℤ := cexp beta (FLX_exp prec) p with hcp_def
+  have h_cp_ge : s + cx ≤ cp := by
+    show s + cx ≤ FLX_exp prec (mag beta p)
+    unfold FLX_exp; rw [hcx_eq]; linarith
+  -- Case split: cp > s+cx vs cp = s+cx.
+  rcases lt_or_eq_of_le h_cp_ge with h_cp_high | h_cp_eq
+  · -- cp > s+cx: Mp has β factor.
+    exact Veltkamp_Mp_even_via_high_cexp beta prec hp h_even_beta h_p_F h_p_pos
+      Mp hMp_eq h_cp_high
+  · -- cp = s+cx: use midpoint argument.
+    -- sm = scaled_mantissa(x · C) is half-integer.
+    have h_cp_le : cp ≤ s + cx := by linarith
+    have h_sm_mid := Veltkamp_xC_sm_at_midpoint_FLX beta prec hp choice
+      h_even_beta Fx hx_pos hs_lo hs_hi M_total eps h_eps h_x_eq h_cp_le
+    -- ZnearestE returns even at midpoint.
+    have h_znE_even : Even (ZnearestE (scaled_mantissa beta (FLX_exp prec)
+                              (x * Veltkamp_C beta s))) :=
+      ZnearestE_even_at_midpoint h_sm_mid
+    -- p = ZnearestE(sm) · β^cexp(x · C). For cexp(x · C) = s+cx (derived from cp = s+cx).
+    -- Need: cexp(x · C) = s+cx.
+    have h_mag_xC_not_high : ¬ (m + s + 1 ≤ mag beta (x * Veltkamp_C beta s)) := by
+      intro h_high
+      have h_cp_high :=
+        Veltkamp_p_cexp_high_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi h_high
+      linarith
+    have h_mag_xC : mag beta (x * Veltkamp_C beta s) = m + s := by
+      have h_lt : mag beta (x * Veltkamp_C beta s) < m + s + 1 := by
+        push_neg at h_mag_xC_not_high; exact h_mag_xC_not_high
+      linarith
+    have h_cexp_xC : cexp beta (FLX_exp prec) (x * Veltkamp_C beta s) = s + cx := by
+      show FLX_exp prec (mag beta (x * Veltkamp_C beta s)) = s + cx
+      rw [h_mag_xC]
+      unfold FLX_exp; rw [hcx_eq]; ring
+    -- p = round β fexp (Znearest choice) (x · C)
+    --   = F2R⟨Znearest choice (sm), cexp(x · C)⟩
+    --   = ZnearestE(sm) · β^(s+cx) (since choice = NE, cexp = s+cx).
+    have h_p_eq_round : p = ((ZnearestE (scaled_mantissa beta (FLX_exp prec)
+                                (x * Veltkamp_C beta s)) : ℤ) : ℝ)
+                            * bpow beta (s + cx) := by
+      show round beta (FLX_exp prec) (Znearest choice) (x * Veltkamp_C beta s)
+         = ((ZnearestE _ : ℤ) : ℝ) * bpow beta (s + cx)
+      show F2R (beta := beta)
+              ⟨Znearest choice (scaled_mantissa beta (FLX_exp prec) (x * Veltkamp_C beta s)),
+               cexp beta (FLX_exp prec) (x * Veltkamp_C beta s)⟩
+         = ((ZnearestE _ : ℤ) : ℝ) * bpow beta (s + cx)
+      show (((Znearest choice _) : ℤ) : ℝ) * bpow beta (cexp beta (FLX_exp prec) (x * Veltkamp_C beta s))
+         = ((ZnearestE _ : ℤ) : ℝ) * bpow beta (s + cx)
+      rw [h_cexp_xC]
+      -- Znearest choice = ZnearestE (definitional).
+      rfl
+    -- Combine hMp_eq with h_p_eq_round to get Mp = ZnearestE(sm).
+    set sm := scaled_mantissa beta (FLX_exp prec) (x * Veltkamp_C beta s) with hsm_def
+    have h_eq : (Mp : ℝ) * bpow beta (s + cx)
+              = ((ZnearestE sm : ℤ) : ℝ) * bpow beta (s + cx) := by
+      rw [← hMp_eq, h_p_eq_round]
+    have h_bpow_pos : (0 : ℝ) < bpow beta (s + cx) := bpow_gt_0 _ _
+    have h_Mp_eq : (Mp : ℝ) = ((ZnearestE sm : ℤ) : ℝ) :=
+      mul_right_cancel₀ (ne_of_gt h_bpow_pos) h_eq
+    have h_Mp_int : Mp = ZnearestE sm := by exact_mod_cast h_Mp_eq
+    rw [h_Mp_int]
+    exact h_znE_even
+
 /-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
 just the tie-conditional hard-case parity hypothesis (rather than the full
 `Rnd_NE_pt`) and concludes `round_NE = hx`. For odd radix, prefer
