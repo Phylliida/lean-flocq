@@ -3514,6 +3514,35 @@ private theorem Veltkamp_Mp_even_via_high_cexp
   rw [h_Mp_int]
   exact h_pow_even.mul_left _
 
+/-- **Pff helper**: `ZnearestE` returns an even integer at a midpoint.
+At `mx − ⌊mx⌋ = 1/2`, the choice `decide (¬ Even ⌊mx⌋)` is true iff
+`⌊mx⌋` is odd, so ZnearestE returns `⌈mx⌉ = ⌊mx⌋ + 1` (even); else
+ZnearestE returns `⌊mx⌋` (even). -/
+private theorem ZnearestE_even_at_midpoint {mx : ℝ}
+    (h_mid : mx - ⌊mx⌋ = 1/2) :
+    Even (ZnearestE mx) := by
+  show Even (Znearest (fun n => decide (¬ Even n)) mx)
+  unfold Znearest
+  rw [if_neg (by linarith : ¬ mx - (⌊mx⌋ : ℝ) < (1:ℝ)/2),
+      if_neg (by linarith : ¬ (1:ℝ)/2 < mx - (⌊mx⌋ : ℝ))]
+  change Even (if decide (¬ Even ⌊mx⌋) = true then ⌈mx⌉ else ⌊mx⌋)
+  by_cases h_even : Even ⌊mx⌋
+  · -- Even floor: ZnearestE = ⌊mx⌋.
+    rw [decide_eq_false (not_not_intro h_even)]
+    simp
+    exact h_even
+  · -- Odd floor: ZnearestE = ⌈mx⌉ = ⌊mx⌋ + 1.
+    rw [decide_eq_true h_even]
+    simp
+    -- Need: Even ⌈mx⌉.
+    have h_ceil : ⌈mx⌉ = ⌊mx⌋ + 1 := by
+      apply Int.ceil_eq_iff.mpr
+      refine ⟨by push_cast; linarith, by push_cast; linarith⟩
+    rw [h_ceil]
+    have h_odd : Odd ⌊mx⌋ := Int.not_even_iff_odd.mp h_even
+    obtain ⟨k, hk⟩ := h_odd
+    refine ⟨k + 1, ?_⟩; rw [hk]; ring
+
 /-- **Veltkamp_Even at FLX (refined, even-radix, tie-conditional).** Takes
 just the tie-conditional hard-case parity hypothesis (rather than the full
 `Rnd_NE_pt`) and concludes `round_NE = hx`. For odd radix, prefer
