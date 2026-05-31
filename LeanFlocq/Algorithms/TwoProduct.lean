@@ -265,4 +265,48 @@ theorem round_add_grid_exact (beta : radix) (prec : ℤ) (choice : ℤ → Bool)
     (generic_format_FLX_of_mult_bpow beta prec (Mu + Mw) E
       (by rw [hu, hw]; push_cast; ring) hb)
 
+/-- **Expansion + sub-product exactness.** For `2s = prec`, splitting `x` and
+`y` by Veltkamp gives the exact bilinear expansion
+`x·y = hx·hy + hx·ty + tx·hy + tx·ty`, and each of the four sub-products rounds
+exactly (each factor is in `F(s)`, so each product is in `F(2s) = F(prec)`).
+This is the algebraic bedrock of the Dekker summation chain. -/
+theorem twoproduct_expand_exact (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x y : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (Fy : generic_format beta (FLX_exp prec) y)
+    (hs : 2 * s = prec) (hs_lo : 2 ≤ s) :
+    x * y
+      = Veltkamp_hx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y
+      + Veltkamp_hx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y
+      + Veltkamp_tx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y
+      + Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y
+    ∧ round beta (FLX_exp prec) (Znearest choice)
+        (Veltkamp_hx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y)
+        = Veltkamp_hx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y
+    ∧ round beta (FLX_exp prec) (Znearest choice)
+        (Veltkamp_hx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y)
+        = Veltkamp_hx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y
+    ∧ round beta (FLX_exp prec) (Znearest choice)
+        (Veltkamp_tx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y)
+        = Veltkamp_tx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y
+    ∧ round beta (FLX_exp prec) (Znearest choice)
+        (Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y)
+        = Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y := by
+  have hs_hi : s + 2 ≤ prec := by omega
+  set hx := Veltkamp_hx_FLX beta prec choice s x with hhx_def
+  set tx := Veltkamp_tx_FLX beta prec choice s x with htx_def
+  set hy := Veltkamp_hx_FLX beta prec choice s y with hhy_def
+  set ty := Veltkamp_tx_FLX beta prec choice s y with hty_def
+  obtain ⟨hsplit_x, Ftx, Fhx⟩ :=
+    Veltkamp_split_FLX_general beta prec hp choice Fx hs_lo hs_hi
+  obtain ⟨hsplit_y, Fty, Fhy⟩ :=
+    Veltkamp_split_FLX_general beta prec hp choice Fy hs_lo hs_hi
+  rw [show prec - s = s from by omega] at Fhx Fhy
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · linear_combination (hy + ty) * hsplit_x + x * hsplit_y
+  · exact round_mul_Fs_exact beta prec choice hs Fhx Fhy
+  · exact round_mul_Fs_exact beta prec choice hs Fhx Fty
+  · exact round_mul_Fs_exact beta prec choice hs Ftx Fhy
+  · exact round_mul_Fs_exact beta prec choice hs Ftx Fty
+
 end LeanFlocq
