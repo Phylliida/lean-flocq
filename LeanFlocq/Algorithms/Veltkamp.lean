@@ -2635,6 +2635,81 @@ private theorem Veltkamp_M_h_close_FLX (beta : radix) (prec : ℤ) (hp : 0 < pre
     push_cast
     nlinarith [h_err, h_bpow_cx_pos]
 
+/-- **Structural decomposition of the Veltkamp split** (positive `x`). Bundles
+the integer-mantissa forms with the two magnitude bounds that drive TwoProduct's
+sub-product analysis:
+- `x = M_x · β^cx` (canonical),
+- `hx = M_h · β^(s+cx)` with `|M_h| ≤ β^(prec−s)` (so `|hx| ≤ β^(mag x)`),
+- `|M_x − M_h · β^s| ≤ β^s/2` (so the tail `tx = (M_x − M_h·β^s)·β^cx` has
+  `|tx| ≤ β^(s+cx)/2`).
+
+The first three come from `Veltkamp_M_h_close_FLX`; the `|M_h| ≤ β^(prec−s)`
+bound is the half-ulp/triangle argument also used in `Veltkamp_hx_format_FLX`. -/
+theorem Veltkamp_struct_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_pos : 0 < x) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    ∃ M_x M_h : ℤ,
+      x = (M_x : ℝ) * bpow beta (cexp beta (FLX_exp prec) x) ∧
+      Veltkamp_hx_FLX beta prec choice s x
+        = (M_h : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) ∧
+      (|M_h| : ℝ) ≤ bpow beta (prec - s) ∧
+      |(M_x : ℝ) - (M_h : ℝ) * bpow beta s| ≤ bpow beta s / 2 := by
+  obtain ⟨M_x, M_h, hx_form, hhx_form, h_close⟩ :=
+    Veltkamp_M_h_close_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  refine ⟨M_x, M_h, hx_form, hhx_form, ?_, h_close⟩
+  -- |M_h| ≤ β^(prec-s) from |hx| < β^m + β^(s+cx)/2 and hx = M_h·β^(s+cx).
+  set m := mag beta x with hm_def
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  have hcx_eq : cx = m - prec := rfl
+  have hβ_ge_2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have h_bpow_scx_pos : 0 < bpow beta (s + cx) := bpow_gt_0 _ _
+  have h_prec_s_nn : 0 ≤ prec - s := by linarith
+  have h_err : |x - Veltkamp_hx_FLX beta prec choice s x| ≤ bpow beta (s + cx) / 2 :=
+    Veltkamp_aux_FLX beta prec hp choice Fx hx_pos hs_lo hs_hi
+  have h_x_lt_bpow : x < bpow beta m := by
+    have := bpow_mag_gt beta x; rwa [abs_of_pos hx_pos] at this
+  -- |hx| < β^m + β^(s+cx)/2.
+  have h_hx_abs_lt : |Veltkamp_hx_FLX beta prec choice s x|
+      < bpow beta m + bpow beta (s + cx) / 2 := by
+    have h_tri : |Veltkamp_hx_FLX beta prec choice s x|
+        ≤ |x| + |x - Veltkamp_hx_FLX beta prec choice s x| := by
+      calc |Veltkamp_hx_FLX beta prec choice s x|
+            = |-(x - Veltkamp_hx_FLX beta prec choice s x) + x| := by ring_nf
+        _ ≤ |-(x - Veltkamp_hx_FLX beta prec choice s x)| + |x| := abs_add_le _ _
+        _ = |x| + |x - Veltkamp_hx_FLX beta prec choice s x| := by rw [abs_neg]; ring
+    rw [abs_of_pos hx_pos] at h_tri; linarith
+  -- |hx| = |M_h| · β^(s+cx).
+  have h_hx_abs_mul : |Veltkamp_hx_FLX beta prec choice s x|
+      = (|M_h| : ℝ) * bpow beta (s + cx) := by
+    rw [hhx_form, abs_mul, abs_of_pos h_bpow_scx_pos]
+  -- β^m = β^(prec-s) · β^(s+cx).
+  have h_bpow_m_eq : bpow beta m = bpow beta (prec - s) * bpow beta (s + cx) := by
+    rw [← bpow_plus]; congr 1; rw [hcx_eq]; ring
+  -- |M_h| < β^(prec-s) + 1/2.
+  have h_strict : (|M_h| : ℝ) < bpow beta (prec - s) + 1/2 := by
+    have h_step : (|M_h| : ℝ) * bpow beta (s + cx)
+                  < bpow beta m + bpow beta (s + cx) / 2 := by
+      rw [← h_hx_abs_mul]; exact h_hx_abs_lt
+    rw [h_bpow_m_eq] at h_step
+    have h_factor : bpow beta (prec - s) * bpow beta (s + cx) + bpow beta (s + cx) / 2
+                  = (bpow beta (prec - s) + 1/2) * bpow beta (s + cx) := by ring
+    rw [h_factor] at h_step
+    exact (mul_lt_mul_iff_of_pos_right h_bpow_scx_pos).mp h_step
+  -- Integer bound: |M_h| ≤ β^(prec-s) (= (beta.val)^(prec-s).toNat).
+  have hN_real : (((beta.val : ℤ) ^ (prec - s).toNat : ℤ) : ℝ) = bpow beta (prec - s) := by
+    have := IZR_Zpower beta h_prec_s_nn; push_cast at this ⊢; exact this
+  have h_strict_N : (|M_h| : ℝ) < (((beta.val : ℤ) ^ (prec - s).toNat : ℤ) : ℝ) + 1/2 := by
+    rw [hN_real]; exact h_strict
+  have h_int : |M_h| ≤ (beta.val : ℤ) ^ (prec - s).toNat := by
+    by_contra h; push_neg at h
+    have hge : (((beta.val : ℤ) ^ (prec - s).toNat : ℤ) : ℝ) + 1 ≤ (|M_h| : ℝ) := by
+      have hz : (beta.val : ℤ) ^ (prec - s).toNat + 1 ≤ |M_h| := by omega
+      exact_mod_cast hz
+    linarith
+  calc (|M_h| : ℝ) ≤ (((beta.val : ℤ) ^ (prec - s).toNat : ℤ) : ℝ) := by exact_mod_cast h_int
+    _ = bpow beta (prec - s) := hN_real
+
 /-- **Veltkamp existence (FLX)**: for `x > 0` in F(FLX, prec), `2 ≤ s ≤ prec − 2`,
 there exists a tie-breaking function `choice'` such that
 `round_{prec−s, Znearest choice'} x = Veltkamp_hx_FLX beta prec choice s x`.
