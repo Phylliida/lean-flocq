@@ -21,9 +21,38 @@ Setting: radix 2, FLX, round-to-nearest (the no-underflow case).
 This file is built in stages:
 - **E1** (here): the existential EFT interfaces (`twoproduct_eft`, `twosum_eft`)
   and the exact-algebra chain `a·b + c = β1 + β2 + α2` (`ErrFMA_chain`).
-- **E2** (pending): the crux exactness lemmas `round(β1 − r1) = β1 − r1` and
-  `round((β1−r1) + β2) = (β1−r1) + β2`.
+- **E2** (pending): the crux exactness lemmas.
 - **E3** (pending): assembly into `a·b + c = r1 + r2 + r3`.
+
+## E2 roadmap (from the paper pass — Boldo–Muller 2011, IEEE TC 60(2))
+
+The whole result reduces to proving `γ = β1 + β2 − r1` exactly (then the final
+`Fast2Sum`/`TwoSum` splits `γ + α2` into `r2 + r3` and `a·b+c = r1+r2+r3`).
+Since `γ = round(round(β1 − r1) + β2)`, this needs two exactness lemmas:
+  - **L1**: `round(β1 − r1) = β1 − r1`   (i.e. `β1 − r1 ∈ F`)
+  - **L2**: `round((β1 − r1) + β2) = (β1 − r1) + β2`
+Then `γ = (β1−r1)+β2 = β1+β2−r1`, and with the E1 chain `a·b+c = β1+β2+α2` we
+get `a·b+c = r1 + γ + α2` (Boldo–Muller Theorem 2's conclusion verbatim).
+
+**Hypotheses at FLX:** radix even (2 ✓) and `prec ≥ 3` (we have `prec ≥ 4`). All
+of the paper's non-underflow side conditions (`β^(emin+k) ≤ |·|`, `r1` normal,
+`ea+ex ≥ emin+p−1`) are *vacuous* at FLX — that's the payoff of staying FLX.
+
+**Reference proof:** Coq `flocq/src/Pff/Pff.v`, section starting line 23446
+("was file FmaErr.v"), theorem `FmaErr` (line 24973) = `a*x+y = r1+ga+al2`,
+assembled from `FmaErr_aux1` (case `β2 = 0`, short — `γ = round(β1−r1)` and
+`β1−r1 ∈ F` directly) and `FmaErr_aux2` (case `β2 ≠ 0`, the hard one). The
+`Pff2Flocq.v` `ErrFMA_correct` (line 1057) is the Flocq-side wrapper that calls
+`FmaErr` after bridging formats. This is ~1700 lines of old-Pff-formalism Coq —
+the "complex, many subcases" the paper warns about — so E2 is a genuine
+multi-session *port* (math, not transcription), not a quick lemma.
+
+**Mathematical engine:** the Pff proof rests on relative-error bounds for
+round-to-nearest — `ClosestRoundeLeNormal` (`|round z| ≤ |z|/(1 − u/2)`) and
+`ClosestRoundeGeNormal` (`|z| ≤ |round z|·(1 + u/2)`), where `u = β^(1−prec)` —
+plus magnitude case analysis tying `ulp(β1)` to `ulp(α1)`/`ulp(u1)`. Our
+`Prop/Relative.lean` `u_ro` family is the Flocq-native counterpart of those
+relative bounds; L1's representability of `β1 − r1` is the load-bearing step.
 -/
 import LeanFlocq.Algorithms.TwoProduct
 import LeanFlocq.Algorithms.EFT_FLX
