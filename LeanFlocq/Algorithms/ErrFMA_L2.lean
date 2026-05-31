@@ -773,4 +773,61 @@ theorem ErrFMA_correct (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool)
     exact ErrFMA_be2_nonzero prec hp choice Fc hu10 hal10 hbe2z hr1_ne
       hu1 hu2 hal1 hal2 hbe1 hbe2 hr1 hgat hga
 
+/-! ### The three-float error-free transformation (`Fma_FTS`) -/
+
+/-- **ErrFMA as a 3-term EFT.** `a·b + c = r1 + r2 + r3` exactly, with
+`r2, r3 ∈ F` and `r2 = ◦(γ + α2)`. The Algorithm-4 final step is
+`Fast2Sum(γ, α2)`; we use the precondition-free `TwoSum(γ, α2)` (same exact
+`r2 + r3 = γ + α2`), so no `|α2| ≤ |γ|` obligation is needed. -/
+theorem ErrFMA_threefloat (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool)
+    {a b c u1 u2 al1 al2 be1 be2 r1 gat ga : ℝ}
+    (Fa : generic_format radix2 (FLX_exp prec) a)
+    (Fb : generic_format radix2 (FLX_exp prec) b)
+    (Fc : generic_format radix2 (FLX_exp prec) c)
+    (hu1 : u1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b))
+    (hu2 : u2 = a * b - u1)
+    (hal1 : al1 = round radix2 (FLX_exp prec) (Znearest choice) (c + u2))
+    (hal2 : al2 = c + u2 - al1)
+    (hbe1 : be1 = round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1))
+    (hbe2 : be2 = u1 + al1 - be1)
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b + c))
+    (hgat : gat = round radix2 (FLX_exp prec) (Znearest choice) (be1 - r1))
+    (hga : ga = round radix2 (FLX_exp prec) (Znearest choice) (gat + be2)) :
+    ∃ r2 r3 : ℝ,
+      generic_format radix2 (FLX_exp prec) r2 ∧
+      generic_format radix2 (FLX_exp prec) r3 ∧
+      r2 = round radix2 (FLX_exp prec) (Znearest choice) (ga + al2) ∧
+      a * b + c = r1 + r2 + r3 := by
+  have hp0 : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp0
+  have hMon := FLX_exp_monotone prec
+  -- core identity
+  have hcore : a * b + c = r1 + ga + al2 :=
+    ErrFMA_correct prec hp choice Fc hu1 hu2 hal1 hal2 hbe1 hbe2 hr1 hgat hga
+  -- ga, al2 ∈ F
+  have Fga : generic_format radix2 (FLX_exp prec) ga := by
+    rw [hga]; exact generic_format_round _ _ hValid _ _
+  have Fu2 : generic_format radix2 (FLX_exp prec) u2 := by
+    rw [show u2 = -(round radix2 (FLX_exp prec) (Znearest choice) (a * b) - a * b) from by
+      rw [hu2, hu1]; ring]
+    exact generic_format_opp _ _ (mult_error_FLX radix2 prec hp0 (Znearest choice) Fa Fb)
+  have Fal2 : generic_format radix2 (FLX_exp prec) al2 := by
+    rw [show al2 = -(round radix2 (FLX_exp prec) (Znearest choice) (c + u2) - (c + u2)) from by
+      rw [hal2, hal1]; ring]
+    exact generic_format_opp _ _
+      (plus_error radix2 (FLX_exp prec) hValid hMon choice Fc Fu2)
+  -- TwoSum(ga, al2): ga + al2 = round(ga+al2) + e
+  have htwo := TwoSum_FLX_correct prec hp0 choice Fga Fal2
+  set r2 := round radix2 (FLX_exp prec) (Znearest choice) (ga + al2) with hr2
+  set r3 := (if |al2| ≤ |ga|
+       then round radix2 (FLX_exp prec) (Znearest choice)
+              (al2 - round radix2 (FLX_exp prec) (Znearest choice) (r2 - ga))
+       else round radix2 (FLX_exp prec) (Znearest choice)
+              (ga - round radix2 (FLX_exp prec) (Znearest choice) (r2 - al2))) with hr3
+  refine ⟨r2, r3, generic_format_round _ _ hValid _ _, ?_, rfl, ?_⟩
+  · rw [hr3]; split_ifs <;> exact generic_format_round _ _ hValid _ _
+  · -- ga + al2 = r2 + r3, so a*b+c = r1 + ga + al2 = r1 + r2 + r3
+    have hsum : ga + al2 = r2 + r3 := htwo
+    linarith [hcore, hsum]
+
 end LeanFlocq
