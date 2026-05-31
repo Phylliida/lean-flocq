@@ -203,4 +203,42 @@ theorem generic_format_FLX_of_mult_bpow (beta : radix) (prec : ℤ)
   have : cexp beta (FLX_exp prec) v = mag beta v - prec := by unfold cexp FLX_exp; rfl
   rw [this]; omega
 
+/-- **Structural decomposition, all nonzero signs.** Lifts `Veltkamp_struct_FLX`
+to arbitrary nonzero `x`: gives integer mantissas `M_x`, `M_h` with
+`x = M_x·β^cx`, `hx = M_h·β^(s+cx)`, `|M_h| ≤ β^(prec−s)`, and the tail bound
+`|M_x − M_h·β^s| ≤ β^s/2`. Negative `x` negates both mantissas (via the Chunk-3
+commutation `Veltkamp_hx_FLX_neg` and `cexp_opp`). -/
+theorem Veltkamp_struct_FLX_general (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hx_ne : x ≠ 0) (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    ∃ M_x M_h : ℤ,
+      x = (M_x : ℝ) * bpow beta (cexp beta (FLX_exp prec) x) ∧
+      Veltkamp_hx_FLX beta prec choice s x
+        = (M_h : ℝ) * bpow beta (s + cexp beta (FLX_exp prec) x) ∧
+      (|M_h| : ℝ) ≤ bpow beta (prec - s) ∧
+      |(M_x : ℝ) - (M_h : ℝ) * bpow beta s| ≤ bpow beta s / 2 := by
+  rcases lt_trichotomy x 0 with hneg | hzero | hpos
+  · -- x < 0: reduce to -x > 0 with flipped tie-breaker; negate both mantissas.
+    have hx'_pos : 0 < -x := by linarith
+    have Fx' : generic_format beta (FLX_exp prec) (-x) := generic_format_opp beta _ Fx
+    obtain ⟨M_x', M_h', hx'_form, hhx'_form, hMh'_bound, hclose'⟩ :=
+      Veltkamp_struct_FLX beta prec hp (fun t => !choice (-(t+1))) Fx' hx'_pos hs_lo hs_hi
+    have hcexp : cexp beta (FLX_exp prec) (-x) = cexp beta (FLX_exp prec) x :=
+      cexp_opp beta _ x
+    have e_hx : Veltkamp_hx_FLX beta prec choice s x
+        = -Veltkamp_hx_FLX beta prec (fun t => !choice (-(t+1))) s (-x) := by
+      have h := Veltkamp_hx_FLX_neg beta prec choice s (-x); rwa [neg_neg] at h
+    rw [hcexp] at hx'_form hhx'_form
+    refine ⟨-M_x', -M_h', ?_, ?_, ?_, ?_⟩
+    · push_cast; linear_combination -hx'_form
+    · rw [e_hx, hhx'_form]; push_cast; ring
+    · simpa using hMh'_bound
+    · have h_rw : ((-M_x' : ℤ) : ℝ) - ((-M_h' : ℤ) : ℝ) * bpow beta s
+          = -(((M_x' : ℤ) : ℝ) - ((M_h' : ℤ) : ℝ) * bpow beta s) := by push_cast; ring
+      rw [h_rw, abs_neg]; exact hclose'
+  · exact absurd hzero hx_ne
+  · -- x > 0: directly.
+    exact Veltkamp_struct_FLX beta prec hp choice Fx hpos hs_lo hs_hi
+
 end LeanFlocq
