@@ -11,11 +11,47 @@ builds the Flocq-native pieces that replace Pff's MSB/LSB machinery:
 - **Exponent bounds** (`errfma_cexp_be1_le_r1`, `errfma_cexp_r1_le_be1`): the
   radix-2 `Expr1`/`Expbe1`, `|cexp β1 − cexp r1| ≤ 1`, from the factor-of-two
   bounds (`round_nearby_factor_two_FLX`).
-- **Midpoint dichotomy** (`errfma_be2_div_dichotomy`): `β1 = r1` OR `β2` is a
-  multiple of `β^(cexp β1 − 2)`. The Flocq-native form of `Midpoint_aux`: if the
-  tiny α2 flips the rounding (`r1 ≠ β1`), then `β1+β2` sits within `|α2|` of a
-  grid midpoint, and a divisibility squeeze (`ξ = ±½ulp − β2` is a β^ℓ-multiple
-  `< β^ℓ`, hence 0) pins β2 to the midpoint value.
+- **Midpoint dichotomy** (`errfma_be2_div_dichotomy`, REMAINING): `β1 = r1` OR
+  `β2` is a multiple of `β^(cexp β1 − 2)`. The Flocq-native form of
+  `Midpoint_aux`. **Full derived proof plan** (this replaces "port MSB/LSB" with a
+  concrete Flocq proof):
+
+  Abstract setup: `be1 = ◦(be1 + be2)` (be1 a round fixed-point), `r1 = ◦(be1 +
+  be2 + al2)`, `be1 ≠ r1`, `be2 ≠ 0`, `be2 = M·β^ℓ` (divisibility), `|al2| < β^ℓ`,
+  and `|be2| ≤ ½ ulp(be1)` (be2 is be1's rounding error, via
+  `error_le_half_ulp_round`). Conclude `∃ N, be2 = N·β^(cexp be1 − 2)`.
+
+  WLOG `be1 > 0` (sign-reduce via `round_N_opp` + flipped choice, as in the
+  engine). Let `u = ulp(be1) = β^cexp(be1)`, `v0 = be1+be2`, `v1 = v0+al2`.
+
+  • **be2 > 0 (upper midpoint).** `v0` rounds to be1 ⟹ `v0 ≤ mid_up := be1 +
+    u/2` (else `round_N_ge_midp` on `succ be1`, using `pred_succ`, forces
+    `◦v0 ≥ succ be1 > be1`). So `be2 ≤ u/2`. And `v1` rounds to `r1 ≠ be1` ⟹
+    `v1 ≥ mid_up` (else `round_N_le_midp` gives `◦v1 ≤ be1`, while `v1 > be1 >
+    mid_dn` gives `◦v1 ≥ be1`, so `◦v1 = be1 = r1`, contradiction; uses `be2 ≥
+    β^ℓ > |al2|`). So `be2 + al2 ≥ u/2`, i.e. `be2 > u/2 − β^ℓ`. Hence `ξ :=
+    u/2 − be2 ∈ [0, β^ℓ)`. Now `u/2 = β^(cexp−1)` and `β^ℓ ≤ be2 ≤ u/2` ⟹ `ℓ ≤
+    cexp−1` ⟹ `u/2` is a β^ℓ-multiple; so `ξ` is a β^ℓ-multiple in `[0,β^ℓ)`,
+    hence `ξ = 0`, `be2 = u/2 = β^(cexp−1) = 2·β^(cexp−2)`. ✓
+
+  • **be2 < 0 (lower midpoint).** Symmetric with `mid_dn := (be1 + pred be1)/2`
+    and `d := be1 − mid_dn = ½(be1 − pred be1)`. `v0 ≥ mid_dn`, `v1 ≤ mid_dn`,
+    giving `be2 ∈ [−d, −d + β^ℓ)`, squeeze ⟹ `be2 = −d`. **The pred subtlety:**
+    `be1 − pred be1 = β^cexp` (non-power) or `β^(cexp−1)` (power of β, via
+    `pred_pos` def — case on `be1 = β^(mag be1 − 1)`), so `d = β^(cexp−1)` or
+    `β^(cexp−2)`, both β^(cexp−2)-multiples and (since `β^ℓ ≤ |be2| = d`) β^ℓ-
+    multiples. ✓
+
+  • **Divisibility squeeze** (clean helper): a nonneg β^ℓ-multiple `< β^ℓ` is 0.
+
+  The `pred_pos`/power-of-β case in the lower-midpoint branch is the one genuinely
+  fiddly spot; everything else is `round_N_{le,ge}_midp` + integer arithmetic.
+
+- **Assembly** (REMAINING): `(β1−r1)+β2 ∈ F`. `be1=r1` ⟹ `= β2 ∈ F` (plus_error).
+  Else: β1, r1, β2 are all multiples of `β^(cexp β1 − 2)` (β1 trivially; r1 via
+  `cexp r1 ≥ cexp β1 − 1` from `Expbe1`; β2 via the dichotomy), and
+  `|(β1−r1)+β2| < β^(cexp β1 + 1) ≤ β^(prec − 2 + (cexp β1 − 2) ... )` ⟹ in F by
+  the grid lemma (`generic_format_FLX_of_mult_bpow`, `prec ≥ 3`).
 
 Setting: radix 2, FLX, round-to-nearest, `prec ≥ 4`.
 -/
@@ -108,5 +144,27 @@ theorem errfma_al2_lt_bpow (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool)
   rcases le_total (cexp radix2 (FLX_exp prec) u1) (cexp radix2 (FLX_exp prec) al1) with h | h
   · rw [min_eq_left h]; exact hlt_u
   · rw [min_eq_right h]; exact hlt_a
+
+/-! ### Divisibility squeeze (the heart of the midpoint dichotomy) -/
+
+/-- A nonnegative integer multiple of `β^ℓ` that is strictly below `β^ℓ` is `0`.
+This is the squeeze that pins `β2` to its midpoint value in the dichotomy. -/
+theorem nonneg_bpow_mult_lt_eq_zero (beta : radix) (ℓ : ℤ) {ξ : ℝ} {M : ℤ}
+    (hξ : ξ = (M : ℝ) * bpow beta ℓ) (h0 : 0 ≤ ξ) (hlt : ξ < bpow beta ℓ) : ξ = 0 := by
+  have hbp : (0 : ℝ) < bpow beta ℓ := bpow_gt_0 beta ℓ
+  have hM0 : 0 ≤ M := by
+    by_contra h
+    push_neg at h
+    have hMr : (M : ℝ) < 0 := by exact_mod_cast h
+    rw [hξ] at h0
+    nlinarith [mul_neg_of_neg_of_pos hMr hbp]
+  have hM1 : M < 1 := by
+    by_contra h
+    push_neg at h
+    have hMr : (1 : ℝ) ≤ (M : ℝ) := by exact_mod_cast h
+    rw [hξ] at hlt
+    nlinarith [hbp]
+  have hMz : M = 0 := by omega
+  rw [hξ, hMz]; simp
 
 end LeanFlocq
