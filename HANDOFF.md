@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `2efb86a`+)
+## Status (as of commit `bf1a896`+)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -234,13 +234,17 @@ Mq high-cexp + algebraic helpers + unconditional wiring) on top of the
 existing ~500-line Mp infrastructure. Veltkamp.lean grew from ~3843 to
 4161 lines.
 
-**Dekker / TwoProduct (fourth algorithm) — FOUNDATION DONE, assembly
-remaining (2026-05-31).** `Algorithms/TwoProduct.lean` (312 lines). The
-goal: `x·y = round(x·y) + e` exactly (FMA-free Dekker), at FLX, under
-`radix 2 ∨ Even prec` (i.e. all IEEE variants — binary formats are
+**Dekker / TwoProduct (fourth algorithm) — EVEN-PREC COMPLETE, radix-2
+odd-prec branch (Chunk 2) remains (2026-05-31).** `Algorithms/TwoProduct.lean`
+(651 lines). The goal: `x·y = round(x·y) + e` exactly (FMA-free Dekker), at
+FLX, under `radix 2 ∨ Even prec` (i.e. all IEEE variants — binary formats are
 radix 2, decimal formats have even prec). The algorithm Veltkamp-splits
 both `x` and `y` into half-precision parts, forms four sub-products, and
-reconstructs the error through a 4-step summation chain. Built in chunks:
+reconstructs the error through a 4-step summation chain. The **even-prec
+case (`2s = prec`) is fully done**: `TwoProduct_FLX` proves
+`x·y = round(x·y) + round(round(round(round(hx·hy − r) + hx·ty) + tx·hy) +
+tx·ty)` exactly for all `x,y ∈ F(FLX,prec)` — covering binary32 and the
+decimal formats. Built in chunks:
 
 - **Chunk 1 DONE** (`generic_format_FLX_mult`): `F(p1)·F(p2) ⊆ F(p1+p2)`.
   Product of a `p1`-digit and a `p2`-digit value is exact at precision
@@ -254,7 +258,9 @@ reconstructs the error through a 4-step summation chain. Built in chunks:
   `fun t => !c(−(t+1))` via `round_N_opp`; four step-commutation lemmas
   (`Veltkamp_{p,q,hx,tx}_FLX_neg`) carry it through; zero collapses
   every step via `round_0`.
-- **Chunk 4 FOUNDATION DONE** (the structural + algebraic bedrock):
+- **Chunk 4 DONE** (`TwoProduct_FLX` + `TwoProduct_FLX_main`): the full
+  magnitude chaining, landed exactly as the paper-scoped plan predicted.
+  Structural + algebraic bedrock:
   - `generic_format_FLX_of_mult_bpow` — **grid lemma**: `v = M·β^E` with
     `|v| < β^(prec+E)` is in `F(prec)`. The workhorse for the summation
     steps (every partial sum lives on a common grid).
@@ -264,41 +270,53 @@ reconstructs the error through a 4-step summation chain. Built in chunks:
     mantissa bounds that drive every magnitude estimate.
   - `Veltkamp_struct_FLX_general` — the same, all nonzero signs (negates
     both mantissas via Chunk-3 commutation + `cexp_opp`).
-  - `round_mul_Fs_exact` — with `2s = prec`, `F(s)·F(s)` rounds exactly
-    (all four sub-products, uniform, even-prec case).
+  - `round_mul_Fs_exact` — with `2s = prec`, `F(s)·F(s)` rounds exactly.
   - `round_add_grid_exact` — **summation-step engine**: `round(u+w) = u+w`
     when `u,w` share grid `β^E` and `|u+w| < β^(prec+E)`.
   - `twoproduct_expand_exact` — `x·y = hx·hy+hx·ty+tx·hy+tx·ty` exactly
     (`linear_combination` of the splits) + all four products exact.
 
-  **What remains for Chunk 4** (the magnitude chaining — fully worked out
-  on paper, in task #285 notes, just not yet typed):
-  1. Product magnitude bounds from the struct bounds: `|hx·ty| ≤
-     ½β^(prec+s+E₀)`, `|tx·hy| ≤ ½β^(prec+s+E₀)`, `|tx·ty| ≤ ¼β^(prec+E₀)`,
-     `|hx·hy| ≤ β^(2prec+E₀)` (where `E₀ = cx+cy`).
-  2. `S1 = −r + hx·hy ∈ F(prec)` via the grid lemma at the **coarse**
-     grid `cexp(x·y)` (data-dependent exponent `δ = mag x + mag y −
-     mag(x·y) ∈ {0,1}`); bound `|S1| ≤ (7/4)β^(2prec−2+E₀) <
-     β^(prec+cexp(x·y))`, using `s ≤ prec−2` and `mag(x·y) ≥ mag x +
-     mag y − 1`. (S1 must use the coarse grid — on `s+E₀` the two medium
-     products sum to exactly the threshold and it fails strict `<`.)
-  3. `S2, S3 ∈ F(prec)` via the grid lemma at grid `s+E₀`; both bounds
-     `< β^(prec+s+E₀)` (S2 ≈ `½β^(prec+s+E₀)`, S3 ≈ `¾β^(prec+E₀)`).
-  4. `S4 = x·y − r ∈ F(prec)` via `mult_error_FLX` + `generic_format_opp`
-     (no grid needed — the linchpin existence fact).
-  5. Chain `S1→S2→S3→S4` through `round_add_grid_exact`, substituting each
-     step's exact value into the next, to get `t4 = x·y − r`, hence
-     `x·y = r + t4`. Target a `noncomputable def TwoProduct_t4` (fully
-     nested rounds) + `TwoProduct_FLX_pos` for `x,y > 0` first.
-  6. Sign/zero handling: `x·y = 0` trivial; general signs via the
-     sign-covariance of the whole algorithm (`round_N_opp` on each step,
-     mirroring Chunk 3).
+  Magnitude bookkeeping helpers (the chaining layer):
+  - `bpow_coarsen` — moves `M·β^E_big` onto a coarser grid `β^E_small`
+    (centralizes all the `toNat`/`IZR_Zpower` bookkeeping).
+  - `abs_prod_bpow_le`, `prod_bound_medium` (`|·| ≤ ½β^(prec+s+E₀)` for the
+    medium products `hx·ty`, `tx·hy`), `prod_bound_small` (`|·| ≤
+    ¼β^(prec+E₀)` for `tx·ty`).
+  - `abs_sub{1,2,3}_le` — triangle inequalities for the running-sum bounds.
+  - `Veltkamp_parts_zero` — the parts of `0` are `0` (for the zero dispatch).
 
-  **Chunk 2 (still pending)**: the radix-2 odd-prec `tx·ty` branch
-  (Pff `Dekker2`, ~350 lines) — needed for binary64 (prec=53). For even
-  prec (binary32, decimals) `tx·ty` is already exact via Chunk 1.
+  The chain itself (`TwoProduct_FLX_main`, nonzero case):
+  - `r = round(x·y)` is pinned to the **coarse grid** `cexp(x·y)` via
+    `cexp_round_ge` (the `mag(round v) ≥ mag v` fact), with a zero-`r`
+    fallback giving `M_r = 0`.
+  - `S1 = hx·hy − r` ∈ F via the grid lemma at `cexp(x·y)`: bound
+    `|S1| ≤ (7/4)β^(2prec−2+E₀) < β^(prec+cexp(x·y))`, closing because
+    **7/4 < 2 ≤ β** (uses `s ≤ prec−2` and `mag(x·y) ≥ mag x + mag y − 1`).
+    S1 must use the coarse grid — on `s+E₀` the two medium products sum to
+    exactly the threshold and strict `<` fails.
+  - `S2, S3` ∈ F at grid `s+cx+cy`, closing via `2·C2 ≤ C` (since `β^s ≥ 2`).
+  - `S4 = x·y − r` ∈ F via `mult_error_FLX` + `generic_format_opp` — no grid.
+  - Chain via `round_add_grid_exact` (S1) and `round_generic`∘grid (S2/S3),
+    then `rw [ht1,ht2,ht3,ht4]; ring` collapses the nested rounds.
+  - Public `TwoProduct_FLX` dispatches `x=0 ∨ y=0` (everything is `0`) to
+    the main nonzero theorem.
 
-**~31969 lines of Lean across 31 files. 0 `sorry`s. All files build clean.**
+  No real wall this session — every compiler error was mechanical (a cast
+  already in real-abs form so `Int.cast_abs` was the wrong tool; `rw`
+  clobbering `r` inside its own RHS → `conv_lhs`; a metavariable not yet
+  fixed when an inline `rw` ran → named `have`; two `nlinarith` calls
+  spinning for want of their key hypothesis → direct
+  `mul_le_mul_of_nonneg_right`). The payoff of scoping the magnitude
+  argument fully on paper before typing it.
+
+- **Chunk 2 (still pending, task #283)**: the radix-2 odd-prec `tx·ty`
+  branch (Pff `Dekker2`, ~350 lines) — the one piece binary64 (prec=53)
+  still needs. For even prec (binary32, decimals) `tx·ty` is already exact
+  via Chunk 1, so `TwoProduct_FLX` already covers those. All the chaining
+  infrastructure above is reusable for the odd-prec assembly; only the
+  `tx·ty` sub-product's exactness changes.
+
+**~32308 lines of Lean across 31 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -337,9 +355,9 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Algorithms/Fast2Sum.lean` | 470 | *not in Coq Flocq* (only in Pff) | **First error-free transformation, proved directly on Flocq's foundations.** Radix 2, **FLT**, round-to-nearest. Helpers: `two_mul_in_FLT_radix2` (closure under doubling), `succ_FLT_subnormal_step` (uniform `succ d = d + bpow(emin)` for `0 ≤ d < bpow(emin+prec)`), `round_N_gt_half_FLT_radix2` (radix-2 midpoint-symmetry: for `a ∈ F, 0 < a, a/2 < v` strict, `a/2 ≤ round_N(v)` even when `a/2 ∉ F`). Main: `Fast2Sum_step1_pos` (Pff three-case argument on `b ≥ 0` vs `b ≤ -a/2` vs `-a/2 < b < 0`), `Fast2Sum_step1` (general, via `round_N_opp` symmetry), `Fast2Sum_step2` (plus_error step), `Fast2Sum_correct` (keystone: `a + b = s + e` exactly). |
 | `Algorithms/TwoSum.lean` | 70 | *not in Coq Flocq* (only in Pff) | **Error-free transformation, no precondition.** Radix 2, **FLT**, round-to-nearest. Branching formulation: comparison + Fast2Sum on the larger side. Mathematically identical to Knuth's 6-op TwoSum (same `e`, same exactness). One theorem, `TwoSum_correct` — exposes both `s` and `e` as named `let`-bindings, returns `e ∈ F ∧ a + b = s + e`. |
 | `Algorithms/Veltkamp.lean` | 4236 | `Pff/Pff2Flocq.v` (Veltkamp section, 323–619) | **Veltkamp at FLX FULLY DONE: aux + format + tail + existence + Veltkamp_Even (both odd and even radix, unconditional).** Plus **`Veltkamp_struct_FLX`** (2026-05-31, exposed for TwoProduct): bundles `x = M_x·β^cx`, `hx = M_h·β^(s+cx)`, `|M_h| ≤ β^(prec−s)`, `|M_x − M_h·β^s| ≤ β^s/2`. `Veltkamp_Even_FLX_even_radix_NE` (2026-05-31): for even β, `round_NE_{prec-s} x = Veltkamp_hx_FLX β prec (fun n => decide (¬ Even n)) s x` with no remaining hypothesis. Mp and Mq parity theorems use the same structural template: at coarse tie + hard interior + NE choice, the algebraic source is at half-integer multiple of β^(s+cx) with odd integer coefficient; case-split on cexp gives β factor (high) or ZnearestE-at-midpoint picks even (equal); the impossible case yields contradiction via odd-coefficient arithmetic. Error-bound side: `Veltkamp_C_format` (FLT) + `Veltkamp_C_format_FLX`, `mag_xC_bounds`, four `noncomputable def`s, polarity lemmas (`Veltkamp_p_nonneg_FLX`, `Veltkamp_x_le_p_FLX`, `Veltkamp_q_nonpos_FLX`), Sterbenz prerequisites (`Veltkamp_neg_q_le_p_FLX`, `Veltkamp_abs_x_minus_p_lt_FLX`, `Veltkamp_p_le_neg_2q_FLX`), **`hxExact_FLX`** (third rounding step is identity), **`Veltkamp_aux_FLX_CaseA`** (mag(x·C) = m+s), **`Veltkamp_aux_FLX_CaseB`** (via interior/boundary M_x dispatch), unified **`Veltkamp_aux_FLX`** keystone. Case B helpers: `Veltkamp_p_le_xbeta_FLX` (epLe), `Veltkamp_mag_p_le_FLX`, `Veltkamp_cexp_p_le_FLX`, `Veltkamp_p_le_J1_FLX` (J1), `Veltkamp_neg_q_le_pow_FLX` (V). **Format-side**: `Veltkamp_q_ne_zero_FLX`, three eqGe branches (`Veltkamp_abs_q_ge_branch1/2a/2b_FLX`), discreteness helper `Veltkamp_x_lb_above_bpow_FLX`, assembled **`Veltkamp_eqGe_FLX`**. Integer-mantissa-at-`s+cx` helpers (`Veltkamp_q_at_scx_FLX`, `Veltkamp_p_at_scx_FLX` — both case-agnostic via `F2R_change_exp`). Unified format theorem **`Veltkamp_hx_format_FLX`**: hx = M·β^(s+cx) with `|M| ≤ β^(prec−s)`, side case `|M| = β^(prec−s) → hx = β^m → generic_format_bpow`. Bundled keystone **`Veltkamp_aux_FLX_complete`** = error bound ∧ format. **Tail**: `Veltkamp_tail_FLX` = `x = hx + tx ∧ tx ∈ F(FLX, s)`, via integer-mantissa decomposition at exp `cx` + half-ulp bound. **Existence**: `Veltkamp_M_h_close_FLX` (integer-mantissa half-ulp core: `\|M_x − M_h · β^s\| ≤ β^s/2`) + **`Veltkamp_FLX`** (∃ choice' such that `round_{prec−s, Znearest choice'} x = hx`, via `choice' = decide(DN < hx)` and case-split on strict vs tie + sm = M_h ± 1/2). |
-| `Algorithms/TwoProduct.lean` | 312 | `Pff/Pff2Flocq.v` (Dekker section, 682–976) | **FMA-free Dekker TwoProduct at FLX — FOUNDATION DONE, magnitude chaining remaining.** Target: `x·y = round(x·y) + e` exactly under `radix 2 ∨ Even prec`. **`generic_format_FLX_mult`** (`F(p1)·F(p2) ⊆ F(p1+p2)`), **`Veltkamp_split_FLX_general`** (all-sign split via `round_N_opp` commutation + four `Veltkamp_{p,q,hx,tx}_FLX_neg` lemmas), **`generic_format_FLX_of_mult_bpow`** (grid lemma), **`Veltkamp_struct_FLX_general`** (all-sign mantissa bounds), **`round_mul_Fs_exact`** (sub-products exact for `2s=prec`), **`round_add_grid_exact`** (summation-step engine), **`twoproduct_expand_exact`** (bilinear expansion + 4 products exact). REMAINING: the 3 grid magnitude bounds (S1 coarse grid `cexp(x·y)`, S2/S3 grid `s+cx+cy`) + S4 via `mult_error_FLX` + chain into `TwoProduct_t4` + sign/zero. See [§ Veltkamp_Even scope](#veltkamp_even-scope)-adjacent status block above and task #285 notes. |
+| `Algorithms/TwoProduct.lean` | 651 | `Pff/Pff2Flocq.v` (Dekker section, 682–976) | **FMA-free Dekker TwoProduct at FLX — EVEN-PREC COMPLETE; radix-2 odd-prec branch (Chunk 2) remains.** `x·y = round(x·y) + e` exactly under `2s = prec` (all even-precision IEEE variants). Capstone **`TwoProduct_FLX`** (+ nonzero core `TwoProduct_FLX_main`): the 4-step Dekker chain `round(round(round(round(hx·hy − r) + hx·ty) + tx·hy) + tx·ty)` reconstructs the error, each step rounding exactly. Bedrock: **`generic_format_FLX_mult`** (`F(p1)·F(p2) ⊆ F(p1+p2)`), **`Veltkamp_split_FLX_general`** (all-sign split via `round_N_opp` commutation + four `Veltkamp_{p,q,hx,tx}_FLX_neg`), **`generic_format_FLX_of_mult_bpow`** (grid lemma), **`Veltkamp_struct_FLX_general`** (all-sign mantissa bounds), **`round_mul_Fs_exact`**, **`round_add_grid_exact`** (step engine), **`twoproduct_expand_exact`** (bilinear expansion + 4 products exact). Chaining layer: **`bpow_coarsen`** (grid coarsening), **`abs_prod_bpow_le`**, **`prod_bound_medium`** (`½β^(prec+s+E₀)`), **`prod_bound_small`** (`¼β^(prec+E₀)`), **`abs_sub{1,2,3}_le`**, **`Veltkamp_parts_zero`**. `r` pinned to grid `cexp(x·y)` via `cexp_round_ge`; S1 coarse-grid bound closes by `7/4 < 2 ≤ β`; S2/S3 via `2·C2 ≤ C`; S4 via `mult_error_FLX`. |
 
-**Total: ~735 Lean theorems vs ~480 substantive Coq theorems** (we have extras
+**Total: ~748 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
 ## Build setup
@@ -583,7 +601,7 @@ The relevant algorithms, sized roughly:
 | ~~`Fast2Sum` (with precondition `|b| ≤ |a|`)~~ ✓ **done at FLT in `Algorithms/Fast2Sum.lean` (470 lines)** | `a + b = round(a+b) + e` exactly | ~~~200~~ 470 |
 | ~~`TwoSum` (no precondition)~~ ✓ **done at FLT in `Algorithms/TwoSum.lean` (70 lines, branching form)** | same, general inputs | ~~~400~~ 70 |
 | ~~`Veltkamp` splitting~~ ✓ **DONE at FLX 2026-05-31** (full Veltkamp_Even arc complete, both odd and even radix; `Algorithms/Veltkamp.lean`) | split `x` into hi/lo parts of `prec/2` bits | ~~~400~~ 4161 |
-| ~~`Dekker` / `TwoProduct`~~ **FOUNDATION DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 312 lines): Chunks 1 & 3 complete, Chunk 4 structural+algebraic bedrock complete; magnitude chaining + Chunk-2 radix-2 branch remain | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ ~312 so far (builds on Veltkamp) |
+| ~~`Dekker` / `TwoProduct` (even prec)~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 651 lines): Chunks 1, 3, 4 complete — `TwoProduct_FLX` proves `a·b = round(a·b) + e` exactly for `2s=prec` (all even-precision IEEE variants). Radix-2 odd-prec branch (Chunk 2, binary64) remains | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 651 (builds on Veltkamp) |
 | `ErrFMA` | FMA with an explicit error term | ~500 |
 | Compensated discriminant (`b² − ac`) | sharp error bound for the quadratic discriminant | ~600 |
 
@@ -740,7 +758,10 @@ to BigInt rationals.
    for `eqLe_FLX` and ~300–500 lines for the format/aux side. Reference:
    `Pff.v` `Velt` section (13053–14776), or Boldo's "Pitfalls of a Full
    Floating-Point Proof" §3 if accessible.
-5. `Dekker`/`TwoProduct` (1 session, builds on Veltkamp).
+5. ~~`Dekker`/`TwoProduct` (even prec)~~ ✓ **DONE 2026-05-31** (`TwoProduct_FLX`).
+   Remaining: Chunk 2 (radix-2 odd-prec `tx·ty` branch, Pff `Dekker2`) for
+   binary64 — all the chaining infrastructure is reusable; only the `tx·ty`
+   sub-product's exactness argument changes.
 6. `ErrFMA` (1 session, builds on TwoProduct + TwoSum).
 7. Compensated discriminant (1 session, applies the above).
 
@@ -851,9 +872,10 @@ combining Mp + Mq:
 style predicates (`orient2d`, etc.) become "definition + correctness
 lemma" exercises sitting on top of `TwoSum` + `TwoProduct`.
 
-Next algorithm to port: `Dekker`/`TwoProduct` (builds on Veltkamp).
-Then `ErrFMA` (builds on TwoProduct + TwoSum), then compensated
-discriminant.
+`Dekker`/`TwoProduct` is done at even precision (`TwoProduct_FLX`). Next:
+either Chunk 2 (radix-2 odd-prec `tx·ty` branch, for binary64) to finish
+TwoProduct's full `radix 2 ∨ Even prec` coverage, or move on to `ErrFMA`
+(builds on TwoProduct + TwoSum), then the compensated discriminant.
 
 If at some point you decide you want the *rest* of Pff (Pff has dozens
 of theorems beyond the half-dozen above), the Pff2Flocq translation
