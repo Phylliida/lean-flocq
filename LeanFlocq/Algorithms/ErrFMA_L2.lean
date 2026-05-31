@@ -375,4 +375,105 @@ theorem errfma_be2_eq_bpow_lower (prec : ℤ) (hp : 0 < prec) (choice : ℤ → 
       linarith [hbe2_le_neg]
     exact neg_bpow_squeeze radix2 ℓ (c1 - 1) hℓj hM hlo hhi
 
+/-! ### The dichotomy: `β1 = r1` or `β2` is a multiple of `β^(cexp β1 − 2)` -/
+
+/-- The positive-`be1` dispatcher: combine the upper/lower cores into "β2 is a
+multiple of `β^(cexp be1 − 2)`". -/
+theorem errfma_be2_div_dichotomy_pos (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool)
+    {be1 be2 al2 r1 : ℝ} (ℓ : ℤ)
+    (Fbe1 : generic_format radix2 (FLX_exp prec) be1)
+    (hb1pos : 0 < be1) (hbe2_ne : be2 ≠ 0)
+    (hbe1_fix : be1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2))
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2 + al2))
+    (hne : be1 ≠ r1)
+    (hbe2_div : ∃ M : ℤ, be2 = (M : ℝ) * bpow radix2 ℓ)
+    (hal2_lt : |al2| < bpow radix2 ℓ) :
+    ∃ N : ℤ, be2 = (N : ℝ) * bpow radix2 (cexp radix2 (FLX_exp prec) be1 - 2) := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNotFTZ := monotone_exp_not_FTZ hValid hMon
+  set c1 := cexp radix2 (FLX_exp prec) be1 with hc1
+  have hconv : bpow radix2 (c1 - 1) = 2 * bpow radix2 (c1 - 2) := by
+    rw [show c1 - 1 = (c1 - 2) + 1 from by ring, bpow_plus, bpow_one]
+    have : (radix2.val : ℝ) = 2 := by norm_cast
+    rw [this]; ring
+  rcases lt_trichotomy be2 0 with hb2neg | hb2zero | hb2pos
+  · rcases errfma_be2_eq_bpow_lower prec hp choice ℓ Fbe1 hb1pos hb2neg hbe1_fix hr1 hne
+        hbe2_div hal2_lt with h | h
+    · rw [← hc1] at h; exact ⟨-2, by rw [h, hconv]; push_cast; ring⟩
+    · rw [← hc1] at h; exact ⟨-1, by rw [h]; push_cast; ring⟩
+  · exact absurd hb2zero hbe2_ne
+  · have hbe2_le : be2 ≤ 1 / 2 * ulp radix2 (FLX_exp prec) be1 := by
+      have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (be1 + be2)
+      rw [← hbe1_fix] at h
+      have heq : |be1 - (be1 + be2)| = be2 := by
+        rw [show be1 - (be1 + be2) = -be2 from by ring, abs_neg, abs_of_pos hb2pos]
+      rw [heq] at h; exact h
+    have h := errfma_be2_eq_bpow_upper prec hp choice ℓ Fbe1 hb1pos hb2pos hbe1_fix hr1 hne
+      hbe2_div hal2_lt hbe2_le
+    rw [← hc1] at h; exact ⟨2, by rw [h, hconv]; push_cast; ring⟩
+
+/-- **The midpoint dichotomy** (`Midpoint_aux`). Either the FMA result equals
+`β1` or `β2` is a multiple of `β^(cexp β1 − 2)`. Sign-reduces `be1 < 0` to the
+positive dispatcher via `round_N_opp` with a flipped tie-breaker. -/
+theorem errfma_be2_div_dichotomy (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool)
+    {be1 be2 al2 r1 : ℝ}
+    (Fbe1 : generic_format radix2 (FLX_exp prec) be1)
+    (hbe2_ne : be2 ≠ 0)
+    (hbe1_fix : be1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2))
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2 + al2))
+    {ℓ : ℤ}
+    (hbe2_div : ∃ M : ℤ, be2 = (M : ℝ) * bpow radix2 ℓ)
+    (hal2_lt : |al2| < bpow radix2 ℓ) :
+    be1 = r1 ∨
+      ∃ N : ℤ, be2 = (N : ℝ) * bpow radix2 (cexp radix2 (FLX_exp prec) be1 - 2) := by
+  by_cases hbe1r1 : be1 = r1
+  · left; exact hbe1r1
+  · right
+    have hValid := FLX_exp_valid prec hp
+    have hMon := FLX_exp_monotone prec
+    have hNotFTZ := monotone_exp_not_FTZ hValid hMon
+    -- |be2| ≤ ½ ulp be1 (be2 is be1's rounding error)
+    have hbe2_le_half : |be2| ≤ 1 / 2 * ulp radix2 (FLX_exp prec) be1 := by
+      have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (be1 + be2)
+      rw [← hbe1_fix] at h
+      have heq : |be1 - (be1 + be2)| = |be2| := by
+        rw [show be1 - (be1 + be2) = -be2 from by ring, abs_neg]
+      rw [heq] at h; exact h
+    -- be1 ≠ 0
+    have hbe1ne : be1 ≠ 0 := by
+      intro h0
+      apply hbe2_ne
+      rw [h0, ulp_FLX_0 radix2 prec hp, mul_zero] at hbe2_le_half
+      exact abs_eq_zero.mp (le_antisymm hbe2_le_half (abs_nonneg be2))
+    rcases lt_trichotomy be1 0 with hb1neg | hb1zero | hb1pos
+    · -- be1 < 0: negate everything and use the positive dispatcher
+      set c' : ℤ → Bool := fun t => !choice (-(t + 1)) with hc'
+      have hflip : (fun t : ℤ => !c' (-(t + 1))) = choice := by
+        funext t; rw [hc']; show (!!choice (-(-(t + 1) + 1))) = choice t; simp
+      have Fnb1 : generic_format radix2 (FLX_exp prec) (-be1) :=
+        generic_format_opp radix2 (FLX_exp prec) Fbe1
+      -- -be1 = round c' (-be1 + -be2)
+      have hfix' : -be1 = round radix2 (FLX_exp prec) (Znearest c') (-be1 + -be2) := by
+        have := round_N_opp radix2 (FLX_exp prec) c' (be1 + be2)
+        rw [hflip] at this
+        rw [show -be1 + -be2 = -(be1 + be2) from by ring, this, ← hbe1_fix]
+      have hr1' : -r1 = round radix2 (FLX_exp prec) (Znearest c') (-be1 + -be2 + -al2) := by
+        have := round_N_opp radix2 (FLX_exp prec) c' (be1 + be2 + al2)
+        rw [hflip] at this
+        rw [show -be1 + -be2 + -al2 = -(be1 + be2 + al2) from by ring, this, ← hr1]
+      have hne' : -be1 ≠ -r1 := fun h => hbe1r1 (neg_injective h)
+      have hdiv' : ∃ M : ℤ, -be2 = (M : ℝ) * bpow radix2 ℓ := by
+        obtain ⟨M, hM⟩ := hbe2_div; exact ⟨-M, by rw [hM]; push_cast; ring⟩
+      have hal2' : |-al2| < bpow radix2 ℓ := by rw [abs_neg]; exact hal2_lt
+      obtain ⟨N, hN⟩ := errfma_be2_div_dichotomy_pos prec hp c' ℓ Fnb1
+        (by linarith) (by simpa using hbe2_ne) hfix' hr1' hne' hdiv' hal2'
+      rw [cexp_opp] at hN
+      exact ⟨-N, by
+        have : be2 = -(-be2) := by ring
+        rw [this, hN]; push_cast; ring⟩
+    · exact absurd hb1zero hbe1ne
+    · exact errfma_be2_div_dichotomy_pos prec hp choice ℓ Fbe1 hb1pos hbe2_ne hbe1_fix hr1
+        hbe1r1 hbe2_div hal2_lt
+
 end LeanFlocq
