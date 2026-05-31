@@ -241,4 +241,28 @@ theorem Veltkamp_struct_FLX_general (beta : radix) (prec : ℤ) (hp : 0 < prec)
   · -- x > 0: directly.
     exact Veltkamp_struct_FLX beta prec hp choice Fx hpos hs_lo hs_hi
 
+/-- With `2s = prec`, the product of two `F(s)` values rounds exactly. This
+covers all four Veltkamp sub-products uniformly in the even-precision case:
+each half-part lies in `F(s)`, and `F(s)·F(s) ⊆ F(2s) = F(prec)`. -/
+theorem round_mul_Fs_exact (beta : radix) (prec : ℤ) (choice : ℤ → Bool)
+    {s : ℤ} {a b : ℝ} (hs : 2 * s = prec)
+    (Fa : generic_format beta (FLX_exp s) a)
+    (Fb : generic_format beta (FLX_exp s) b) :
+    round beta (FLX_exp prec) (Znearest choice) (a * b) = a * b :=
+  round_generic beta (FLX_exp prec) (Znearest choice)
+    (generic_format_FLX_mult beta s s prec (by omega) Fa Fb)
+
+/-- **Grid step.** If `u = Mu·β^E` and `w = Mw·β^E` both lie on the grid `β^E`
+and their sum fits under `β^(prec+E)`, then `round(u+w) = u+w`. Each step of the
+Dekker summation chain is an instance: the running partial sum and the next
+sub-product share a common grid, and the sum stays small enough. -/
+theorem round_add_grid_exact (beta : radix) (prec : ℤ) (choice : ℤ → Bool)
+    (E Mu Mw : ℤ) {u w : ℝ}
+    (hu : u = (Mu : ℝ) * bpow beta E) (hw : w = (Mw : ℝ) * bpow beta E)
+    (hb : |u + w| < bpow beta (prec + E)) :
+    round beta (FLX_exp prec) (Znearest choice) (u + w) = u + w :=
+  round_generic beta (FLX_exp prec) (Znearest choice)
+    (generic_format_FLX_of_mult_bpow beta prec (Mu + Mw) E
+      (by rw [hu, hw]; push_cast; ring) hb)
+
 end LeanFlocq
