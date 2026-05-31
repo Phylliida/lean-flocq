@@ -176,4 +176,31 @@ theorem Veltkamp_split_FLX_general (beta : radix) (prec : ℤ) (hp : 0 < prec)
     exact ⟨h_sum, h_tx,
       Veltkamp_hx_format_FLX beta prec hp choice Fx hpos hs_lo hs_hi⟩
 
+/-! ## Chunk 4: summation spine
+
+The reconstruction `t1..t4` of the product error. The engine for the two
+middle steps is a single "grid + magnitude ⟹ representable" lemma. -/
+
+/-- **Grid lemma.** A value `v = M · β^E` that fits in magnitude under
+`β^(prec+E)` is representable at precision `prec`. This is the workhorse for
+proving each summation step rounds exactly: every partial sum lives on a
+common grid `β^E`, and being small enough forces `cexp(v) ≤ E`. -/
+theorem generic_format_FLX_of_mult_bpow (beta : radix) (prec : ℤ)
+    (M E : ℤ) {v : ℝ} (hv : v = (M : ℝ) * bpow beta E)
+    (hbound : |v| < bpow beta (prec + E)) :
+    generic_format beta (FLX_exp prec) v := by
+  by_cases hM : M = 0
+  · rw [hv, hM]; push_cast; rw [zero_mul]; exact generic_format_0 _ _
+  have hvF2R : v = F2R (beta := beta) ⟨M, E⟩ := hv
+  have hvne : v ≠ 0 := by
+    rw [hv]; exact mul_ne_zero (by exact_mod_cast hM) (ne_of_gt (bpow_gt_0 beta E))
+  have h_mag : mag beta v ≤ prec + E := mag_le_bpow beta hvne hbound
+  rw [hvF2R]
+  apply generic_format_F2R
+  intro _
+  rw [← hvF2R]
+  show cexp beta (FLX_exp prec) v ≤ E
+  have : cexp beta (FLX_exp prec) v = mag beta v - prec := by unfold cexp FLX_exp; rfl
+  rw [this]; omega
+
 end LeanFlocq
