@@ -167,6 +167,23 @@ theorem nonneg_bpow_mult_lt_eq_zero (beta : radix) (ℓ : ℤ) {ξ : ℝ} {M : �
   have hMz : M = 0 := by omega
   rw [hξ, hMz]; simp
 
+/-- Negative-side squeeze: `be2` is a `β^ℓ`-multiple in `[−β^j, −β^j + β^ℓ)` with
+`ℓ ≤ j`, hence `be2 = −β^j` exactly. -/
+theorem neg_bpow_squeeze (beta : radix) (ℓ j : ℤ) (hℓj : ℓ ≤ j) {be2 : ℝ} {M : ℤ}
+    (hM : be2 = (M : ℝ) * bpow beta ℓ)
+    (hlo : -bpow beta j ≤ be2) (hhi : be2 < -bpow beta j + bpow beta ℓ) :
+    be2 = -bpow beta j := by
+  have hdnn : 0 ≤ j - ℓ := by omega
+  have hjpow : bpow beta j = ((beta.val ^ (j - ℓ).toNat : ℤ) : ℝ) * bpow beta ℓ := by
+    rw [IZR_Zpower beta hdnn, ← bpow_plus]; congr 1; omega
+  set ξ := be2 + bpow beta j with hξdef
+  have hξform : ξ = ((M + beta.val ^ (j - ℓ).toNat : ℤ) : ℝ) * bpow beta ℓ := by
+    rw [hξdef, hM, hjpow]; push_cast; ring
+  have hξ0 : 0 ≤ ξ := by rw [hξdef]; linarith
+  have hξlt : ξ < bpow beta ℓ := by rw [hξdef]; linarith
+  have := nonneg_bpow_mult_lt_eq_zero beta ℓ hξform hξ0 hξlt
+  rw [hξdef] at this; linarith
+
 /-- **Upper-midpoint core.** With `be1 > 0`, `be2 > 0`, `be1 = ◦(be1+be2)`,
 `r1 = ◦(be1+be2+al2) ≠ be1`, and the divisibility data, `be2 = β^(cexp be1 − 1)`
 (exactly half a ulp). The clean half of the midpoint dichotomy: `r1 ≠ be1` forces
@@ -252,5 +269,110 @@ theorem errfma_be2_eq_bpow_upper (prec : ℤ) (hp : 0 < prec) (choice : ℤ → 
   have hξlt : ξ < bpow radix2 ℓ := by rw [hξdef]; linarith [hlb]
   have : ξ = 0 := nonneg_bpow_mult_lt_eq_zero radix2 ℓ hξform hξ0 hξlt
   rw [hξdef] at this; linarith
+
+/-- **Lower-midpoint core.** With `be1 > 0`, `be2 < 0`, and the dichotomy data,
+`be2 = −β^(cexp be1 − 1)` (non-power-of-β `be1`) or `be2 = −β^(cexp be1 − 2)`
+(power of β — the `pred_pos` branch). Both are multiples of `β^(cexp be1 − 2)`. -/
+theorem errfma_be2_eq_bpow_lower (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool)
+    {be1 be2 al2 r1 : ℝ} (ℓ : ℤ)
+    (Fbe1 : generic_format radix2 (FLX_exp prec) be1)
+    (hbe1pos : 0 < be1) (hbe2neg : be2 < 0)
+    (hbe1_fix : be1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2))
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2 + al2))
+    (hne : be1 ≠ r1)
+    (hbe2_div : ∃ M : ℤ, be2 = (M : ℝ) * bpow radix2 ℓ)
+    (hal2_lt : |al2| < bpow radix2 ℓ) :
+    be2 = -bpow radix2 (cexp radix2 (FLX_exp prec) be1 - 1)
+      ∨ be2 = -bpow radix2 (cexp radix2 (FLX_exp prec) be1 - 2) := by
+  have hValid := FLX_exp_valid prec hp
+  have hbe1ne : be1 ≠ 0 := ne_of_gt hbe1pos
+  set c1 := cexp radix2 (FLX_exp prec) be1 with hc1
+  have hc1m : c1 = mag radix2 be1 - prec := by rw [hc1]; rfl
+  have hu : ulp radix2 (FLX_exp prec) be1 = bpow radix2 c1 :=
+    ulp_neq_0 radix2 (FLX_exp prec) hbe1ne
+  have hbpl : (0 : ℝ) < bpow radix2 ℓ := bpow_gt_0 _ _
+  obtain ⟨M, hM⟩ := hbe2_div
+  -- M ≤ −1 and be2 ≤ −β^ℓ
+  have hM1 : M ≤ -1 := by
+    rcases le_or_gt M (-1) with h | h
+    · exact h
+    · exfalso
+      have hM0 : 0 ≤ M := by omega
+      have : (0 : ℝ) ≤ (M : ℝ) := by exact_mod_cast hM0
+      nlinarith [hM, mul_nonneg this (le_of_lt hbpl)]
+  have hbe2_le_neg : be2 ≤ -bpow radix2 ℓ := by
+    rw [hM]
+    have : (M : ℝ) ≤ -1 := by exact_mod_cast hM1
+    nlinarith [hbpl]
+  -- bpow(-1) = 1/2
+  have hb1 : bpow radix2 (-1 : ℤ) = 1 / 2 := by
+    show ((radix2.val : ℝ)) ^ (-1 : ℤ) = 1 / 2
+    have : (radix2.val : ℝ) = 2 := by norm_cast
+    rw [this]; norm_num
+  set p := pred radix2 (FLX_exp prec) be1 with hp_def
+  -- v0 = be1 + be2 ≥ mid_dn = (be1 + p)/2
+  have hv0_ge : (be1 + p) / 2 ≤ be1 + be2 := by
+    by_contra h; push_neg at h
+    have hsp : succ radix2 (FLX_exp prec) p = be1 := succ_pred radix2 (FLX_exp prec) hValid Fbe1
+    have hle : round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2) ≤ p :=
+      round_N_le_midp radix2 (FLX_exp prec) hValid choice
+        (generic_format_pred radix2 (FLX_exp prec) hValid Fbe1)
+        (by rw [hsp]; linarith)
+    rw [← hbe1_fix] at hle
+    have := pred_lt_id radix2 (FLX_exp prec) hbe1ne
+    rw [← hp_def] at this; linarith
+  -- v1 = be1 + be2 + al2 ≤ mid_dn
+  have hv1_le : be1 + be2 + al2 ≤ (be1 + p) / 2 := by
+    by_contra h; push_neg at h
+    have hge : be1 ≤ round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2 + al2) :=
+      round_N_ge_midp radix2 (FLX_exp prec) hValid choice Fbe1 h
+    have hsucc : succ radix2 (FLX_exp prec) be1 = be1 + ulp radix2 (FLX_exp prec) be1 :=
+      succ_eq_pos radix2 (FLX_exp prec) (le_of_lt hbe1pos)
+    have hal2 : al2 < bpow radix2 ℓ := lt_of_le_of_lt (le_abs_self al2) hal2_lt
+    have hv1_lt_be1 : be1 + be2 + al2 < be1 := by linarith [hbe2_le_neg]
+    have hle : round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2 + al2) ≤ be1 :=
+      round_N_le_midp radix2 (FLX_exp prec) hValid choice Fbe1
+        (by rw [hsucc, hu]; have := bpow_gt_0 radix2 c1; linarith)
+    exact hne (by rw [hr1]; linarith)
+  -- be2 ∈ [(p−be1)/2, (p−be1)/2 + β^ℓ)
+  have hlo : (p - be1) / 2 ≤ be2 := by linarith
+  have hhi : be2 < (p - be1) / 2 + bpow radix2 ℓ := by
+    have hal2 : -bpow radix2 ℓ < al2 := by linarith [neg_abs_le al2, hal2_lt]
+    linarith
+  -- compute (p − be1)/2 via pred_pos branch
+  have hpred_eq : p = pred_pos radix2 (FLX_exp prec) be1 := by
+    rw [hp_def]; exact pred_eq_pos radix2 (FLX_exp prec) (le_of_lt hbe1pos)
+  by_cases hpow : be1 = bpow radix2 (mag radix2 be1 - 1)
+  · -- power of β: be1 − p = β^(c1−1), (p−be1)/2 = −β^(c1−2)
+    right
+    have hpval : p = be1 - bpow radix2 (c1 - 1) := by
+      rw [hpred_eq]; unfold pred_pos; rw [if_pos hpow]
+      congr 2
+      show FLX_exp prec (mag radix2 be1 - 1) = c1 - 1
+      unfold FLX_exp; omega
+    have hmidval : (p - be1) / 2 = -bpow radix2 (c1 - 2) := by
+      rw [hpval]
+      rw [show c1 - 2 = (c1 - 1) + (-1) from by ring, bpow_plus, hb1]; ring
+    rw [hmidval] at hlo hhi
+    have hℓj : ℓ ≤ c1 - 2 := by
+      by_contra hcon; push_neg at hcon
+      have : bpow radix2 (c1 - 2) < bpow radix2 ℓ := bpow_lt radix2 (by omega)
+      have hbe2ge : -bpow radix2 (c1 - 2) ≤ be2 := hlo
+      linarith [hbe2_le_neg]
+    exact neg_bpow_squeeze radix2 ℓ (c1 - 2) hℓj hM hlo hhi
+  · -- non-power: be1 − p = ulp = β^c1, (p−be1)/2 = −β^(c1−1)
+    left
+    have hpval : p = be1 - bpow radix2 c1 := by
+      rw [hpred_eq]; unfold pred_pos; rw [if_neg hpow, hu]
+    have hmidval : (p - be1) / 2 = -bpow radix2 (c1 - 1) := by
+      rw [hpval]
+      rw [show c1 - 1 = c1 + (-1) from by ring, bpow_plus, hb1]; ring
+    rw [hmidval] at hlo hhi
+    have hℓj : ℓ ≤ c1 - 1 := by
+      by_contra hcon; push_neg at hcon
+      have : bpow radix2 (c1 - 1) < bpow radix2 ℓ := bpow_lt radix2 (by omega)
+      have hbe2ge : -bpow radix2 (c1 - 1) ≤ be2 := hlo
+      linarith [hbe2_le_neg]
+    exact neg_bpow_squeeze radix2 ℓ (c1 - 1) hℓj hM hlo hhi
 
 end LeanFlocq
