@@ -476,4 +476,162 @@ theorem errfma_be2_div_dichotomy (prec : ℤ) (hp : 0 < prec) (choice : ℤ → 
     · exact errfma_be2_div_dichotomy_pos prec hp choice ℓ Fbe1 hb1pos hbe2_ne hbe1_fix hr1
         hbe1r1 hbe2_div hal2_lt
 
+/-! ### Assembly: `(β1 − r1) + β2 ∈ F` -/
+
+/-- A format element with `cexp ≥ E` is an integer multiple of `β^E`. -/
+theorem format_mult_bpow_of_cexp_ge (beta : radix) (prec : ℤ) {x : ℝ} (E : ℤ)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hE : E ≤ cexp beta (FLX_exp prec) x) :
+    ∃ m : ℤ, x = (m : ℝ) * bpow beta E := by
+  set e := cexp beta (FLX_exp prec) x with he
+  set Mx := Ztrunc (scaled_mantissa beta (FLX_exp prec) x) with hMx
+  have hx : x = F2R (beta := beta) ⟨Mx, e⟩ := Fx
+  refine ⟨Mx * (beta.val : ℤ) ^ (e - E).toNat, ?_⟩
+  rw [hx, F2R_change_exp E Mx e hE]; rfl
+
+/-- **ErrFMA L2 (`gaCorrect`).** `(β1 − r1) + β2 ∈ F`, the keystone of the
+`β2 ≠ 0` branch. `β1 = r1` ⟹ `= β2 ∈ F`; else the dichotomy makes β2 a
+`β^(cexp β1 − 2)`-multiple, β1 and r1 are coarser multiples (via `Expbe1`), and a
+magnitude bound `< β^(cexp β1 + 1)` closes it by the grid lemma. -/
+theorem errfma_ga_exact (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool)
+    {a b c u1 u2 al1 al2 be1 be2 r1 : ℝ}
+    (Fc : generic_format radix2 (FLX_exp prec) c)
+    (hu10 : u1 ≠ 0) (hal10 : al1 ≠ 0) (hbe2_ne : be2 ≠ 0) (hr1_ne : r1 ≠ 0)
+    (hu1 : u1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b))
+    (hu2 : u2 = a * b - u1)
+    (hal1 : al1 = round radix2 (FLX_exp prec) (Znearest choice) (c + u2))
+    (hal2 : al2 = c + u2 - al1)
+    (hbe1 : be1 = round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1))
+    (hbe2 : be2 = u1 + al1 - be1)
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b + c)) :
+    generic_format radix2 (FLX_exp prec) (be1 - r1 + be2) := by
+  have hp0 : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp0
+  have hMon := FLX_exp_monotone prec
+  have hNotFTZ := monotone_exp_not_FTZ hValid hMon
+  have Fu1 : generic_format radix2 (FLX_exp prec) u1 := by
+    rw [hu1]; exact generic_format_round _ _ hValid _ _
+  have Fal1 : generic_format radix2 (FLX_exp prec) al1 := by
+    rw [hal1]; exact generic_format_round _ _ hValid _ _
+  have Fbe1 : generic_format radix2 (FLX_exp prec) be1 := by
+    rw [hbe1]; exact generic_format_round _ _ hValid _ _
+  have Fr1 : generic_format radix2 (FLX_exp prec) r1 := by
+    rw [hr1]; exact generic_format_round _ _ hValid _ _
+  -- β2 ∈ F (rounding error of u1 + al1)
+  have Fbe2 : generic_format radix2 (FLX_exp prec) be2 := by
+    have h := plus_error radix2 (FLX_exp prec) hValid hMon choice Fu1 Fal1
+    rw [← hbe1] at h
+    rw [show be2 = -(be1 - (u1 + al1)) from by rw [hbe2]; ring]
+    exact generic_format_opp _ _ h
+  -- be1 + be2 = u1 + al1, be1 + be2 + al2 = a*b + c
+  have hsum1 : be1 + be2 = u1 + al1 := by rw [hbe2]; ring
+  have hsum2 : be1 + be2 + al2 = a * b + c := by rw [hbe2, hal2, hu2]; ring
+  have hfix : be1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2) := by
+    rw [hsum1, hbe1]
+  have hr1' : r1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2 + al2) := by
+    rw [hsum2, hr1]
+  -- divisibility + al2 bound at ℓ = min(cexp u1, cexp al1)
+  set ℓ := min (cexp radix2 (FLX_exp prec) u1) (cexp radix2 (FLX_exp prec) al1) with hℓ
+  have hdiv : ∃ M : ℤ, be2 = (M : ℝ) * bpow radix2 ℓ :=
+    errfma_be2_mult_bpow prec choice Fu1 Fal1 hbe1 hbe2
+  have hal2lt : |al2| < bpow radix2 ℓ :=
+    errfma_al2_lt_bpow prec hp0 choice Fc hu10 hal10 hu1 hu2 hal1 hal2
+  -- dichotomy
+  rcases errfma_be2_div_dichotomy prec hp0 choice Fbe1 hbe2_ne hfix hr1' hdiv hal2lt with
+    hbe1r1 | ⟨N, hN⟩
+  · -- be1 = r1: (be1 - r1) + be2 = be2 ∈ F
+    rw [show be1 - r1 + be2 = be2 from by rw [hbe1r1]; ring]; exact Fbe2
+  · -- assembly on grid β^(cexp be1 − 2)
+    set c1 := cexp radix2 (FLX_exp prec) be1 with hc1
+    have hbe1ne : be1 ≠ 0 := by
+      intro h0; apply hbe2_ne
+      have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (be1 + be2)
+      rw [← hfix, h0, ulp_FLX_0 radix2 prec hp0] at h
+      simp only [zero_add, zero_sub, abs_neg, mul_zero] at h
+      exact abs_eq_zero.mp (le_antisymm h (abs_nonneg _))
+    -- factor-of-two: |be1| ≤ 2|r1|, |r1| ≤ 2|be1|
+    have hHea : |al2| ≤ 1 / 2 * ulp radix2 (FLX_exp prec) u1 := by
+      have hcl := (round_N_pt radix2 (FLX_exp prec) hValid choice (c + u2)).2 c Fc
+      rw [← hal1] at hcl
+      have hcu : |c - (c + u2)| = |u2| := by rw [show c - (c + u2) = -u2 from by ring, abs_neg]
+      rw [hcu] at hcl
+      have hu2err : |u2| ≤ 1 / 2 * ulp radix2 (FLX_exp prec) u1 := by
+        have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (a * b)
+        rw [← hu1] at h; rw [hu2, abs_sub_comm]; exact h
+      have : |al2| ≤ |u2| := by rw [hal2, abs_sub_comm]; exact hcl
+      linarith
+    have hHeb : |al2| ≤ 1 / 2 * ulp radix2 (FLX_exp prec) al1 := by
+      have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (c + u2)
+      rw [← hal1] at h; rw [hal2, abs_sub_comm]; exact h
+    have hu1al1_ne : u1 + al1 ≠ 0 := by
+      intro h0; apply hbe2_ne; rw [hbe2, h0, hbe1, ← h0, h0,
+        round_0 radix2 (FLX_exp prec) (Znearest choice)]; ring
+    obtain ⟨_, hb1le2r, hr1le2b⟩ :=
+      round_nearby_factor_two_FLX prec hp choice Fu1 Fal1 hHea hHeb hu10 hal10 hu1al1_ne
+    rw [← hbe1] at hb1le2r hr1le2b
+    have hround_r1 : round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1 + al2) = r1 := by
+      rw [show u1 + al1 + al2 = a * b + c from by rw [hal2, hu2]; ring, hr1]
+    rw [hround_r1] at hb1le2r hr1le2b
+    -- cexp(r1) ∈ [c1 − 1, c1 + 1]
+    have h2bpow : (2 : ℝ) = bpow radix2 1 := by rw [bpow_one]; norm_cast
+    have hmag_le1 : mag radix2 be1 ≤ mag radix2 r1 + 1 := by
+      have h2 : |be1| ≤ |2 * r1| := by rw [abs_mul]; simp only [abs_two]; linarith [hb1le2r]
+      have := mag_le_abs radix2 hbe1ne h2
+      rwa [show (2 : ℝ) * r1 = r1 * bpow radix2 1 from by rw [h2bpow]; ring,
+        mag_mult_bpow radix2 hr1_ne] at this
+    have hmag_le2 : mag radix2 r1 ≤ mag radix2 be1 + 1 := by
+      have h2 : |r1| ≤ |2 * be1| := by rw [abs_mul]; simp only [abs_two]; linarith [hr1le2b]
+      have := mag_le_abs radix2 hr1_ne h2
+      rwa [show (2 : ℝ) * be1 = be1 * bpow radix2 1 from by rw [h2bpow]; ring,
+        mag_mult_bpow radix2 hbe1ne] at this
+    have hcexp_r1_lo : c1 - 1 ≤ cexp radix2 (FLX_exp prec) r1 := by
+      show c1 - 1 ≤ FLX_exp prec (mag radix2 r1)
+      unfold FLX_exp; rw [hc1]; show cexp radix2 (FLX_exp prec) be1 - 1 ≤ _
+      unfold cexp FLX_exp; omega
+    have hcexp_r1_hi : cexp radix2 (FLX_exp prec) r1 ≤ c1 + 1 := by
+      show FLX_exp prec (mag radix2 r1) ≤ c1 + 1
+      unfold FLX_exp; rw [hc1]; unfold cexp FLX_exp; omega
+    -- |al2| ≤ |be2|  (al2 below β2's grid)
+    have hal2_le_be2 : |al2| ≤ |be2| := by
+      obtain ⟨Mb, hMb⟩ := hdiv
+      have hMb1 : (1 : ℤ) ≤ |Mb| := by
+        rcases eq_or_ne Mb 0 with h | h
+        · exfalso; apply hbe2_ne; rw [hMb, h]; simp
+        · exact Int.one_le_abs h
+      have : bpow radix2 ℓ ≤ |be2| := by
+        rw [hMb, abs_mul, abs_of_pos (bpow_gt_0 radix2 ℓ)]
+        have : (1 : ℝ) ≤ |(Mb : ℝ)| := by rw [← Int.cast_abs]; exact_mod_cast hMb1
+        nlinarith [bpow_gt_0 radix2 ℓ]
+      linarith [hal2lt]
+    -- magnitude: |(be1 − r1) + be2| < β^(c1 + 1)
+    have hmagbound : |be1 - r1 + be2| < bpow radix2 (c1 + 1) := by
+      have heq : be1 - r1 + be2 = (a * b + c - r1) - al2 := by
+        have : be1 + be2 = a * b + c - al2 := by rw [hsum1]; linarith [hsum2]
+        linarith [this]
+      have hfma_err : |a * b + c - r1| ≤ 1 / 2 * bpow radix2 (cexp radix2 (FLX_exp prec) r1) := by
+        have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (a * b + c)
+        rw [← hr1, ulp_neq_0 radix2 (FLX_exp prec) hr1_ne] at h
+        rw [abs_sub_comm]; exact h
+      have hr1ulp_le : bpow radix2 (cexp radix2 (FLX_exp prec) r1) ≤ bpow radix2 (c1 + 1) :=
+        bpow_le radix2 hcexp_r1_hi
+      have hbe2ulp : |be2| ≤ 1 / 2 * bpow radix2 c1 := by
+        have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (be1 + be2)
+        rw [← hfix, ulp_neq_0 radix2 (FLX_exp prec) hbe1ne, ← hc1] at h
+        have : |be1 - (be1 + be2)| = |be2| := by rw [show be1 - (be1 + be2) = -be2 from by ring, abs_neg]
+        rw [this] at h; exact h
+      have hc1_lt : bpow radix2 c1 < bpow radix2 (c1 + 1) := bpow_lt radix2 (by omega)
+      rw [heq]
+      calc |a * b + c - r1 - al2| ≤ |a * b + c - r1| + |al2| := abs_sub _ _
+        _ ≤ 1 / 2 * bpow radix2 (cexp radix2 (FLX_exp prec) r1) + |be2| := by linarith [hal2_le_be2]
+        _ < bpow radix2 (c1 + 1) := by linarith
+    -- (be1 − r1) + be2 = K·β^(c1 − 2)
+    obtain ⟨mb, hmb⟩ := format_mult_bpow_of_cexp_ge radix2 prec (c1 - 2) Fbe1 (by rw [← hc1]; omega)
+    obtain ⟨mr, hmr⟩ := format_mult_bpow_of_cexp_ge radix2 prec (c1 - 2) Fr1 (by omega)
+    have hmult : be1 - r1 + be2 = ((mb - mr + N : ℤ) : ℝ) * bpow radix2 (c1 - 2) := by
+      rw [hmb, hmr, hN]; push_cast; ring
+    -- grid lemma
+    have hgrid : |be1 - r1 + be2| < bpow radix2 (prec + (c1 - 2)) :=
+      lt_of_lt_of_le hmagbound (bpow_le radix2 (by omega))
+    exact generic_format_FLX_of_mult_bpow radix2 prec (mb - mr + N) (c1 - 2) hmult hgrid
+
 end LeanFlocq
