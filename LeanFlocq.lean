@@ -25,4 +25,5 @@ import LeanFlocq.IEEE754.Bits
 import LeanFlocq.Algorithms.Fast2Sum
 import LeanFlocq.Algorithms.TwoSum
 import LeanFlocq.Algorithms.Veltkamp
+import LeanFlocq.Algorithms.TwoProduct
 
