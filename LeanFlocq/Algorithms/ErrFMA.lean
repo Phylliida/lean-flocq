@@ -56,6 +56,7 @@ relative bounds; L1's representability of `β1 − r1` is the load-bearing step.
 -/
 import LeanFlocq.Algorithms.TwoProduct
 import LeanFlocq.Algorithms.EFT_FLX
+import LeanFlocq.Algorithms.RoundMinusRound_FLX
 
 namespace LeanFlocq
 
@@ -136,5 +137,99 @@ theorem ErrFMA_chain (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool)
     generic_format_round radix2 (FLX_exp prec) (FLX_exp_valid prec hp) (Znearest choice) _
   obtain ⟨β2, Fβ2, huα1⟩ := twosum_eft prec hp choice Fu1 Fα1
   exact ⟨u2, α2, β2, Fu2, Fα2, Fβ2, hab, hcu2, huα1, by linarith [hab, hcu2, huα1]⟩
+
+/-! ### E2 / L1: `β1 − r1` is representable
+
+The crux exactness lemma. With `u1 = ◦(a·b)`, `u2 = a·b − u1`, `α1 = ◦(c + u2)`,
+`β1 = ◦(u1 + α1)`, `r1 = ◦(a·b + c)`, the difference `β1 − r1` is exact. This is
+Pff's `gatCorrect`: it applies the round-minus-round engine with the
+perturbation `α2 = (c + u2) − α1`, whose magnitude is at most half a ulp of both
+`u1` (via `|α2| ≤ |u2| ≤ ½ ulp u1`) and `α1` (it is α1's own rounding error). -/
+
+/-- **L1 (`gatCorrect`).** `β1 − r1 ∈ F`, where `β1 = ◦(u1 + α1)` and
+`r1 = ◦(a·b + c)`. -/
+theorem errfma_gat_exact (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool)
+    {a b c u1 u2 al1 be1 r1 : ℝ}
+    (Fc : generic_format radix2 (FLX_exp prec) c)
+    (hu1 : u1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b))
+    (hu2 : u2 = a * b - u1)
+    (hal1 : al1 = round radix2 (FLX_exp prec) (Znearest choice) (c + u2))
+    (hbe1 : be1 = round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1))
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b + c)) :
+    generic_format radix2 (FLX_exp prec) (be1 - r1) := by
+  have hp0 : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp0
+  have hMon := FLX_exp_monotone prec
+  have hNotFTZ := monotone_exp_not_FTZ hValid hMon
+  set al2 := (c + u2) - al1 with hal2
+  have Fu1 : generic_format radix2 (FLX_exp prec) u1 := by
+    rw [hu1]; exact generic_format_round _ _ hValid _ _
+  have Fal1 : generic_format radix2 (FLX_exp prec) al1 := by
+    rw [hal1]; exact generic_format_round _ _ hValid _ _
+  -- |u2| ≤ ½ ulp u1  (u2 is u1's rounding error)
+  have hu2_err : |u2| ≤ 1 / 2 * ulp radix2 (FLX_exp prec) u1 := by
+    have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (a * b)
+    rw [← hu1] at h
+    rw [hu2, abs_sub_comm]; exact h
+  -- |α2| ≤ |u2|  (round-to-nearest is at least as close as the float c)
+  have hal2_le_u2 : |al2| ≤ |u2| := by
+    obtain ⟨_, hcl⟩ := round_N_pt radix2 (FLX_exp prec) hValid choice (c + u2)
+    have hc := hcl c Fc
+    rw [← hal1] at hc
+    have hcu : |c - (c + u2)| = |u2| := by
+      rw [show c - (c + u2) = -u2 from by ring, abs_neg]
+    rw [hcu] at hc
+    rw [hal2, abs_sub_comm]; exact hc
+  have Hea : |al2| ≤ 1 / 2 * ulp radix2 (FLX_exp prec) u1 := le_trans hal2_le_u2 hu2_err
+  have Heb : |al2| ≤ 1 / 2 * ulp radix2 (FLX_exp prec) al1 := by
+    have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (c + u2)
+    rw [← hal1] at h
+    rw [hal2, abs_sub_comm]; exact h
+  have hEng := round_minus_round_nearby_exact_FLX prec hp choice Fu1 Fal1 Hea Heb
+  -- rewrite round(u1+al1) = be1 and round(u1+al1+al2) = r1
+  have h1 : round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1) = be1 := hbe1.symm
+  have hsum : u1 + al1 + al2 = a * b + c := by rw [hal2, hu2]; ring
+  have h2 : round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1 + al2) = r1 := by
+    rw [hsum]; exact hr1.symm
+  rw [h1, h2] at hEng
+  exact hEng
+
+/-! ### E2, the `β2 = 0` branch (`FmaErr_aux1`)
+
+When the inner TwoSum on `(u1, α1)` is exact (`β2 = 0`), the FMA error reduces to
+`γ = ◦(β1 − r1) = β1 − r1` (L1 + idempotency), giving the three-term identity
+`a·b + c = r1 + γ + α2` directly. -/
+
+/-- **ErrFMA, `β2 = 0` case.** -/
+theorem ErrFMA_be2_zero (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool)
+    {a b c u1 u2 al1 al2 be1 be2 r1 gat ga : ℝ}
+    (Fc : generic_format radix2 (FLX_exp prec) c)
+    (hu1 : u1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b))
+    (hu2 : u2 = a * b - u1)
+    (hal1 : al1 = round radix2 (FLX_exp prec) (Znearest choice) (c + u2))
+    (hal2 : al2 = (c + u2) - al1)
+    (hbe1 : be1 = round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1))
+    (hbe2 : be2 = (u1 + al1) - be1)
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b + c))
+    (hgat : gat = round radix2 (FLX_exp prec) (Znearest choice) (be1 - r1))
+    (hga : ga = round radix2 (FLX_exp prec) (Znearest choice) (gat + be2))
+    (hbe2z : be2 = 0) :
+    a * b + c = r1 + ga + al2 := by
+  have hp0 : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp0
+  -- L1: be1 − r1 ∈ F
+  have hL1 : generic_format radix2 (FLX_exp prec) (be1 - r1) :=
+    errfma_gat_exact prec hp choice Fc hu1 hu2 hal1 hbe1 hr1
+  -- gat = be1 − r1
+  have hgat_eq : gat = be1 - r1 := by
+    rw [hgat]; exact round_generic radix2 (FLX_exp prec) (Znearest choice) hL1
+  -- ga = gat (since be2 = 0 and gat ∈ F)
+  have hga_eq : ga = be1 - r1 := by
+    rw [hga, hbe2z, add_zero, hgat_eq]
+    exact round_generic radix2 (FLX_exp prec) (Znearest choice) hL1
+  -- be1 = u1 + al1 (β2 = 0)
+  have hbe1_eq : be1 = u1 + al1 := by rw [hbe2z] at hbe2; linarith
+  -- algebra
+  rw [hga_eq, hal2, hu2, hbe1_eq]; ring
 
 end LeanFlocq
