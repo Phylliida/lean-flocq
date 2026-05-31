@@ -27,5 +27,6 @@ import LeanFlocq.Algorithms.TwoSum
 import LeanFlocq.Algorithms.Veltkamp
 import LeanFlocq.Algorithms.TwoProduct
 import LeanFlocq.Algorithms.EFT_FLX
+import LeanFlocq.Algorithms.RoundMinusRound_FLX
 import LeanFlocq.Algorithms.ErrFMA
 
