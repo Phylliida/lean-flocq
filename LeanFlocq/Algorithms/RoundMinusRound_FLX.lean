@@ -141,6 +141,134 @@ theorem sterbenz_abs (beta : radix) (fexp : ℤ → ℤ)
 
 /-! ### The engine: difference of two roundings of nearby sums is exact -/
 
+/-- **Factor-of-two bounds for two roundings of nearby sums.** For nonzero
+`a, b` with `a + b ≠ 0` and `e` at most half a ulp of each, `round(a+b)` and
+`round(a+b+e)` keep the same sign and lie within a factor of two of each other.
+Exposed for ErrFMA's `Expr1`/`Expbe1` exponent bounds. -/
+theorem round_nearby_factor_two_FLX (prec : ℤ) (hp : 3 ≤ prec)
+    (choice : ℤ → Bool) {a b e : ℝ}
+    (Fa : generic_format radix2 (FLX_exp prec) a)
+    (Fb : generic_format radix2 (FLX_exp prec) b)
+    (Hea : |e| ≤ 1/2 * ulp radix2 (FLX_exp prec) a)
+    (Heb : |e| ≤ 1/2 * ulp radix2 (FLX_exp prec) b)
+    (ha0 : a ≠ 0) (hb0 : b ≠ 0) (hs0 : a + b ≠ 0) :
+    ((0 ≤ round radix2 (FLX_exp prec) (Znearest choice) (a + b)
+        ∧ 0 ≤ round radix2 (FLX_exp prec) (Znearest choice) (a + b + e))
+      ∨ (round radix2 (FLX_exp prec) (Znearest choice) (a + b) ≤ 0
+        ∧ round radix2 (FLX_exp prec) (Znearest choice) (a + b + e) ≤ 0))
+    ∧ |round radix2 (FLX_exp prec) (Znearest choice) (a + b)|
+        ≤ 2 * |round radix2 (FLX_exp prec) (Znearest choice) (a + b + e)|
+    ∧ |round radix2 (FLX_exp prec) (Znearest choice) (a + b + e)|
+        ≤ 2 * |round radix2 (FLX_exp prec) (Znearest choice) (a + b)| := by
+  have hp0 : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp0
+  set x := round radix2 (FLX_exp prec) (Znearest choice) (a + b) with hx_def
+  set y := round radix2 (FLX_exp prec) (Znearest choice) (a + b + e) with hy_def
+  set ea := cexp radix2 (FLX_exp prec) a with hea
+  set eb := cexp radix2 (FLX_exp prec) b with heb
+  set m := min ea eb with hm
+  have hbp : (0 : ℝ) < bpow radix2 m := bpow_gt_0 radix2 m
+  have Hea' : |e| ≤ 1/2 * bpow radix2 ea := by
+    rwa [ulp_neq_0 radix2 (FLX_exp prec) ha0] at Hea
+  have Heb' : |e| ≤ 1/2 * bpow radix2 eb := by
+    rwa [ulp_neq_0 radix2 (FLX_exp prec) hb0] at Heb
+  have Hem : |e| ≤ 1/2 * bpow radix2 m := by
+    rcases le_total ea eb with h | h
+    · rw [hm, min_eq_left h]; exact Hea'
+    · rw [hm, min_eq_right h]; exact Heb'
+  obtain ⟨hge, hdich⟩ := abs_add_eq_or_ge_two_bpow_min radix2 prec Fa Fb hs0
+  rw [← hea, ← heb, ← hm] at hge hdich
+  have hxe : |x - (a + b)| ≤ u_ro radix2 prec * |x| := by
+    have := err_le_uro_round_FLX radix2 prec hp0 choice (a + b); rwa [← hx_def] at this
+  have hye : |y - (a + b + e)| ≤ u_ro radix2 prec * |y| := by
+    have := err_le_uro_round_FLX radix2 prec hp0 choice (a + b + e); rwa [← hy_def] at this
+  have huro : u_ro radix2 prec ≤ 1/8 := by
+    unfold u_ro
+    have hb2 : bpow radix2 (-prec + 1) ≤ bpow radix2 (-2 : ℤ) := bpow_le radix2 (by omega)
+    have h14 : bpow radix2 (-2 : ℤ) = 1/4 := by
+      show ((radix2.val : ℝ)) ^ (-2 : ℤ) = 1/4
+      have : (radix2.val : ℝ) = 2 := by norm_cast
+      rw [this]; norm_num
+    rw [h14] at hb2; linarith
+  have huro0 : 0 ≤ u_ro radix2 prec := u_ro_pos radix2 prec
+  have hX : (0 : ℝ) ≤ |x| := abs_nonneg x
+  have hY : (0 : ℝ) ≤ |y| := abs_nonneg y
+  have hSx : |a + b| - |x| ≤ u_ro radix2 prec * |x| := by
+    have h := abs_sub_abs_le_abs_sub (a + b) x
+    rw [show (a + b) - x = -(x - (a + b)) from by ring, abs_neg] at h
+    linarith [hxe]
+  have hSx2 : |x| - |a + b| ≤ u_ro radix2 prec * |x| := by
+    have h := abs_sub_abs_le_abs_sub x (a + b); linarith [hxe]
+  have hSy : |y| - |a + b + e| ≤ u_ro radix2 prec * |y| := by
+    have h := abs_sub_abs_le_abs_sub y (a + b + e); linarith [hye]
+  have hSy2 : |a + b + e| - |y| ≤ u_ro radix2 prec * |y| := by
+    have h := abs_sub_abs_le_abs_sub (a + b + e) y
+    rw [show (a + b + e) - y = -(y - (a + b + e)) from by ring, abs_neg] at h
+    linarith [hye]
+  have hStri1 : |a + b + e| ≤ |a + b| + |e| := by
+    have := abs_add_le (a + b) e; linarith
+  have hStri2 : |a + b| - |e| ≤ |a + b + e| := by
+    have := abs_sub_abs_le_abs_sub (a + b) (a + b + e)
+    rw [show (a + b) - (a + b + e) = -e from by ring, abs_neg] at this
+    linarith
+  have hsign : (0 ≤ x ∧ 0 ≤ y) ∨ (x ≤ 0 ∧ y ≤ 0) := by
+    rcases lt_or_gt_of_ne hs0 with hneg | hpos
+    · right
+      have habs : |a + b| = -(a + b) := abs_of_neg hneg
+      have hse : a + b + e ≤ 0 := by
+        have := le_abs_self e; linarith [Hem, hge, habs]
+      refine ⟨?_, ?_⟩
+      · rw [hx_def]
+        exact round_le_generic radix2 (FLX_exp prec) hValid _ (generic_format_0 _ _)
+          (le_of_lt hneg)
+      · rw [hy_def]
+        exact round_le_generic radix2 (FLX_exp prec) hValid _ (generic_format_0 _ _) hse
+    · left
+      have habs : |a + b| = a + b := abs_of_pos hpos
+      have hse : 0 ≤ a + b + e := by
+        have := neg_abs_le e; linarith [Hem, hge, habs]
+      refine ⟨?_, ?_⟩
+      · rw [hx_def]
+        exact round_ge_generic radix2 (FLX_exp prec) hValid _ (generic_format_0 _ _)
+          (le_of_lt hpos)
+      · rw [hy_def]
+        exact round_ge_generic radix2 (FLX_exp prec) hValid _ (generic_format_0 _ _) hse
+  have hYleX : |y| ≤ 2 * |x| := by
+    nlinarith [mul_nonneg (by linarith : (0:ℝ) ≤ 1/8 - u_ro radix2 prec) hX,
+      mul_nonneg (by linarith : (0:ℝ) ≤ 1/8 - u_ro radix2 prec) hY,
+      hSy, hSx2, hStri1, Hem, hge]
+  have hXleY : |x| ≤ 2 * |y| := by
+    rcases hdich with hbdry | hbulk
+    · have hF_bpow : generic_format radix2 (FLX_exp prec) (bpow radix2 m) :=
+        generic_format_bpow radix2 (FLX_exp prec) m (by unfold FLX_exp; omega)
+      have hF_ab : generic_format radix2 (FLX_exp prec) (a + b) := by
+        rcases (abs_eq (le_of_lt hbp)).mp hbdry with hpos | hneg
+        · rw [hpos]; exact hF_bpow
+        · rw [hneg]; exact generic_format_opp _ _ hF_bpow
+      have hx_eq : x = a + b := by
+        rw [hx_def]; exact round_generic radix2 (FLX_exp prec) (Znearest choice) hF_ab
+      have hXval : |x| = bpow radix2 m := by rw [hx_eq, hbdry]
+      have hbpm1 : bpow radix2 (m - 1) = 1/2 * bpow radix2 m := by
+        rw [show m - 1 = m + (-1) from by ring, bpow_plus]
+        have : bpow radix2 (-1 : ℤ) = 1/2 := by
+          show ((radix2.val : ℝ)) ^ (-1 : ℤ) = 1/2
+          have : (radix2.val : ℝ) = 2 := by norm_cast
+          rw [this]; norm_num
+        rw [this]; ring
+      have hF_half : generic_format radix2 (FLX_exp prec) (bpow radix2 (m - 1)) :=
+        generic_format_bpow radix2 (FLX_exp prec) (m - 1) (by unfold FLX_exp; omega)
+      have hhalf_le : bpow radix2 (m - 1) ≤ |a + b + e| := by
+        rw [hbpm1]; linarith [hStri2, Hem, hbdry]
+      have hYge : bpow radix2 (m - 1) ≤ |y| := by
+        rw [hy_def]
+        exact abs_round_ge_generic radix2 (FLX_exp prec) hValid (Znearest choice)
+          hF_half hhalf_le
+      rw [hXval]; rw [hbpm1] at hYge; linarith
+    · nlinarith [mul_nonneg (by linarith : (0:ℝ) ≤ 1/8 - u_ro radix2 prec) hX,
+        mul_nonneg (by linarith : (0:ℝ) ≤ 1/8 - u_ro radix2 prec) hY,
+        hSy2, hSx, hStri2, Hem, hbulk]
+  exact ⟨hsign, hXleY, hYleX⟩
+
 /-- **Round-minus-round exactness (FLX, radix 2).** For `a, b ∈ F` and a
 perturbation `e` no larger than half a ulp of *each* of `a` and `b`,
 
@@ -182,123 +310,9 @@ theorem round_minus_round_nearby_exact_FLX (prec : ℤ) (hp : 3 ≤ prec)
     · have hx0 : x = 0 := by
         rw [hx_def, hs0]; exact round_0 radix2 (FLX_exp prec) (Znearest choice)
       rw [hx0, zero_sub]; exact generic_format_opp _ _ Fy
-    · -- Main case: a, b, a+b all nonzero.
-      set ea := cexp radix2 (FLX_exp prec) a with hea
-      set eb := cexp radix2 (FLX_exp prec) b with heb
-      set m := min ea eb with hm
-      have hbp : (0 : ℝ) < bpow radix2 m := bpow_gt_0 radix2 m
-      -- e bound against β^m
-      have Hea' : |e| ≤ 1/2 * bpow radix2 ea := by
-        rwa [ulp_neq_0 radix2 (FLX_exp prec) ha0] at Hea
-      have Heb' : |e| ≤ 1/2 * bpow radix2 eb := by
-        rwa [ulp_neq_0 radix2 (FLX_exp prec) hb0] at Heb
-      have Hem : |e| ≤ 1/2 * bpow radix2 m := by
-        rcases le_total ea eb with h | h
-        · rw [hm, min_eq_left h]; exact Hea'
-        · rw [hm, min_eq_right h]; exact Heb'
-      -- structural bounds on |a+b|
-      obtain ⟨hge, hdich⟩ := abs_add_eq_or_ge_two_bpow_min radix2 prec Fa Fb hs0
-      rw [← hea, ← heb, ← hm] at hge hdich
-      -- relative error bounds in output form
-      have hxe : |x - (a + b)| ≤ u_ro radix2 prec * |x| := by
-        have := err_le_uro_round_FLX radix2 prec hp0 choice (a + b); rwa [← hx_def] at this
-      have hye : |y - (a + b + e)| ≤ u_ro radix2 prec * |y| := by
-        have := err_le_uro_round_FLX radix2 prec hp0 choice (a + b + e); rwa [← hy_def] at this
-      -- u_ro ≤ 1/8
-      have huro : u_ro radix2 prec ≤ 1/8 := by
-        unfold u_ro
-        have hb2 : bpow radix2 (-prec + 1) ≤ bpow radix2 (-2 : ℤ) := bpow_le radix2 (by omega)
-        have h14 : bpow radix2 (-2 : ℤ) = 1/4 := by
-          show ((radix2.val : ℝ)) ^ (-2 : ℤ) = 1/4
-          have : (radix2.val : ℝ) = 2 := by norm_cast
-          rw [this]; norm_num
-        rw [h14] at hb2; linarith
-      have huro0 : 0 ≤ u_ro radix2 prec := u_ro_pos radix2 prec
-      have hX : (0 : ℝ) ≤ |x| := abs_nonneg x
-      have hY : (0 : ℝ) ≤ |y| := abs_nonneg y
-      -- triangle facts relating |x|,|y| to S = |a+b|, S' = |a+b+e|
-      have hSx : |a + b| - |x| ≤ u_ro radix2 prec * |x| := by
-        have h := abs_sub_abs_le_abs_sub (a + b) x
-        rw [show (a + b) - x = -(x - (a + b)) from by ring, abs_neg] at h
-        linarith [hxe]
-      have hSx2 : |x| - |a + b| ≤ u_ro radix2 prec * |x| := by
-        have h := abs_sub_abs_le_abs_sub x (a + b); linarith [hxe]
-      have hSy : |y| - |a + b + e| ≤ u_ro radix2 prec * |y| := by
-        have h := abs_sub_abs_le_abs_sub y (a + b + e); linarith [hye]
-      have hSy2 : |a + b + e| - |y| ≤ u_ro radix2 prec * |y| := by
-        have h := abs_sub_abs_le_abs_sub (a + b + e) y
-        rw [show (a + b + e) - y = -(y - (a + b + e)) from by ring, abs_neg] at h
-        linarith [hye]
-      -- S' ≤ S + |e| and S' ≥ S − |e|
-      have hStri1 : |a + b + e| ≤ |a + b| + |e| := by
-        have := abs_add_le (a + b) e; linarith
-      have hStri2 : |a + b| - |e| ≤ |a + b + e| := by
-        have := abs_sub_abs_le_abs_sub (a + b) (a + b + e)
-        rw [show (a + b) - (a + b + e) = -e from by ring, abs_neg] at this
-        linarith
-      -- sign consistency
-      have hsign : (0 ≤ x ∧ 0 ≤ y) ∨ (x ≤ 0 ∧ y ≤ 0) := by
-        have hab_pos_or_neg := lt_or_gt_of_ne hs0
-        rcases hab_pos_or_neg with hneg | hpos
-        · right
-          have habs : |a + b| = -(a + b) := abs_of_neg hneg
-          have hse : a + b + e ≤ 0 := by
-            have := le_abs_self e; linarith [Hem, hge, habs]
-          refine ⟨?_, ?_⟩
-          · rw [hx_def]
-            exact round_le_generic radix2 (FLX_exp prec) hValid _ (generic_format_0 _ _)
-              (le_of_lt hneg)
-          · rw [hy_def]
-            exact round_le_generic radix2 (FLX_exp prec) hValid _ (generic_format_0 _ _) hse
-        · left
-          have habs : |a + b| = a + b := abs_of_pos hpos
-          have hse : 0 ≤ a + b + e := by
-            have := neg_abs_le e; linarith [Hem, hge, habs]
-          refine ⟨?_, ?_⟩
-          · rw [hx_def]
-            exact round_ge_generic radix2 (FLX_exp prec) hValid _ (generic_format_0 _ _)
-              (le_of_lt hpos)
-          · rw [hy_def]
-            exact round_ge_generic radix2 (FLX_exp prec) hValid _ (generic_format_0 _ _) hse
-      -- factor-of-two bound: |y| ≤ 2|x| (no boundary split needed)
-      have hYleX : |y| ≤ 2 * |x| := by
-        nlinarith [mul_nonneg (by linarith : (0:ℝ) ≤ 1/8 - u_ro radix2 prec) hX,
-          mul_nonneg (by linarith : (0:ℝ) ≤ 1/8 - u_ro radix2 prec) hY,
-          hSy, hSx2, hStri1, Hem, hge]
-      -- factor-of-two bound: |x| ≤ 2|y| (needs boundary/bulk dichotomy)
-      have hXleY : |x| ≤ 2 * |y| := by
-        rcases hdich with hbdry | hbulk
-        · -- boundary: |a+b| = β^m, so a+b ∈ F and x = a+b.
-          have hF_bpow : generic_format radix2 (FLX_exp prec) (bpow radix2 m) :=
-            generic_format_bpow radix2 (FLX_exp prec) m (by unfold FLX_exp; omega)
-          have hF_ab : generic_format radix2 (FLX_exp prec) (a + b) := by
-            rcases (abs_eq (le_of_lt hbp)).mp hbdry with hpos | hneg
-            · rw [hpos]; exact hF_bpow
-            · rw [hneg]; exact generic_format_opp _ _ hF_bpow
-          have hx_eq : x = a + b := by
-            rw [hx_def]; exact round_generic radix2 (FLX_exp prec) (Znearest choice) hF_ab
-          have hXval : |x| = bpow radix2 m := by rw [hx_eq, hbdry]
-          -- β^(m-1) = ½β^m ∈ F and ≤ |a+b+e|, so ≤ |y|
-          have hbpm1 : bpow radix2 (m - 1) = 1/2 * bpow radix2 m := by
-            rw [show m - 1 = m + (-1) from by ring, bpow_plus]
-            have : bpow radix2 (-1 : ℤ) = 1/2 := by
-              show ((radix2.val : ℝ)) ^ (-1 : ℤ) = 1/2
-              have : (radix2.val : ℝ) = 2 := by norm_cast
-              rw [this]; norm_num
-            rw [this]; ring
-          have hF_half : generic_format radix2 (FLX_exp prec) (bpow radix2 (m - 1)) :=
-            generic_format_bpow radix2 (FLX_exp prec) (m - 1) (by unfold FLX_exp; omega)
-          have hhalf_le : bpow radix2 (m - 1) ≤ |a + b + e| := by
-            rw [hbpm1]; linarith [hStri2, Hem, hbdry]
-          have hYge : bpow radix2 (m - 1) ≤ |y| := by
-            rw [hy_def]
-            exact abs_round_ge_generic radix2 (FLX_exp prec) hValid (Znearest choice)
-              hF_half hhalf_le
-          rw [hXval]; rw [hbpm1] at hYge; linarith
-        · -- bulk: 2β^m ≤ |a+b|, so |e| ≤ ¼|a+b|, S ≤ (4/3)S'.
-          nlinarith [mul_nonneg (by linarith : (0:ℝ) ≤ 1/8 - u_ro radix2 prec) hX,
-            mul_nonneg (by linarith : (0:ℝ) ≤ 1/8 - u_ro radix2 prec) hY,
-            hSy2, hSx, hStri2, Hem, hbulk]
+    · obtain ⟨hsign, hXleY, hYleX⟩ :=
+        round_nearby_factor_two_FLX prec hp choice Fa Fb Hea Heb ha0 hb0 hs0
+      rw [← hx_def, ← hy_def] at hsign hXleY hYleX
       exact sterbenz_abs radix2 (FLX_exp prec) hValid hMon Fx Fy hsign hXleY hYleX
 
 end LeanFlocq
