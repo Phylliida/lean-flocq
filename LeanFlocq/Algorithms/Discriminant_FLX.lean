@@ -33,6 +33,7 @@ on our error-free transformations rather than the original Pff development.
 import LeanFlocq.Prop.Mult_error
 import LeanFlocq.Prop.Sterbenz
 import LeanFlocq.Prop.Relative
+import LeanFlocq.Algorithms.RoundMinusRound_FLX
 
 namespace LeanFlocq
 
@@ -114,5 +115,50 @@ theorem disc_p_nonneg (beta : radix) (prec : ℤ) (Hp : 0 < prec)
     0 ≤ round beta (FLX_exp prec) (Znearest choice) (b * b) :=
   round_ge_generic beta (FLX_exp prec) (FLX_exp_valid prec Hp) (Znearest choice)
     (generic_format_0 beta (FLX_exp prec)) (mul_self_nonneg b)
+
+/-! ## D2: the master error decomposition (general radix) -/
+
+/-- **Error decomposition of the naive result.**
+
+The naive result `d = RN(p − q)` (what Kahan's algorithm returns in the benign
+branch) differs from the true discriminant `b·b − a·c` by at most
+`u_ro · (|d| + |p| + |q|)`.
+
+This is the exact, tight decomposition — three rounding errors, each bounded by
+`u_ro` times its own (output) magnitude:
+`d − (b·b − a·c) = (d − (p−q)) + (p − b·b) − (q − a·c)`,
+with `|d − (p−q)| ≤ u_ro|d|`, `|p − b·b| ≤ u_ro|p|`, `|q − a·c| ≤ u_ro|q|`
+(each from `err_le_uro_round_FLX`). General radix.
+
+The benign-branch relative bound `≤ 2u_ro · |b·b − a·c|` (Boldo 2009) is obtained
+from this by combining with the branch test `3|d| ≥ p + q` and a sign-cancellation
+analysis of the three errors; that tightening is the remaining work. -/
+theorem disc_naive_error_bound (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hde : d = round beta (FLX_exp prec) (Znearest choice) (p - q)) :
+    |d - (b * b - a * c)| ≤ u_ro beta prec * (|d| + |p| + |q|) := by
+  -- Each of the three roundings is within `u_ro` of its own output magnitude.
+  have e1 : |d - (p - q)| ≤ u_ro beta prec * |d| := by
+    rw [hde]; exact err_le_uro_round_FLX beta prec hp choice (p - q)
+  have e2 : |p - b * b| ≤ u_ro beta prec * |p| := by
+    rw [hpe]; exact err_le_uro_round_FLX beta prec hp choice (b * b)
+  have e3 : |q - a * c| ≤ u_ro beta prec * |q| := by
+    rw [hqe]; exact err_le_uro_round_FLX beta prec hp choice (a * c)
+  -- Algebraic decomposition + triangle inequality.
+  have key : d - (b * b - a * c)
+      = (d - (p - q)) + (p - b * b) + (-(q - a * c)) := by ring
+  rw [key]
+  have t1 : |(d - (p - q)) + (p - b * b) + (-(q - a * c))|
+      ≤ |(d - (p - q)) + (p - b * b)| + |(-(q - a * c))| := abs_add_le _ _
+  have t2 : |(d - (p - q)) + (p - b * b)| ≤ |d - (p - q)| + |p - b * b| := abs_add_le _ _
+  have t3 : |(-(q - a * c))| = |q - a * c| := abs_neg _
+  calc |(d - (p - q)) + (p - b * b) + (-(q - a * c))|
+      ≤ |d - (p - q)| + |p - b * b| + |q - a * c| := by linarith [t1, t2, t3]
+    _ ≤ u_ro beta prec * |d| + u_ro beta prec * |p| + u_ro beta prec * |q| := by
+          linarith [e1, e2, e3]
+    _ = u_ro beta prec * (|d| + |p| + |q|) := by ring
 
 end LeanFlocq
