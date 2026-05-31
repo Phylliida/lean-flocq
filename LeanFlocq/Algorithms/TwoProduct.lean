@@ -344,32 +344,35 @@ theorem abs_prod_bpow_le (beta : radix) (Ma Mb : ℝ) (Ea Eb : ℤ) (Ca Cb : ℝ
           _ ≤ Ca * Cb := mul_le_mul ha hb (abs_nonneg _) hCa
     _ = (Ca * Cb) * bpow beta (Ea + Eb) := by rw [bpow_plus]
 
-/-- **Medium sub-product bound.** A product of a full half-part (`|·| ≤ β^s`) and
-a tail half-part (`|·| ≤ β^s/2`), whose exponents sum to `s + E0`, is bounded by
-`½·β^(prec+s+E0)`. Covers `hx·ty` and `tx·hy` (after `2s = prec`). -/
-theorem prod_bound_medium (beta : radix) (prec s : ℤ) (hs : 2 * s = prec)
+/-- **Medium sub-product bound.** A product of a full half-part (`|·| ≤ β^(prec−s)`)
+and a tail half-part (`|·| ≤ β^s/2`), whose exponents sum to `s + E0`, is bounded
+by `½·β^(prec+s+E0)`. Covers `hx·ty` and `tx·hy` at any `s` (the full part of a
+Veltkamp split lives in `F(prec−s)`, and `β^(prec−s)·β^s = β^prec`). -/
+theorem prod_bound_medium (beta : radix) (prec s : ℤ)
     (Ma Mb : ℝ) (Ea Eb E0 : ℤ) (hE : Ea + Eb = s + E0)
-    (ha : |Ma| ≤ bpow beta s) (hb : |Mb| ≤ bpow beta s / 2) :
+    (ha : |Ma| ≤ bpow beta (prec - s)) (hb : |Mb| ≤ bpow beta s / 2) :
     |(Ma * bpow beta Ea) * (Mb * bpow beta Eb)| ≤ bpow beta (prec + (s + E0)) / 2 := by
-  refine le_trans (abs_prod_bpow_le beta Ma Mb Ea Eb (bpow beta s) (bpow beta s / 2)
+  refine le_trans (abs_prod_bpow_le beta Ma Mb Ea Eb (bpow beta (prec - s)) (bpow beta s / 2)
     (le_of_lt (bpow_gt_0 _ _)) ha hb) (le_of_eq ?_)
   rw [hE]
-  have hbp : bpow beta s * bpow beta s = bpow beta prec := by rw [← bpow_plus]; congr 1; omega
-  have hrw : (bpow beta s * (bpow beta s / 2)) * bpow beta (s + E0)
-      = (bpow beta s * bpow beta s) * bpow beta (s + E0) / 2 := by ring
+  have hbp : bpow beta (prec - s) * bpow beta s = bpow beta prec := by
+    rw [← bpow_plus]; congr 1; omega
+  have hrw : (bpow beta (prec - s) * (bpow beta s / 2)) * bpow beta (s + E0)
+      = (bpow beta (prec - s) * bpow beta s) * bpow beta (s + E0) / 2 := by ring
   rw [hrw, hbp, ← bpow_plus]
 
 /-- **Small sub-product bound.** A product of two tail half-parts (each `|·| ≤
-β^s/2`), exponents summing to `E0`, is bounded by `¼·β^(prec+E0)`. Covers
-`tx·ty`. -/
-theorem prod_bound_small (beta : radix) (prec s : ℤ) (hs : 2 * s = prec)
+β^s/2`), exponents summing to `E0`, is bounded by `¼·β^(2s+E0)`. Covers `tx·ty`.
+At even precision `2s = prec` this is `¼·β^(prec+E0)`; at radix-2 odd precision
+`2s = prec+1` it is `¼·β^(prec+1+E0)`. -/
+theorem prod_bound_small (beta : radix) (s : ℤ)
     (Ma Mb : ℝ) (Ea Eb E0 : ℤ) (hE : Ea + Eb = E0)
     (ha : |Ma| ≤ bpow beta s / 2) (hb : |Mb| ≤ bpow beta s / 2) :
-    |(Ma * bpow beta Ea) * (Mb * bpow beta Eb)| ≤ bpow beta (prec + E0) / 4 := by
+    |(Ma * bpow beta Ea) * (Mb * bpow beta Eb)| ≤ bpow beta (2 * s + E0) / 4 := by
   refine le_trans (abs_prod_bpow_le beta Ma Mb Ea Eb (bpow beta s / 2) (bpow beta s / 2)
     (le_of_lt (half_pos (bpow_gt_0 _ _))) ha hb) (le_of_eq ?_)
   rw [hE]
-  have hbp : bpow beta s * bpow beta s = bpow beta prec := by rw [← bpow_plus]; congr 1; omega
+  have hbp : bpow beta s * bpow beta s = bpow beta (2 * s) := by rw [← bpow_plus]; congr 1; ring
   have hrw : (bpow beta s / 2 * (bpow beta s / 2)) * bpow beta E0
       = (bpow beta s * bpow beta s) * bpow beta E0 / 4 := by ring
   rw [hrw, hbp, ← bpow_plus]
@@ -400,6 +403,15 @@ private theorem Veltkamp_parts_zero (beta : radix) (prec : ℤ) (c : ℤ → Boo
   have hhx0 : Veltkamp_hx_FLX beta prec c s 0 = 0 := by
     unfold Veltkamp_hx_FLX; rw [hp0, hq0, add_zero, round_0]
   exact ⟨hhx0, by unfold Veltkamp_tx_FLX; rw [hhx0, sub_zero, round_0]⟩
+
+/-- `4 ≤ β^s` for `s ≥ 2` (since `β ≥ 2`). Extracted so its `nlinarith` runs in a
+small context. -/
+theorem four_le_bpow (beta : radix) {s : ℤ} (hs : 2 ≤ s) : (4 : ℝ) ≤ bpow beta s := by
+  have hβ2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have hb2le : bpow beta 2 ≤ bpow beta s := bpow_le beta hs
+  have h4b2 : (4 : ℝ) ≤ bpow beta 2 := by
+    rw [show (2 : ℤ) = 1 + 1 from rfl, bpow_plus, bpow_one]; nlinarith [hβ2]
+  linarith
 
 /-- **Radix-2 tail-product exactness (the Dekker2 crux).** At radix 2 with
 `s = ⌈prec/2⌉` (i.e. `2s ≤ prec+1`), the product of the two Veltkamp tails
@@ -481,7 +493,10 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
     (choice : ℤ → Bool) {s : ℤ} {x y : ℝ}
     (Fx : generic_format beta (FLX_exp prec) x)
     (Fy : generic_format beta (FLX_exp prec) y)
-    (hs : 2 * s = prec) (hs_lo : 2 ≤ s) (hx0 : x ≠ 0) (hy0 : y ≠ 0) :
+    (hradix : beta.val = 2 ∨ 2 * s = prec)
+    (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (hs2lo : prec ≤ 2 * s) (hs2hi : 2 * s ≤ prec + 1)
+    (hx0 : x ≠ 0) (hy0 : y ≠ 0) :
     x * y
       = round beta (FLX_exp prec) (Znearest choice) (x * y)
       + round beta (FLX_exp prec) (Znearest choice)
@@ -493,17 +508,15 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
                 + Veltkamp_hx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y)
               + Veltkamp_tx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y)
             + Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y) := by
-  have hs_hi : s + 2 ≤ prec := by omega
   have hxy_ne : x * y ≠ 0 := mul_ne_zero hx0 hy0
   have hβ2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
-  -- Structural decompositions and the bilinear expansion, before abbreviating.
+  -- Structural decompositions, before abbreviating.
   obtain ⟨M_x, M_hx, hx_form, hhx_form, hMhx_bd, hclose_x⟩ :=
     Veltkamp_struct_FLX_general beta prec hp choice Fx hx0 hs_lo hs_hi
   obtain ⟨M_y, M_hy, hy_form, hhy_form, hMhy_bd, hclose_y⟩ :=
     Veltkamp_struct_FLX_general beta prec hp choice Fy hy0 hs_lo hs_hi
   obtain ⟨hsplit_x, _, _⟩ := Veltkamp_split_FLX_general beta prec hp choice Fx hs_lo hs_hi
   obtain ⟨hsplit_y, _, _⟩ := Veltkamp_split_FLX_general beta prec hp choice Fy hs_lo hs_hi
-  obtain ⟨hexp, _, _, _, _⟩ := twoproduct_expand_exact beta prec hp choice Fx Fy hs hs_lo
   set cx := cexp beta (FLX_exp prec) x with hcx_def
   set cy := cexp beta (FLX_exp prec) y with hcy_def
   set cr := cexp beta (FLX_exp prec) (x * y) with hcr_def
@@ -512,8 +525,9 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
   set hy := Veltkamp_hx_FLX beta prec choice s y with hhy_def
   set ty := Veltkamp_tx_FLX beta prec choice s y with hty_def
   set r := round beta (FLX_exp prec) (Znearest choice) (x * y) with hr_def
-  -- Mantissa bounds in usable real form.
-  rw [show prec - s = s from by omega] at hMhx_bd hMhy_bd
+  -- The bilinear expansion, straight from the two splits.
+  have hexp' : x * y = hx * hy + hx * ty + tx * hy + tx * ty := by
+    rw [hsplit_x, hsplit_y]; ring
   -- tx, ty as (real mantissa)·β^c.
   have htx_form : tx = ((M_x : ℝ) - (M_hx : ℝ) * bpow beta s) * bpow beta cx := by
     have htxv : tx = x - hx := by linarith [hsplit_x]
@@ -552,10 +566,10 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
   have hM_tx_cast : ((M_x - M_hx * beta.val ^ s.toNat : ℤ) : ℝ)
       = (M_x : ℝ) - (M_hx : ℝ) * bpow beta s := by
     rw [Int.cast_sub, Int.cast_mul, hcast_s]
-  -- Grid representations of the four sub-products.
-  have hphh_grid : hx * hy = ((M_hx * M_hy : ℤ) : ℝ) * bpow beta (prec + (cx + cy)) := by
+  -- Grid representations of the four sub-products (phh on grid 2s+E₀).
+  have hphh_grid : hx * hy = ((M_hx * M_hy : ℤ) : ℝ) * bpow beta (2 * s + (cx + cy)) := by
     rw [hhx_form, hhy_form,
-      show bpow beta (prec + (cx + cy)) = bpow beta (s + cx) * bpow beta (s + cy) from by
+      show bpow beta (2 * s + (cx + cy)) = bpow beta (s + cx) * bpow beta (s + cy) from by
         rw [← bpow_plus]; congr 1; omega]
     push_cast; ring
   have hpht_grid : hx * ty
@@ -572,12 +586,12 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
     push_cast; ring
   -- phh coarsened to the cr grid and the s+(cx+cy) grid; r to the s+(cx+cy) grid.
   have hphh_at_cr : hx * hy
-      = ((M_hx * M_hy * beta.val ^ (prec + (cx + cy) - cr).toNat : ℤ) : ℝ) * bpow beta cr := by
-    rw [hphh_grid]; exact bpow_coarsen beta (M_hx * M_hy) cr (prec + (cx + cy)) hcr_hi
+      = ((M_hx * M_hy * beta.val ^ (2 * s + (cx + cy) - cr).toNat : ℤ) : ℝ) * bpow beta cr := by
+    rw [hphh_grid]; exact bpow_coarsen beta (M_hx * M_hy) cr (2 * s + (cx + cy)) (by omega)
   have hphh_at_g : hx * hy
       = ((M_hx * M_hy * beta.val ^ s.toNat : ℤ) : ℝ) * bpow beta (s + (cx + cy)) := by
     rw [hphh_grid,
-      show bpow beta (prec + (cx + cy)) = bpow beta s * bpow beta (s + (cx + cy)) from by
+      show bpow beta (2 * s + (cx + cy)) = bpow beta s * bpow beta (s + (cx + cy)) from by
         rw [← bpow_plus]; congr 1; omega, ← hcast_s]
     push_cast; ring
   have hr_at_g : r
@@ -602,16 +616,23 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
   have hcr_D : bpow beta cr ≤ bpow beta (2 * prec - 2 + (cx + cy)) := bpow_le beta (by omega)
   have hC_D : bpow beta (prec + (s + (cx + cy))) ≤ bpow beta (2 * prec - 2 + (cx + cy)) :=
     bpow_le beta (by omega)
-  have hC2_D : bpow beta (prec + (cx + cy)) ≤ bpow beta (2 * prec - 2 + (cx + cy)) :=
+  have hptt_D : bpow beta (2 * s + (cx + cy)) ≤ bpow beta (2 * prec - 2 + (cx + cy)) :=
     bpow_le beta (by omega)
-  have h2C2 : 2 * bpow beta (prec + (cx + cy)) ≤ bpow beta (prec + (s + (cx + cy))) := by
+  -- |tx·ty| ≤ ¼β^(2s+E₀); the tail-product grid sits within 2·β^(prec+E₀)
+  -- (equality at radix-2 odd precision, slack to spare at even precision).
+  have hptt2 : bpow beta (2 * s + (cx + cy)) ≤ 2 * bpow beta (prec + (cx + cy)) := by
+    rcases hradix with hb | he
+    · calc bpow beta (2 * s + (cx + cy))
+          ≤ bpow beta (prec + 1 + (cx + cy)) := bpow_le beta (by omega)
+        _ = 2 * bpow beta (prec + (cx + cy)) := by
+            rw [show prec + 1 + (cx + cy) = 1 + (prec + (cx + cy)) from by ring, bpow_plus,
+              bpow_one, hb]; norm_num
+    · rw [show 2 * s + (cx + cy) = prec + (cx + cy) from by omega]
+      linarith [bpow_gt_0 beta (prec + (cx + cy))]
+  have h4C2 : 4 * bpow beta (prec + (cx + cy)) ≤ bpow beta (prec + (s + (cx + cy))) := by
     have hsplit : bpow beta (prec + (s + (cx + cy)))
         = bpow beta s * bpow beta (prec + (cx + cy)) := by rw [← bpow_plus]; congr 1; omega
-    have hbs2 : (2 : ℝ) ≤ bpow beta s := by
-      calc (2 : ℝ) ≤ (beta.val : ℝ) := hβ2
-        _ = bpow beta 1 := (bpow_one beta).symm
-        _ ≤ bpow beta s := bpow_le beta (by omega)
-    rw [hsplit]; exact mul_le_mul_of_nonneg_right hbs2 (le_of_lt hC2_pos)
+    rw [hsplit]; exact mul_le_mul_of_nonneg_right (four_le_bpow beta hs_lo) (le_of_lt hC2_pos)
   have hthresh1 : 2 * bpow beta (2 * prec - 2 + (cx + cy)) ≤ bpow beta (prec + cr) := by
     have hbge2 : (2 : ℝ) ≤ bpow beta 1 := by rw [bpow_one]; exact hβ2
     calc 2 * bpow beta (2 * prec - 2 + (cx + cy))
@@ -626,18 +647,17 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
     rw [abs_sub_comm]; linarith [h]
   have hb_pht : |hx * ty| ≤ bpow beta (prec + (s + (cx + cy))) / 2 := by
     rw [hhx_form, hty_form]
-    exact prod_bound_medium beta prec s hs (M_hx : ℝ) ((M_y : ℝ) - (M_hy : ℝ) * bpow beta s)
+    exact prod_bound_medium beta prec s (M_hx : ℝ) ((M_y : ℝ) - (M_hy : ℝ) * bpow beta s)
       (s + cx) cy (cx + cy) (by ring) hMhx_bd hclose_y
   have hb_pth : |tx * hy| ≤ bpow beta (prec + (s + (cx + cy))) / 2 := by
     rw [show tx * hy = hy * tx from mul_comm _ _, hhy_form, htx_form]
-    exact prod_bound_medium beta prec s hs (M_hy : ℝ) ((M_x : ℝ) - (M_hx : ℝ) * bpow beta s)
+    exact prod_bound_medium beta prec s (M_hy : ℝ) ((M_x : ℝ) - (M_hx : ℝ) * bpow beta s)
       (s + cy) cx (cx + cy) (by ring) hMhy_bd hclose_x
-  have hb_ptt : |tx * ty| ≤ bpow beta (prec + (cx + cy)) / 4 := by
+  have hb_ptt : |tx * ty| ≤ bpow beta (2 * s + (cx + cy)) / 4 := by
     rw [htx_form, hty_form]
-    exact prod_bound_small beta prec s hs ((M_x : ℝ) - (M_hx : ℝ) * bpow beta s)
+    exact prod_bound_small beta s ((M_x : ℝ) - (M_hx : ℝ) * bpow beta s)
       ((M_y : ℝ) - (M_hy : ℝ) * bpow beta s) cx cy (cx + cy) (by ring) hclose_x hclose_y
   -- The three running-sum magnitude bounds.
-  have hexp' : x * y = hx * hy + hx * ty + tx * hy + tx * ty := hexp
   have hS1_eq : hx * hy - r = (x * y - r) - hx * ty - tx * hy - tx * ty := by
     linear_combination -hexp'
   have hS2_eq : (hx * hy - r) + hx * ty = (x * y - r) - tx * hy - tx * ty := by
@@ -647,20 +667,20 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
   have hS1_bound : |hx * hy - r| < bpow beta (prec + cr) := by
     rw [hS1_eq]
     have htri := abs_sub3_le (x * y - r) (hx * ty) (tx * hy) (tx * ty)
-    linarith [htri, hb_err, hb_pht, hb_pth, hb_ptt, hcr_D, hC_D, hC2_D, hthresh1, hD_pos]
+    linarith [htri, hb_err, hb_pht, hb_pth, hb_ptt, hcr_D, hC_D, hptt_D, hthresh1, hD_pos]
   have hS2_bound : |(hx * hy - r) + hx * ty| < bpow beta (prec + (s + (cx + cy))) := by
     rw [hS2_eq]
     have htri := abs_sub2_le (x * y - r) (tx * hy) (tx * ty)
-    linarith [htri, hb_err, hb_pth, hb_ptt, hcr_C2, h2C2, hC2_pos, hC_pos]
+    linarith [htri, hb_err, hb_pth, hb_ptt, hcr_C2, hptt2, h4C2, hC_pos]
   have hS3_bound : |((hx * hy - r) + hx * ty) + tx * hy| < bpow beta (prec + (s + (cx + cy))) := by
     rw [hS3_eq]
     have htri := abs_sub1_le (x * y - r) (tx * ty)
-    linarith [htri, hb_err, hb_ptt, hcr_C2, h2C2, hC2_pos, hC_pos]
+    linarith [htri, hb_err, hb_ptt, hcr_C2, hptt2, h4C2, hC_pos]
   -- Each step rounds exactly.
   have ht1 : round beta (FLX_exp prec) (Znearest choice) (hx * hy - r) = hx * hy - r := by
     have hw1 : -r = ((-M_r : ℤ) : ℝ) * bpow beta cr := by rw [hr_grid_eq]; push_cast; ring
     have h := round_add_grid_exact beta prec choice cr
-      (M_hx * M_hy * beta.val ^ (prec + (cx + cy) - cr).toNat) (-M_r)
+      (M_hx * M_hy * beta.val ^ (2 * s + (cx + cy) - cr).toNat) (-M_r)
       hphh_at_cr hw1
       (by rw [show hx * hy + -r = hx * hy - r from by ring]; exact hS1_bound)
     rw [show hx * hy - r = hx * hy + -r from by ring]; exact h
@@ -687,17 +707,23 @@ private theorem TwoProduct_FLX_main (beta : radix) (prec : ℤ) (hp : 0 < prec)
     rw [hop]; exact round_generic beta (FLX_exp prec) (Znearest choice) hS4_format
   rw [ht1, ht2, ht3, ht4]; ring
 
-/-- **Dekker TwoProduct, even precision.** For any `x, y` in `F(FLX, prec)` with
-`2s = prec`, the FMA-free Dekker construction is error-free:
-`x·y = round(x·y) + e`, where `e` is the four-step summation of the Veltkamp
-sub-products against the rounded product. Covers all even-precision IEEE
-variants (binary32, the decimal formats). The radix-2 odd-precision case
-(binary64) needs the separate `tx·ty` exactness branch (Chunk 2). -/
+/-- **Dekker TwoProduct, all IEEE variants.** For `x, y` in `F(FLX, prec)` with
+`s = ⌈prec/2⌉` (`prec ≤ 2s ≤ prec+1`) under `radix 2 ∨ Even prec`, the FMA-free
+Dekker construction is error-free: `x·y = round(x·y) + e`, where `e` is the
+four-step summation of the Veltkamp sub-products against the rounded product.
+The hypothesis `radix 2 ∨ 2s = prec` covers every IEEE format — the binary ones
+(radix 2, any prec, incl. binary64's odd prec=53) and the decimal ones (even
+prec). The sub-products `hx·hy`, `hx·ty`, `tx·hy` are exact at any precision; the
+condition is what makes the fourth, `tx·ty`, exact too (`round_tt_exact_radix2` /
+`round_mul_Fs_exact`), so the bare products here equal the machine ones (see
+`TwoProduct_FLX_machine`). -/
 theorem TwoProduct_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     (choice : ℤ → Bool) {s : ℤ} {x y : ℝ}
     (Fx : generic_format beta (FLX_exp prec) x)
     (Fy : generic_format beta (FLX_exp prec) y)
-    (hs : 2 * s = prec) (hs_lo : 2 ≤ s) :
+    (hradix : beta.val = 2 ∨ 2 * s = prec)
+    (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (hs2lo : prec ≤ 2 * s) (hs2hi : 2 * s ≤ prec + 1) :
     x * y
       = round beta (FLX_exp prec) (Znearest choice) (x * y)
       + round beta (FLX_exp prec) (Znearest choice)
@@ -717,6 +743,63 @@ theorem TwoProduct_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
   · subst hy0
     rw [(Veltkamp_parts_zero beta prec choice s).1, (Veltkamp_parts_zero beta prec choice s).2]
     simp only [mul_zero, round_0, sub_zero, add_zero]
-  exact TwoProduct_FLX_main beta prec hp choice Fx Fy hs hs_lo hx0 hy0
+  exact TwoProduct_FLX_main beta prec hp choice Fx Fy hradix hs_lo hs_hi hs2lo hs2hi hx0 hy0
+
+/-- **Dekker TwoProduct, machine form.** The literally-faithful FMA-free algorithm:
+every sub-product is a *rounded* multiply `round(hx·hy)`, … (machine operations),
+not an exact real product. Under `radix 2 ∨ Even prec` this still reconstructs the
+error exactly, `x·y = round(x·y) + e`, because all four sub-products round exactly
+— the three involving a high part for free (`generic_format_FLX_mult`, since each
+factor fits in `≤ prec` digits jointly), and `tx·ty` via the radix-2/even-prec
+dichotomy (`round_tt_exact_radix2` / `round_mul_Fs_exact`). So the rounded products
+coincide with the bare ones of `TwoProduct_FLX`. This is the form a real FMA-free
+TwoProduct kernel computes, hence the one CAD's geometric predicates consume. -/
+theorem TwoProduct_FLX_machine (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x y : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (Fy : generic_format beta (FLX_exp prec) y)
+    (hradix : beta.val = 2 ∨ 2 * s = prec)
+    (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec)
+    (hs2lo : prec ≤ 2 * s) (hs2hi : 2 * s ≤ prec + 1) :
+    x * y
+      = round beta (FLX_exp prec) (Znearest choice) (x * y)
+      + round beta (FLX_exp prec) (Znearest choice)
+          (round beta (FLX_exp prec) (Znearest choice)
+            (round beta (FLX_exp prec) (Znearest choice)
+              (round beta (FLX_exp prec) (Znearest choice)
+                  (round beta (FLX_exp prec) (Znearest choice)
+                      (Veltkamp_hx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y)
+                    - round beta (FLX_exp prec) (Znearest choice) (x * y))
+                + round beta (FLX_exp prec) (Znearest choice)
+                    (Veltkamp_hx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y))
+              + round beta (FLX_exp prec) (Znearest choice)
+                  (Veltkamp_tx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y))
+            + round beta (FLX_exp prec) (Znearest choice)
+                (Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y)) := by
+  obtain ⟨_, Ftx, Fhx⟩ := Veltkamp_split_FLX_general beta prec hp choice Fx hs_lo hs_hi
+  obtain ⟨_, Fty, Fhy⟩ := Veltkamp_split_FLX_general beta prec hp choice Fy hs_lo hs_hi
+  have e_hh : round beta (FLX_exp prec) (Znearest choice)
+      (Veltkamp_hx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y)
+      = Veltkamp_hx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y :=
+    round_generic beta (FLX_exp prec) (Znearest choice)
+      (generic_format_FLX_mult beta (prec - s) (prec - s) prec (by omega) Fhx Fhy)
+  have e_ht : round beta (FLX_exp prec) (Znearest choice)
+      (Veltkamp_hx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y)
+      = Veltkamp_hx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y :=
+    round_generic beta (FLX_exp prec) (Znearest choice)
+      (generic_format_FLX_mult beta (prec - s) s prec (by omega) Fhx Fty)
+  have e_th : round beta (FLX_exp prec) (Znearest choice)
+      (Veltkamp_tx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y)
+      = Veltkamp_tx_FLX beta prec choice s x * Veltkamp_hx_FLX beta prec choice s y :=
+    round_generic beta (FLX_exp prec) (Znearest choice)
+      (generic_format_FLX_mult beta s (prec - s) prec (by omega) Ftx Fhy)
+  have e_tt : round beta (FLX_exp prec) (Znearest choice)
+      (Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y)
+      = Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y := by
+    rcases hradix with hb | he
+    · exact round_tt_exact_radix2 beta prec hp choice hb Fx Fy hs_lo hs_hi hs2hi
+    · exact round_mul_Fs_exact beta prec choice he Ftx Fty
+  rw [e_hh, e_ht, e_th, e_tt]
+  exact TwoProduct_FLX beta prec hp choice Fx Fy hradix hs_lo hs_hi hs2lo hs2hi
 
 end LeanFlocq
