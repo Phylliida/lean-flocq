@@ -401,6 +401,77 @@ private theorem Veltkamp_parts_zero (beta : radix) (prec : ℤ) (c : ℤ → Boo
     unfold Veltkamp_hx_FLX; rw [hp0, hq0, add_zero, round_0]
   exact ⟨hhx0, by unfold Veltkamp_tx_FLX; rw [hhx0, sub_zero, round_0]⟩
 
+/-- **Radix-2 tail-product exactness (the Dekker2 crux).** At radix 2 with
+`s = ⌈prec/2⌉` (i.e. `2s ≤ prec+1`), the product of the two Veltkamp tails
+`tx·ty` rounds exactly — even at odd precision, where the budget lemma only
+places it in `F(prec+1)`. The reason is the *half-ulp* tail bound from the
+Veltkamp structure: `|M_tx| ≤ β^s/2 = 2^(s-1)`, so `|M_tx·M_ty| ≤ 2^(2s-2) ≤
+2^(prec-1)`, putting `tx·ty = (M_tx·M_ty)·2^(cx+cy)` strictly under the grid
+threshold `2^(prec+cx+cy)`. This is the one piece binary64 (prec=53) needs that
+even precision gets for free via `round_mul_Fs_exact`. -/
+theorem round_tt_exact_radix2 (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x y : ℝ} (hbeta : beta.val = 2)
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (Fy : generic_format beta (FLX_exp prec) y)
+    (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) (h2s : 2 * s ≤ prec + 1) :
+    round beta (FLX_exp prec) (Znearest choice)
+        (Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y)
+      = Veltkamp_tx_FLX beta prec choice s x * Veltkamp_tx_FLX beta prec choice s y := by
+  rcases eq_or_ne x 0 with hx0 | hx0
+  · subst hx0; rw [(Veltkamp_parts_zero beta prec choice s).2, zero_mul, round_0]
+  rcases eq_or_ne y 0 with hy0 | hy0
+  · subst hy0; rw [(Veltkamp_parts_zero beta prec choice s).2, mul_zero, round_0]
+  obtain ⟨M_x, M_hx, hx_form, hhx_form, _, hclose_x⟩ :=
+    Veltkamp_struct_FLX_general beta prec hp choice Fx hx0 hs_lo hs_hi
+  obtain ⟨M_y, M_hy, hy_form, hhy_form, _, hclose_y⟩ :=
+    Veltkamp_struct_FLX_general beta prec hp choice Fy hy0 hs_lo hs_hi
+  set cx := cexp beta (FLX_exp prec) x with hcx_def
+  set cy := cexp beta (FLX_exp prec) y with hcy_def
+  set tx := Veltkamp_tx_FLX beta prec choice s x with htx_def
+  set ty := Veltkamp_tx_FLX beta prec choice s y with hty_def
+  set hx := Veltkamp_hx_FLX beta prec choice s x with hhx_def
+  set hy := Veltkamp_hx_FLX beta prec choice s y with hhy_def
+  obtain ⟨hsplit_x, _, _⟩ := Veltkamp_split_FLX_general beta prec hp choice Fx hs_lo hs_hi
+  obtain ⟨hsplit_y, _, _⟩ := Veltkamp_split_FLX_general beta prec hp choice Fy hs_lo hs_hi
+  have hcast_s : ((beta.val ^ s.toNat : ℤ) : ℝ) = bpow beta s := IZR_Zpower beta (by omega)
+  -- Real and integer mantissa forms of the two tails.
+  have htx_real : tx = ((M_x : ℝ) - (M_hx : ℝ) * bpow beta s) * bpow beta cx := by
+    have : tx = x - hx := by linarith [hsplit_x]
+    rw [this, hx_form, hhx_form, bpow_plus]; ring
+  have hty_real : ty = ((M_y : ℝ) - (M_hy : ℝ) * bpow beta s) * bpow beta cy := by
+    have : ty = y - hy := by linarith [hsplit_y]
+    rw [this, hy_form, hhy_form, bpow_plus]; ring
+  have htt_form : tx * ty
+      = (((M_x - M_hx * beta.val ^ s.toNat) * (M_y - M_hy * beta.val ^ s.toNat) : ℤ) : ℝ)
+        * bpow beta (cx + cy) := by
+    rw [htx_real, hty_real, bpow_plus, Int.cast_mul, Int.cast_sub, Int.cast_sub,
+      Int.cast_mul, Int.cast_mul, hcast_s]; ring
+  -- |tx·ty| < β^(prec + (cx+cy)): the radix-2 half-ulp argument.
+  have hb2 : bpow beta 2 = 4 := by
+    have : bpow beta 2 = (beta.val : ℝ) * (beta.val : ℝ) := by
+      rw [show (2 : ℤ) = 1 + 1 from rfl, bpow_plus, bpow_one]
+    rw [this, hbeta]; norm_num
+  have hbound : |tx * ty| < bpow beta (prec + (cx + cy)) := by
+    rw [htx_real, hty_real]
+    refine lt_of_le_of_lt (abs_prod_bpow_le beta _ _ cx cy (bpow beta s / 2) (bpow beta s / 2)
+      (le_of_lt (half_pos (bpow_gt_0 _ _))) hclose_x hclose_y) ?_
+    have hbp : bpow beta s * bpow beta s = bpow beta (2 * s) := by rw [← bpow_plus]; congr 1; ring
+    have key : (bpow beta s / 2 * (bpow beta s / 2)) * bpow beta (cx + cy)
+        = bpow beta (2 * s + (cx + cy)) / 4 := by
+      rw [show (bpow beta s / 2 * (bpow beta s / 2)) * bpow beta (cx + cy)
+            = (bpow beta s * bpow beta s) * bpow beta (cx + cy) / 4 from by ring, hbp, ← bpow_plus]
+    rw [key]
+    have hle : bpow beta (2 * s + (cx + cy)) ≤ bpow beta (prec + 1 + (cx + cy)) :=
+      bpow_le beta (by omega)
+    have heq : bpow beta (prec + 1 + (cx + cy)) = 4 * bpow beta (prec - 1 + (cx + cy)) := by
+      rw [← hb2, ← bpow_plus]; congr 1; ring
+    rw [heq] at hle
+    have hlt : bpow beta (prec - 1 + (cx + cy)) < bpow beta (prec + (cx + cy)) :=
+      bpow_lt beta (by omega)
+    linarith [hle, hlt]
+  exact round_generic beta (FLX_exp prec) (Znearest choice)
+    (generic_format_FLX_of_mult_bpow beta prec _ (cx + cy) htt_form hbound)
+
 /-- **Dekker TwoProduct, even precision, nonzero inputs.** For `x, y ≠ 0` in
 `F(FLX, prec)` with `2s = prec`, the four-step Dekker error chain reconstructs
 the rounding error exactly: `x·y = round(x·y) + t4`, where each summation step
