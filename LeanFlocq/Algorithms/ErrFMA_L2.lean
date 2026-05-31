@@ -634,4 +634,38 @@ theorem errfma_ga_exact (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool)
       lt_of_lt_of_le hmagbound (bpow_le radix2 (by omega))
     exact generic_format_FLX_of_mult_bpow radix2 prec (mb - mr + N) (c1 - 2) hmult hgrid
 
+/-! ### The β2 ≠ 0 branch (`FmaErr_aux2`) -/
+
+/-- **ErrFMA, `β2 ≠ 0` case.** With `γ = ◦(◦(β1−r1) + β2)`, both roundings are
+exact (L1: `β1−r1 ∈ F`; L2: `(β1−r1)+β2 ∈ F`), so `γ = β1+β2−r1` and the
+three-term identity `a·b + c = r1 + γ + α2` follows. -/
+theorem ErrFMA_be2_nonzero (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool)
+    {a b c u1 u2 al1 al2 be1 be2 r1 gat ga : ℝ}
+    (Fc : generic_format radix2 (FLX_exp prec) c)
+    (hu10 : u1 ≠ 0) (hal10 : al1 ≠ 0) (hbe2_ne : be2 ≠ 0) (hr1_ne : r1 ≠ 0)
+    (hu1 : u1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b))
+    (hu2 : u2 = a * b - u1)
+    (hal1 : al1 = round radix2 (FLX_exp prec) (Znearest choice) (c + u2))
+    (hal2 : al2 = c + u2 - al1)
+    (hbe1 : be1 = round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1))
+    (hbe2 : be2 = u1 + al1 - be1)
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b + c))
+    (hgat : gat = round radix2 (FLX_exp prec) (Znearest choice) (be1 - r1))
+    (hga : ga = round radix2 (FLX_exp prec) (Znearest choice) (gat + be2)) :
+    a * b + c = r1 + ga + al2 := by
+  have hp0 : 0 < prec := by omega
+  -- L1: be1 − r1 ∈ F, so gat = be1 − r1
+  have hL1 : generic_format radix2 (FLX_exp prec) (be1 - r1) :=
+    errfma_gat_exact prec hp choice Fc hu1 hu2 hal1 hbe1 hr1
+  have hgat_eq : gat = be1 - r1 := by
+    rw [hgat]; exact round_generic radix2 (FLX_exp prec) (Znearest choice) hL1
+  -- L2: (be1 − r1) + be2 ∈ F, so ga = (be1 − r1) + be2
+  have hL2 : generic_format radix2 (FLX_exp prec) (be1 - r1 + be2) :=
+    errfma_ga_exact prec hp choice Fc hu10 hal10 hbe2_ne hr1_ne hu1 hu2 hal1 hal2 hbe1 hbe2 hr1
+  have hga_eq : ga = be1 - r1 + be2 := by
+    rw [hga, hgat_eq]
+    exact round_generic radix2 (FLX_exp prec) (Znearest choice) hL2
+  -- algebra
+  rw [hga_eq, hbe2, hal2, hu2]; ring
+
 end LeanFlocq
