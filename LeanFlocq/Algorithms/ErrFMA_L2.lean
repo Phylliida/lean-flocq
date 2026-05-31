@@ -668,4 +668,109 @@ theorem ErrFMA_be2_nonzero (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool
   -- algebra
   rw [hga_eq, hbe2, hal2, hu2]; ring
 
+/-! ### The full ErrFMA error theorem (`FmaErr`) -/
+
+/-- **ErrFMA (Boldo–Muller Theorem 2).** For floats `a, b, c` at FLX radix 2,
+`prec ≥ 4`, with the Algorithm-4 intermediate values, `a·b + c = r1 + γ + α2`
+exactly. Combines the `β2 = 0` and `β2 ≠ 0` branches; the `β2 ≠ 0` edge
+conditions (`u1, α1, r1 ≠ 0`) are discharged from `β2 ≠ 0`. -/
+theorem ErrFMA_correct (prec : ℤ) (hp : 3 ≤ prec) (choice : ℤ → Bool)
+    {a b c u1 u2 al1 al2 be1 be2 r1 gat ga : ℝ}
+    (Fc : generic_format radix2 (FLX_exp prec) c)
+    (hu1 : u1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b))
+    (hu2 : u2 = a * b - u1)
+    (hal1 : al1 = round radix2 (FLX_exp prec) (Znearest choice) (c + u2))
+    (hal2 : al2 = c + u2 - al1)
+    (hbe1 : be1 = round radix2 (FLX_exp prec) (Znearest choice) (u1 + al1))
+    (hbe2 : be2 = u1 + al1 - be1)
+    (hr1 : r1 = round radix2 (FLX_exp prec) (Znearest choice) (a * b + c))
+    (hgat : gat = round radix2 (FLX_exp prec) (Znearest choice) (be1 - r1))
+    (hga : ga = round radix2 (FLX_exp prec) (Znearest choice) (gat + be2)) :
+    a * b + c = r1 + ga + al2 := by
+  have hp0 : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp0
+  have hMon := FLX_exp_monotone prec
+  have hNotFTZ := monotone_exp_not_FTZ hValid hMon
+  have Fu1 : generic_format radix2 (FLX_exp prec) u1 := by
+    rw [hu1]; exact generic_format_round _ _ hValid _ _
+  have Fbe1 : generic_format radix2 (FLX_exp prec) be1 := by
+    rw [hbe1]; exact generic_format_round _ _ hValid _ _
+  -- ◦v = 0 ⟹ v = 0 at FLX
+  have round_zero_imp : ∀ v : ℝ,
+      round radix2 (FLX_exp prec) (Znearest choice) v = 0 → v = 0 := by
+    intro v hv
+    have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice v
+    rw [hv, ulp_FLX_0 radix2 prec hp0, zero_sub, abs_neg, mul_zero] at h
+    exact abs_eq_zero.mp (le_antisymm h (abs_nonneg _))
+  by_cases hbe2z : be2 = 0
+  · exact ErrFMA_be2_zero prec hp choice Fc hu1 hu2 hal1 hal2 hbe1 hbe2 hr1 hgat hga hbe2z
+  · -- β2 ≠ 0: derive u1, al1, r1 ≠ 0
+    have hu10 : u1 ≠ 0 := by
+      intro hu1z; apply hbe2z
+      have habz : a * b = 0 := round_zero_imp (a * b) (by rw [← hu1]; exact hu1z)
+      have hu2z : u2 = 0 := by rw [hu2, hu1z, habz]; ring
+      have hal1c : al1 = c := by
+        rw [hal1, hu2z, add_zero]; exact round_generic radix2 (FLX_exp prec) (Znearest choice) Fc
+      have hbe1c : be1 = c := by
+        rw [hbe1, hu1z, hal1c, zero_add]; exact round_generic radix2 (FLX_exp prec) (Znearest choice) Fc
+      rw [hbe2, hu1z, hal1c, hbe1c]; ring
+    have hal10 : al1 ≠ 0 := by
+      intro hal1z; apply hbe2z
+      have hbe1u : be1 = u1 := by
+        rw [hbe1, hal1z, add_zero]; exact round_generic radix2 (FLX_exp prec) (Znearest choice) Fu1
+      rw [hbe2, hal1z, hbe1u]; ring
+    have hr1_ne : r1 ≠ 0 := by
+      intro hr1z; apply hbe2z
+      have habc0 : a * b + c = 0 := round_zero_imp (a * b + c) (by rw [← hr1]; exact hr1z)
+      have hsum0 : be1 + be2 + al2 = 0 := by
+        rw [show be1 + be2 + al2 = a * b + c from by rw [hbe2, hal2, hu2]; ring, habc0]
+      -- |al2| ≤ |be2| via divisibility
+      set ℓ := min (cexp radix2 (FLX_exp prec) u1) (cexp radix2 (FLX_exp prec) al1) with hℓ
+      obtain ⟨Mb, hMb⟩ := errfma_be2_mult_bpow prec choice Fu1
+        (by rw [hal1]; exact generic_format_round _ _ hValid _ _) hbe1 hbe2
+      have hal2lt : |al2| < bpow radix2 ℓ :=
+        errfma_al2_lt_bpow prec hp0 choice Fc hu10 hal10 hu1 hu2 hal1 hal2
+      have hal2_le_be2 : |al2| ≤ |be2| := by
+        rcases eq_or_ne Mb 0 with h | h
+        · exfalso; apply hbe2z; rw [hMb, h]; simp
+        · have hMb1 : (1 : ℤ) ≤ |Mb| := Int.one_le_abs h
+          have : bpow radix2 ℓ ≤ |be2| := by
+            rw [hMb, abs_mul, abs_of_pos (bpow_gt_0 radix2 ℓ)]
+            have : (1 : ℝ) ≤ |(Mb : ℝ)| := by rw [← Int.cast_abs]; exact_mod_cast hMb1
+            nlinarith [bpow_gt_0 radix2 ℓ]
+          linarith [hal2lt]
+      -- |be2| ≤ ½ ulp be1
+      have hbe2_le : |be2| ≤ 1 / 2 * ulp radix2 (FLX_exp prec) be1 := by
+        have hfix : be1 = round radix2 (FLX_exp prec) (Znearest choice) (be1 + be2) := by
+          rw [show be1 + be2 = u1 + al1 from by rw [hbe2]; ring, hbe1]
+        have h := error_le_half_ulp_round radix2 (FLX_exp prec) hValid hNotFTZ hMon choice (be1 + be2)
+        rw [← hfix] at h
+        have : |be1 - (be1 + be2)| = |be2| := by
+          rw [show be1 - (be1 + be2) = -be2 from by ring, abs_neg]
+        rw [this] at h; exact h
+      -- be1 = 0 (else magnitude contradiction), hence be2 = 0
+      have hbe1z : be1 = 0 := by
+        by_contra hbe1ne
+        have hule : |be1| ≤ ulp radix2 (FLX_exp prec) be1 := by
+          have : |be1| ≤ 2 * |be2| := by
+            have := abs_add_le be2 al2
+            have hb1eq : be1 = -(be2 + al2) := by linarith [hsum0]
+            rw [hb1eq, abs_neg]; linarith [hal2_le_be2]
+          linarith [hbe2_le]
+        rw [ulp_neq_0 radix2 (FLX_exp prec) hbe1ne] at hule
+        have hlo := bpow_mag_le radix2 hbe1ne
+        have : bpow radix2 (mag radix2 be1 - 1) ≤ bpow radix2 (cexp radix2 (FLX_exp prec) be1) :=
+          le_trans hlo hule
+        have hexp : mag radix2 be1 - 1 ≤ cexp radix2 (FLX_exp prec) be1 := by
+          by_contra hc; push_neg at hc
+          exact absurd this (not_le.mpr (bpow_lt radix2 (by omega)))
+        have : mag radix2 be1 - 1 ≤ mag radix2 be1 - prec := by
+          rwa [show cexp radix2 (FLX_exp prec) be1 = mag radix2 be1 - prec from rfl] at hexp
+        omega
+      have hu1al1z : u1 + al1 = 0 :=
+        round_zero_imp (u1 + al1) (by rw [← hbe1]; exact hbe1z)
+      rw [hbe2, hu1al1z, hbe1z]; ring
+    exact ErrFMA_be2_nonzero prec hp choice Fc hu10 hal10 hbe2z hr1_ne
+      hu1 hu2 hal1 hal2 hbe1 hbe2 hr1 hgat hga
+
 end LeanFlocq
