@@ -26,4 +26,5 @@ import LeanFlocq.Algorithms.Fast2Sum
 import LeanFlocq.Algorithms.TwoSum
 import LeanFlocq.Algorithms.Veltkamp
 import LeanFlocq.Algorithms.TwoProduct
+import LeanFlocq.Algorithms.EFT_FLX
 
