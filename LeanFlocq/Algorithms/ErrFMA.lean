@@ -21,38 +21,54 @@ Setting: radix 2, FLX, round-to-nearest (the no-underflow case).
 This file is built in stages:
 - **E1** (here): the existential EFT interfaces (`twoproduct_eft`, `twosum_eft`)
   and the exact-algebra chain `a·b + c = β1 + β2 + α2` (`ErrFMA_chain`).
-- **E2** (pending): the crux exactness lemmas.
+- **E2** (in progress): the crux exactness lemmas.
+  - **L1 DONE** (`errfma_gat_exact`): `β1 − r1 ∈ F`, via the round-minus-round
+    engine `round_minus_round_nearby_exact_FLX` in `RoundMinusRound_FLX.lean`.
+  - **β2 = 0 DONE** (`ErrFMA_be2_zero` = Pff `FmaErr_aux1`): `a·b+c = r1+γ+α2`.
+  - **L2 / β2 ≠ 0 REMAINING** (Pff `FmaErr_aux2`/`gaCorrect`) — see below.
 - **E3** (pending): assembly into `a·b + c = r1 + r2 + r3`.
 
-## E2 roadmap (from the paper pass — Boldo–Muller 2011, IEEE TC 60(2))
+## E2 progress and the L2 roadmap (Boldo–Muller 2011, IEEE TC 60(2))
 
-The whole result reduces to proving `γ = β1 + β2 − r1` exactly (then the final
-`Fast2Sum`/`TwoSum` splits `γ + α2` into `r2 + r3` and `a·b+c = r1+r2+r3`).
-Since `γ = round(round(β1 − r1) + β2)`, this needs two exactness lemmas:
-  - **L1**: `round(β1 − r1) = β1 − r1`   (i.e. `β1 − r1 ∈ F`)
-  - **L2**: `round((β1 − r1) + β2) = (β1 − r1) + β2`
+The whole result reduces to `γ = β1 + β2 − r1` exactly, i.e. two exactness
+lemmas (`γ = round(round(β1 − r1) + β2)`):
+  - **L1**: `round(β1 − r1) = β1 − r1`   (`β1 − r1 ∈ F`) — **DONE**.
+  - **L2**: `round((β1 − r1) + β2) = (β1 − r1) + β2` — remaining.
 Then `γ = (β1−r1)+β2 = β1+β2−r1`, and with the E1 chain `a·b+c = β1+β2+α2` we
 get `a·b+c = r1 + γ + α2` (Boldo–Muller Theorem 2's conclusion verbatim).
 
-**Hypotheses at FLX:** radix even (2 ✓) and `prec ≥ 3` (we have `prec ≥ 4`). All
-of the paper's non-underflow side conditions (`β^(emin+k) ≤ |·|`, `r1` normal,
-`ea+ex ≥ emin+p−1`) are *vacuous* at FLX — that's the payoff of staying FLX.
+**L1 — the engine.** Pff's `gatCorrect` reduces to `Subexact`: `β1 − r1` is
+Sterbenz-exact because `β1 = ◦(u1+α1)` and `r1 = ◦(u1+α1+α2)` stay within a
+factor of two (`α2` is at most half a ulp of each summand). The Flocq-native
+engine is `round_minus_round_nearby_exact_FLX`: at radix 2 a nonzero float-sum
+sits on the grid `β^min(cexp a, cexp b)` and `|α2|` is at most half of it, so the
+two roundings keep the sign and stay within `[½, 3⁄2]·|sum|`. The output-form
+relative bounds `err_le_uro_round_FLX` (= Pff `ClosestRounde{Le,Ge}Normal`) and
+a boundary/bulk dichotomy give the tight factor of two; `sterbenz_abs` finishes.
+All non-underflow side conditions are *vacuous* at FLX (the payoff of staying
+FLX). Needs only radix 2 + `prec ≥ 3`.
 
-**Reference proof:** Coq `flocq/src/Pff/Pff.v`, section starting line 23446
-("was file FmaErr.v"), theorem `FmaErr` (line 24973) = `a*x+y = r1+ga+al2`,
-assembled from `FmaErr_aux1` (case `β2 = 0`, short — `γ = round(β1−r1)` and
-`β1−r1 ∈ F` directly) and `FmaErr_aux2` (case `β2 ≠ 0`, the hard one). The
-`Pff2Flocq.v` `ErrFMA_correct` (line 1057) is the Flocq-side wrapper that calls
-`FmaErr` after bridging formats. This is ~1700 lines of old-Pff-formalism Coq —
-the "complex, many subcases" the paper warns about — so E2 is a genuine
-multi-session *port* (math, not transcription), not a quick lemma.
+**β2 = 0 (`FmaErr_aux1`) — DONE.** `γ = ◦(◦(β1−r1)+0) = β1−r1` (L1 + idempotency),
+so `a·b+c = r1 + (β1−r1) + α2 = β1 + α2`, matching the chain at β2=0.
 
-**Mathematical engine:** the Pff proof rests on relative-error bounds for
-round-to-nearest — `ClosestRoundeLeNormal` (`|round z| ≤ |z|/(1 − u/2)`) and
-`ClosestRoundeGeNormal` (`|z| ≤ |round z|·(1 + u/2)`), where `u = β^(1−prec)` —
-plus magnitude case analysis tying `ulp(β1)` to `ulp(α1)`/`ulp(u1)`. Our
-`Prop/Relative.lean` `u_ro` family is the Flocq-native counterpart of those
-relative bounds; L1's representability of `β1 − r1` is the load-bearing step.
+**L2 / β2 ≠ 0 (`FmaErr_aux2`/`gaCorrect`) — REMAINING.** Need
+`(β1−r1) + β2 ∈ F`. Using `(β1−r1)+β2 = (a·b+c − r1) − α2`, the structure is:
+  - **Dichotomy (Pff `Midpoint_aux`, GenericC/D, Pff.v 23856–24316, ~400 lines):**
+    `β1 = r1` OR `cexp(β2) ≥ cexp(β1) − 2`. If `β1 = r1`, `(β1−r1)+β2 = β2 ∈ F`.
+    Else β2 isn't tiny, and β1−r1 (cexp ≥ cexp(β1)−1 in radix 2) aligns with β2
+    on grid `cexp(β1)−2`; the magnitude `|(β1−r1)+β2| < β^(cexp(β1)+1) ≤
+    β^(prec−2+cexp(β1))` forces representability (Pff `BoundedL`).
+  - **`be2MuchSmaller` (Pff.v 24596):** `MSB(α2) < LSB(β2)` — α2 entirely below
+    β2's lowest set bit — the hypothesis Midpoint_aux needs.
+  - **`Expr1`/`Expbe1` (Pff.v 24519/24555):** `|cexp(β1) − cexp(r1)| ≤ 1`, a
+    radix-2 consequence of the factor-of-two bounds (the engine's machinery is
+    in hand — these should be a short add).
+Pff does this with **MSB/LSB bit-position machinery** modern Flocq lacks. The
+Flocq-native path is a **midpoint argument**: if the tiny α2 flips the rounding
+(`r1 ≠ β1`), then `β1+β2` sits within `|α2|` of a midpoint of the β1-grid, which
+pins β2 near `±½ulp(β1)` and hence `cexp(β2) ≥ cexp(β1) − 2` (`round_N_eq_DN`,
+`round_N_le_midp`, the Ulp perturbation family). Estimated ~600–900 Lean lines —
+its own focused session. This is the genuine remaining hard core of ErrFMA.
 -/
 import LeanFlocq.Algorithms.TwoProduct
 import LeanFlocq.Algorithms.EFT_FLX
