@@ -72,4 +72,108 @@ theorem generic_format_FLX_mult (beta : radix) (p1 p2 prec : ℤ)
   rw [← hxy_F2R]
   exact h_cexp_le
 
+/-! ## Chunk 3: general-sign Veltkamp split
+
+`Veltkamp_tail_FLX` and `Veltkamp_hx_format_FLX` are proved for `0 < x`. For
+TwoProduct we need the split for arbitrary inputs (any sign, and zero).
+
+The reduction is via `round_N_opp`: rounding-to-nearest of `−v` equals the
+negation of rounding `v` under the *flipped* tie-breaker
+`flip c := fun t => !c(−(t+1))`. Hence each Veltkamp step on `−x` (with
+choice `c`) equals the negation of the same step on `x` (with choice
+`flip c`). Below, four step-commutation lemmas, then the bundled theorem. -/
+
+/-- Step 1 commutes with negation (flipping the tie-breaker). -/
+private theorem Veltkamp_p_FLX_neg (beta : radix) (prec : ℤ)
+    (c : ℤ → Bool) (s : ℤ) (x : ℝ) :
+    Veltkamp_p_FLX beta prec c s (-x)
+      = -Veltkamp_p_FLX beta prec (fun t => !c (-(t+1))) s x := by
+  unfold Veltkamp_p_FLX
+  rw [neg_mul, round_N_opp]
+
+/-- Step 2 commutes with negation. -/
+private theorem Veltkamp_q_FLX_neg (beta : radix) (prec : ℤ)
+    (c : ℤ → Bool) (s : ℤ) (x : ℝ) :
+    Veltkamp_q_FLX beta prec c s (-x)
+      = -Veltkamp_q_FLX beta prec (fun t => !c (-(t+1))) s x := by
+  unfold Veltkamp_q_FLX
+  rw [Veltkamp_p_FLX_neg,
+    show (-x) - -Veltkamp_p_FLX beta prec (fun t => !c (-(t+1))) s x
+        = -(x - Veltkamp_p_FLX beta prec (fun t => !c (-(t+1))) s x) from by ring,
+    round_N_opp]
+
+/-- Step 3 commutes with negation. -/
+private theorem Veltkamp_hx_FLX_neg (beta : radix) (prec : ℤ)
+    (c : ℤ → Bool) (s : ℤ) (x : ℝ) :
+    Veltkamp_hx_FLX beta prec c s (-x)
+      = -Veltkamp_hx_FLX beta prec (fun t => !c (-(t+1))) s x := by
+  unfold Veltkamp_hx_FLX
+  rw [Veltkamp_q_FLX_neg, Veltkamp_p_FLX_neg,
+    show -Veltkamp_q_FLX beta prec (fun t => !c (-(t+1))) s x
+          + -Veltkamp_p_FLX beta prec (fun t => !c (-(t+1))) s x
+        = -(Veltkamp_q_FLX beta prec (fun t => !c (-(t+1))) s x
+            + Veltkamp_p_FLX beta prec (fun t => !c (-(t+1))) s x) from by ring,
+    round_N_opp]
+
+/-- Step 4 commutes with negation. -/
+private theorem Veltkamp_tx_FLX_neg (beta : radix) (prec : ℤ)
+    (c : ℤ → Bool) (s : ℤ) (x : ℝ) :
+    Veltkamp_tx_FLX beta prec c s (-x)
+      = -Veltkamp_tx_FLX beta prec (fun t => !c (-(t+1))) s x := by
+  unfold Veltkamp_tx_FLX
+  rw [Veltkamp_hx_FLX_neg,
+    show (-x) - -Veltkamp_hx_FLX beta prec (fun t => !c (-(t+1))) s x
+        = -(x - Veltkamp_hx_FLX beta prec (fun t => !c (-(t+1))) s x) from by ring,
+    round_N_opp]
+
+/-- **Veltkamp split at FLX, all signs.** For arbitrary `x` in `F(FLX, prec)`
+and `2 ≤ s ≤ prec − 2`, the algorithm outputs satisfy `x = hx + tx` exactly,
+with `tx ∈ F(s)` and `hx ∈ F(prec − s)`. This bundles `Veltkamp_tail_FLX` and
+`Veltkamp_hx_format_FLX` and removes the positivity restriction, so TwoProduct
+can split arbitrary inputs. -/
+theorem Veltkamp_split_FLX_general (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {s : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hs_lo : 2 ≤ s) (hs_hi : s + 2 ≤ prec) :
+    x = Veltkamp_hx_FLX beta prec choice s x + Veltkamp_tx_FLX beta prec choice s x
+    ∧ generic_format beta (FLX_exp s) (Veltkamp_tx_FLX beta prec choice s x)
+    ∧ generic_format beta (FLX_exp (prec - s))
+        (Veltkamp_hx_FLX beta prec choice s x) := by
+  rcases lt_trichotomy x 0 with hneg | hzero | hpos
+  · -- x < 0: reduce to -x > 0 with the flipped tie-breaker.
+    have hx'_pos : 0 < -x := by linarith
+    have Fx' : generic_format beta (FLX_exp prec) (-x) :=
+      generic_format_opp beta _ Fx
+    obtain ⟨h_sum', h_tx'⟩ :=
+      Veltkamp_tail_FLX beta prec hp (fun t => !choice (-(t+1))) Fx' hx'_pos hs_lo hs_hi
+    have h_hx' :=
+      Veltkamp_hx_format_FLX beta prec hp (fun t => !choice (-(t+1))) Fx' hx'_pos hs_lo hs_hi
+    -- Commutation: each output on x equals the negation of the output on -x.
+    have e_hx : Veltkamp_hx_FLX beta prec choice s x
+        = -Veltkamp_hx_FLX beta prec (fun t => !choice (-(t+1))) s (-x) := by
+      have h := Veltkamp_hx_FLX_neg beta prec choice s (-x); rwa [neg_neg] at h
+    have e_tx : Veltkamp_tx_FLX beta prec choice s x
+        = -Veltkamp_tx_FLX beta prec (fun t => !choice (-(t+1))) s (-x) := by
+      have h := Veltkamp_tx_FLX_neg beta prec choice s (-x); rwa [neg_neg] at h
+    refine ⟨?_, ?_, ?_⟩
+    · rw [e_hx, e_tx]; linarith [h_sum']
+    · rw [e_tx]; exact generic_format_opp beta _ h_tx'
+    · rw [e_hx]; exact generic_format_opp beta _ h_hx'
+  · -- x = 0: every output is 0.
+    subst hzero
+    have hp0 : Veltkamp_p_FLX beta prec choice s 0 = 0 := by
+      unfold Veltkamp_p_FLX; rw [zero_mul, round_0]
+    have hq0 : Veltkamp_q_FLX beta prec choice s 0 = 0 := by
+      unfold Veltkamp_q_FLX; rw [hp0, sub_zero, round_0]
+    have hhx0 : Veltkamp_hx_FLX beta prec choice s 0 = 0 := by
+      unfold Veltkamp_hx_FLX; rw [hp0, hq0, add_zero, round_0]
+    have htx0 : Veltkamp_tx_FLX beta prec choice s 0 = 0 := by
+      unfold Veltkamp_tx_FLX; rw [hhx0, sub_zero, round_0]
+    rw [hhx0, htx0]
+    exact ⟨by ring, generic_format_0 _ _, generic_format_0 _ _⟩
+  · -- x > 0: the existing positive theorems.
+    obtain ⟨h_sum, h_tx⟩ := Veltkamp_tail_FLX beta prec hp choice Fx hpos hs_lo hs_hi
+    exact ⟨h_sum, h_tx,
+      Veltkamp_hx_format_FLX beta prec hp choice Fx hpos hs_lo hs_hi⟩
+
 end LeanFlocq
