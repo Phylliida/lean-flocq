@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `d1956f7`+)
+## Status (as of commit `0c227fe`+)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -346,12 +346,15 @@ Built in chunks:
   together give `tx·ty` exact under the full `radix 2 ∨ Even prec`, which is
   exactly what `TwoProduct_FLX_machine` dispatches on.
 
-**ErrFMA (fifth algorithm) — E0/E1 DONE, E2 HALF-PROVED (L1 + β2=0 branch
-typed Flocq-native), L2/β2≠0 remaining (2026-05-31).** The error-free
+**ErrFMA (fifth algorithm) — E2 COMPLETE (full `FmaErr` proved Flocq-native),
+only the `r1+r2+r3` normalization remains (2026-05-31).** The error-free
 transformation for the FMA: given `a, b, c`, the FMA computes `r1 = round(a·b +
 c)`, and the error `a·b + c − r1` (which generally does *not* fit in one float)
-is reconstructed as `r2 + r3`, two floats, with `a·b + c = r1 + r2 + r3` exactly
-(Boldo–Muller 2011, IEEE TC 60(2)). At FLX, radix 2. Built in stages:
+is reconstructed as `γ + α2`, two floats, with **`a·b + c = r1 + γ + α2`
+exactly** (`ErrFMA_correct` = Boldo–Muller 2011 Theorem 2 / Pff `FmaErr`). At FLX,
+radix 2, `prec ≥ 4`. **Pff's ~1700-line `FmaErr` (with its MSB/LSB
+`Midpoint_aux`/`be2MuchSmaller` machinery) is replaced by ~640 Flocq-native lines
+with NO MSB/LSB.** Built in stages:
 
 - **E0 DONE** (`Algorithms/EFT_FLX.lean`): ErrFMA stacks TwoProduct + TwoSum +
   Fast2Sum, all needed at one format — and TwoProduct is FLX-only, so the whole
@@ -380,33 +383,38 @@ is reconstructed as `r2 + r3`, two floats, with `a·b + c = r1 + r2 + r3` exactl
   own rounding error so `|α2| ≤ ½ ulp(α1)`. Needs only `c ∈ F` (not TwoProduct).
 - **E2 β2 = 0 DONE** (`ErrFMA_be2_zero` = Pff `FmaErr_aux1`): `γ = round(β1−r1) =
   β1−r1` (L1 + idempotency), so `a·b+c = r1 + γ + α2` directly.
-- **E2 L2 / β2 ≠ 0 — scaffolding + dichotomy half DONE** (`Algorithms/ErrFMA_L2.lean`,
-  256 lines), Pff `FmaErr_aux2`/`gaCorrect`. The Flocq-native replacement for
-  Pff's MSB/LSB machinery is **a midpoint argument**, and the technique is now
-  **validated in Lean**:
+- **E2 L2 / β2 ≠ 0 — DONE** (`Algorithms/ErrFMA_L2.lean`, 776 lines), Pff
+  `FmaErr_aux2`/`gaCorrect`. The Flocq-native replacement for Pff's MSB/LSB
+  machinery is **a midpoint argument**, proven complete:
   - `errfma_be2_mult_bpow`: β2 is an integer multiple of `β^min(cexp u1, cexp α1)`
     — straight from `round_repr_same_exp` (rounding a float on grid ℓ stays on
     grid ℓ), **no `plusExact1`/`be2MuchSmaller`-LSB needed** (cleaner than Pff).
   - `errfma_al2_lt_bpow`: `|α2| < β^min(cexp u1, cexp α1)`, from L1's bounds.
-  - `nonneg_bpow_mult_lt_eq_zero`: the divisibility squeeze (a nonneg β^ℓ-multiple
-    `< β^ℓ` is 0).
-  - **`errfma_be2_eq_bpow_upper` DONE**: the upper-midpoint core. With `be1>0,
-    be2>0`, `be1 = ◦(be1+be2)`, `r1 = ◦(be1+be2+α2) ≠ be1`, the divisibility data,
-    `β2 = β^(cexp β1 − 1)` exactly. `r1 ≠ be1` forces `be1+be2+α2 ≥` the upper
-    midpoint (via `round_N_le_midp`/`round_N_ge_midp`), and the squeeze pins β2.
-  - **REMAINING**: the lower-midpoint case (`be2<0`; the same structure plus a
-    two-way `pred_pos` branch on `be1 = β^(mag−1)`, giving gap `β^(c1−1)` or
-    `β^c1` so `d ∈ {β^(c1−2), β^(c1−1)}` — the one fiddly spot), the `be1<0` sign
-    reduction (`round_N_opp` + flipped choice, as in the engine), assembly into
-    the dichotomy `β1=r1 ∨ β2 multiple of β^(cexp β1 − 2)`, the `Expr1`/`Expbe1`
-    exponent bounds (from `round_nearby_factor_two_FLX`), and the grid assembly
-    `(β1−r1)+β2 ∈ F`. ~300 Lean lines, well-mapped (see `ErrFMA_L2.lean`'s header).
-    Also: the top-level `r1 = 0` edge case (forces `a·b+c=0`; Pff's `Nr1` normal
-    hyp) routes to the β2=0 branch or needs its own short handling.
-- **E3 pending**: `γ` exact ⟹ `error = γ + α2` ⟹ final `Fast2Sum`/`TwoSum` gives
-  `a·b + c = r1 + r2 + r3`. ~100 lines, routine once E2 lands.
+  - `nonneg_bpow_mult_lt_eq_zero` / `neg_bpow_squeeze`: the divisibility squeeze
+    (a nonneg β^ℓ-multiple `< β^ℓ` is 0) — the heart of the dichotomy.
+  - `errfma_be2_eq_bpow_upper` / `errfma_be2_eq_bpow_lower`: the upper/lower
+    midpoint cores. `r1 ≠ be1` forces `be1+be2+α2` across a grid midpoint (via
+    `round_N_le_midp`/`round_N_ge_midp`), and the squeeze pins β2 to exactly
+    `±½ulp` (upper / non-power lower) or `±¼ulp` (the `pred_pos` power-of-β lower).
+  - **`errfma_be2_div_dichotomy`**: `β1 = r1 ∨ β2 multiple of β^(cexp β1 − 2)`.
+    Combines the cores via a positive dispatcher; `be1<0` sign-reduces through
+    `round_N_opp` + flipped tie-breaker (engine's double-flip), `cexp_opp`.
+  - **`errfma_ga_exact`** (`gaCorrect`): `(β1−r1)+β2 ∈ F`. `β1=r1` ⟹ `=β2∈F`;
+    else β2 is a `β^(cexp β1−2)`-multiple (dichotomy), β1/r1 are coarser multiples
+    (r1 via the `Expbe1`/`Expr1` cexp bounds from `round_nearby_factor_two_FLX`),
+    and `|(β1−r1)+β2| < β^(cexp β1+1)` closes via `generic_format_FLX_of_mult_bpow`.
+  - **`ErrFMA_be2_nonzero`** (`FmaErr_aux2`): L1 + L2 ⟹ `a·b+c = r1+γ+α2`.
+- **E2 the full theorem — DONE**: **`ErrFMA_correct`** case-splits β2=0 /
+  β2≠0; the β2≠0 edge conditions (`u1,α1,r1 ≠ 0`) are discharged from `β2 ≠ 0`
+  (u1=0/α1=0 collapse β2; r1=0 ⟹ `a·b+c=0` ⟹ `be1+be2+α2=0`, and
+  `|be1| ≤ 2|β2| ≤ ulp(be1)` forces `be1=0` by the mag bound, hence β2=0).
+- **E3 — only the normalization remains**: `ErrFMA_correct` already gives the
+  exact error as two floats (`a·b+c = r1 + γ + α2`, with `γ, α2 ∈ F`). The
+  Algorithm-4 final `(r2,r3) = Fast2Sum(γ, α2)` just normalizes so
+  `|r3| ≤ ½ ulp(r2)`; it needs the Fast2Sum precondition `|α2| ≤ |γ|` (a Boldo–
+  Muller magnitude fact). ~60 lines. The substantive theorem is **done**.
 
-**~33502 lines of Lean across 35 files. 0 `sorry`s. All files build clean.**
+**~34022 lines of Lean across 35 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -449,9 +457,9 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Algorithms/EFT_FLX.lean` | 232 | *not in Coq Flocq* (only in Pff) | **FLX (no-underflow) Fast2Sum + TwoSum, radix 2.** The FLX counterparts of the FLT EFTs, recovered from commits `a7d8eff`/`cc7ad6c` with `_FLX`-suffixed names so they coexist with the gradual-underflow versions. `Fast2Sum_FLX_correct` (3-case Pff structure: `b ≥ 0` / `b ≤ −a/2` Sterbenz / midpoint), `TwoSum_FLX_correct` (branch into Fast2Sum on the larger side). Needed because ErrFMA's blocks must share TwoProduct's format (FLX). |
 | `Algorithms/RoundMinusRound_FLX.lean` | 304 | `Pff/Pff.v` `Subexact` (GenericA/B, 23448–23854) | **The round-minus-round exactness engine (L1's heart).** **`round_minus_round_nearby_exact_FLX`**: for `a, b ∈ F(FLX)` and `e` at most half a ulp of *each*, `round(a+b) − round(a+b+e) ∈ F`. The two roundings keep the sign and stay within a factor of two (Pff's `xLe2y`/`yLe2x`), so Sterbenz applies. Supporting: **`err_le_uro_round_FLX`** (output-form relative bound = Pff `ClosestRounde{Le,Ge}Normal`, from `error_le_half_ulp_round` + `ulp_FLX_le`), **`add_int_mul_bpow_min`** (a nonzero float-sum is a nonzero integer multiple of `β^min(cexp a, cexp b)`), **`abs_add_eq_or_ge_two_bpow_min`** (boundary `=β^m` / bulk `≥2β^m` dichotomy), **`sterbenz_abs`** (signed Sterbenz via `\|x\|≤2\|y\|`, `\|y\|≤2\|x\|`, same sign). Boundary case clean at radix 2 (`a+b = ±2^m` is a float). Radix 2, FLX, `prec ≥ 3`. |
 | `Algorithms/ErrFMA.lean` | 251 | `Pff/Pff.v` `FmaErr` (23446–25161), `Pff2Flocq.v` `ErrFMA_correct` (1057) | **Exact error of the FMA (Boldo–Muller) — E0/E1 done, E2 L1 + β2=0 branch typed.** `a·b + c = r1 + r2 + r3` exactly. `twoproduct_eft`/`twosum_eft` (existential EFT interfaces), **`ErrFMA_chain`** (`a·b+c = β1+β2+α2`), **`errfma_gat_exact`** (L1 = Pff `gatCorrect`: `β1−r1 ∈ F` via the engine + `round_N_pt` closeness), **`ErrFMA_be2_zero`** (Pff `FmaErr_aux1`: `a·b+c = r1+γ+α2` when β2=0, via L1 + idempotency). |
-| `Algorithms/ErrFMA_L2.lean` | 256 | `Pff/Pff.v` `FmaErr_aux2`/`gaCorrect`/`Midpoint_aux` (24318–24786, 23856–24316) | **ErrFMA L2 (β2≠0): scaffolding + dichotomy half.** The Flocq-native replacement for Pff's MSB/LSB. **`errfma_be2_mult_bpow`** (β2 a multiple of `β^min(cexp u1, cexp α1)` via `round_repr_same_exp`), **`errfma_al2_lt_bpow`** (`|α2| < β^min(...)`), **`nonneg_bpow_mult_lt_eq_zero`** (divisibility squeeze), **`errfma_be2_eq_bpow_upper`** (upper-midpoint core: `be2>0` ⟹ `β2 = β^(cexp β1 − 1)`, via `round_N_{le,ge}_midp` + squeeze). Header carries the full derived plan for the remaining lower-midpoint case (pred_pos branch), sign reduction, and grid assembly (~300 lines). |
+| `Algorithms/ErrFMA_L2.lean` | 776 | `Pff/Pff.v` `FmaErr_aux2`/`gaCorrect`/`Midpoint_aux` (24318–24786, 23856–24316) | **ErrFMA L2 (β2≠0) — COMPLETE.** The Flocq-native replacement for Pff's MSB/LSB. **`errfma_be2_mult_bpow`** (β2 a multiple of `β^min(cexp u1, cexp α1)` via `round_repr_same_exp`), **`errfma_al2_lt_bpow`** (`|α2| < β^min(...)`), **`nonneg_bpow_mult_lt_eq_zero`**/**`neg_bpow_squeeze`** (divisibility squeeze), **`errfma_be2_eq_bpow_upper`**/**`errfma_be2_eq_bpow_lower`** (upper/lower midpoint cores via `round_N_{le,ge}_midp` + squeeze; lower has the `pred_pos` power-of-β branch), **`errfma_be2_div_dichotomy`** (`β1=r1 ∨ β2` a `β^(cexp β1−2)`-multiple; `be1<0` sign-reduces via `round_N_opp`), **`format_mult_bpow_of_cexp_ge`**, **`errfma_ga_exact`** (`(β1−r1)+β2 ∈ F`), **`ErrFMA_be2_nonzero`** (`FmaErr_aux2`), **`ErrFMA_correct`** (the full `FmaErr`: `a·b+c = r1+γ+α2`, both branches + edge cases). |
 
-**Total: ~764 Lean theorems vs ~480 substantive Coq theorems** (we have extras
+**Total: ~785 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
 ## Build setup
@@ -855,13 +863,13 @@ to BigInt rationals.
 5. ~~`Dekker`/`TwoProduct`~~ ✓ **DONE 2026-05-31** — Chunks 1–4 complete,
    `radix 2 ∨ Even prec`, bare (`TwoProduct_FLX`) + machine
    (`TwoProduct_FLX_machine`) forms. Covers every IEEE format incl. binary64.
-6. `ErrFMA` — **STARTED 2026-05-31**: E0 (FLX EFTs, `EFT_FLX.lean`) + E1
-   (algebra skeleton, `ErrFMA.lean`) done; **E2 half-proved** — the
-   round-minus-round engine (`RoundMinusRound_FLX.lean`), L1 (`errfma_gat_exact`),
-   and the entire β2=0 branch (`ErrFMA_be2_zero`) are typed Flocq-native. **L2 /
-   β2≠0 remains** (Pff `FmaErr_aux2`/`gaCorrect`: `Midpoint_aux` + `be2MuchSmaller`,
-   the MSB/LSB → midpoint-argument port, ~600–900 lines). See the ErrFMA status
-   block above and `ErrFMA.lean`'s header for the full L2 map.
+6. `ErrFMA` — **E2 COMPLETE 2026-05-31**: E0 (FLX EFTs) + E1 (algebra skeleton) +
+   **E2 the full `FmaErr`** (`ErrFMA_correct`: `a·b+c = r1+γ+α2` exactly) all typed
+   Flocq-native. The round-minus-round engine (`RoundMinusRound_FLX.lean`), L1,
+   β2=0, and the entire L2/β2≠0 midpoint-dichotomy arc (`ErrFMA_L2.lean`) are done
+   — **Pff's ~1700-line MSB/LSB `FmaErr` replaced by ~640 lines, no MSB/LSB.**
+   Only the `r1+r2+r3` normalization (final `Fast2Sum(γ,α2)`, needs `|α2|≤|γ|`)
+   remains (~60 lines).
 7. Compensated discriminant (1 session, applies the above).
 
 #### Veltkamp_Even scope
@@ -973,10 +981,11 @@ lemma" exercises sitting on top of `TwoSum` + `TwoProduct`.
 
 `Dekker`/`TwoProduct` is fully done for `radix 2 ∨ Even prec` — bare
 (`TwoProduct_FLX`) and machine (`TwoProduct_FLX_machine`) forms, every IEEE
-format incl. binary64. `ErrFMA` is half-proved (E0 FLX EFTs + E1 algebra skeleton
-done; E2 has the round-minus-round engine, L1, and the entire β2=0 branch typed
-Flocq-native — only the L2/β2≠0 `Midpoint_aux` port remains, ~600–900 lines).
-After ErrFMA, the compensated discriminant.
+format incl. binary64. `ErrFMA`'s core error theorem is **done**
+(`ErrFMA_correct`: `a·b+c = r1+γ+α2` exactly) — Pff's ~1700-line `FmaErr` with its
+MSB/LSB `Midpoint_aux`/`be2MuchSmaller` machinery replaced by ~640 Flocq-native
+lines via a midpoint-divisibility argument; only the `r1+r2+r3` normalization
+(final `Fast2Sum(γ,α2)`) remains. After ErrFMA, the compensated discriminant.
 
 If at some point you decide you want the *rest* of Pff (Pff has dozens
 of theorems beyond the half-dozen above), the Pff2Flocq translation
