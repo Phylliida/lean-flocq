@@ -2163,4 +2163,69 @@ theorem disc_kahan_opp_sign_2u (beta : radix) (prec : ℤ) (hp : 0 < prec)
     _ ≤ (b * b - a * c) * (2 * u) := mul_le_mul_of_nonneg_left hscalar hD_nn
     _ = 2 * u * |b * b - a * c| := by rw [abs_of_nonneg hD_nn]; ring
 
+/-! ## Boldo §4: reconciling the real test with the floating-point test
+
+The §3 proof uses the *real* test `3|p − q| ≥ p + q`. The actual program tests the
+rounded quantities: `◦(p + q) ≤ ◦(3·|p − q|)` (with `◦(p − q) = p − q` exact in the
+Sterbenz range, so `◦(|p − q|) = |p − q|`). The two tests can disagree (Boldo's 5-digit
+`p = 27, q = 14`). §4 shows the `2·ulp(d)` bound survives both disagreements.
+
+**First disagreement (§4.1):** real says correction (`3|p − q| < p + q`) but the program
+runs *benign* (`◦(p + q) ≤ ◦(3·|p − q|)`), so `d = ◦(p − q) = p − q`. Lemmas 5–9 show
+`δ ≤ 2·ulp d` anyway. These are stated for `q < p` (Boldo's WLOG); since here `d = p − q`
+is the *exact* benign result, the orientation is handled at assembly by sign symmetry of
+`◦(p − q)`. -/
+
+/-- **Boldo §4 Lemma 5** (radix 2). First disagreement, the easy case `cexp q ≤ cexp d`:
+with `d = p − q` exact, `δ = |dp − dq| ≤ ½(ulp p + ulp q) ≤ 3/2·ulp q ≤ 3/2·ulp d`. -/
+theorem disc_fp_lemma5 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hde : d = round beta (FLX_exp prec) (Znearest choice) (p - q))
+    (hq_pos : 0 < q) (hqp : q < p)
+    (hbranch : 3 * |p - q| < p + q)
+    (hed : cexp beta (FLX_exp prec) q ≤ cexp beta (FLX_exp prec) d) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have hq_ne : q ≠ 0 := ne_of_gt hq_pos
+  have Fp : generic_format beta (FLX_exp prec) p := by
+    rw [hpe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have Fq : generic_format beta (FLX_exp prec) q := by
+    rw [hqe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  -- `d = p − q` exactly (Lemma 1).
+  have hpqF : generic_format beta (FLX_exp prec) (p - q) :=
+    disc_branch_subtract_exact beta prec hp Fp Fq (le_of_lt hp_pos) hbranch
+  have hd_eq : d = p - q := by
+    rw [hde]; exact round_generic beta (FLX_exp prec) (Znearest choice) hpqF
+  have hd_pos : 0 < d := by rw [hd_eq]; linarith
+  have hd_ne : d ≠ 0 := ne_of_gt hd_pos
+  -- `δ = |dp − dq|`.
+  have hdelta : d - (b * b - a * c) = -(dp - dq) := by
+    have := disc_corrected_value (a := a) (b := b) (c := c) (p := p) (q := q) hdp hdq
+    rw [hd_eq]; linarith [this]
+  have hdelta_abs : |d - (b * b - a * c)| = |dp - dq| := by rw [hdelta, abs_neg]
+  -- `|dp − dq| ≤ ½(ulp p + ulp q)`.
+  have hbd := disc_corr_dpdq_bound beta prec hp choice a b c hpe hqe hdp hdq
+  -- `p ≤ 2q` (Lemma 1), so `ulp p ≤ 2·ulp q`.
+  have hp2q : p ≤ 2 * q := by nlinarith [hbranch, le_abs_self (p - q)]
+  have hulp_p_le : ulp beta (FLX_exp prec) p ≤ 2 * ulp beta (FLX_exp prec) q := by
+    rw [← ulp_two_mul_r2 beta hbeta prec hp q]
+    apply ulp_le beta (FLX_exp prec) hValid hMon
+    rw [abs_of_pos hp_pos, abs_of_pos (by linarith : (0:ℝ) < 2 * q)]; linarith
+  -- `ulp q ≤ ulp d` (from `cexp q ≤ cexp d`).
+  have hulp_qd : ulp beta (FLX_exp prec) q ≤ ulp beta (FLX_exp prec) d := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hq_ne, ulp_neq_0 beta (FLX_exp prec) hd_ne]
+    exact bpow_le beta hed
+  rw [hdelta_abs]
+  linarith [hbd, hulp_p_le, hulp_qd, ulp_ge_0 beta (FLX_exp prec) q]
+
 end LeanFlocq
