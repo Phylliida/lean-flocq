@@ -4,7 +4,14 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `1b47729`+)
+## Status (as of commit `e4c3c42`+)
+
+> **Latest session (2026-06-01):** the Kahan compensated discriminant `b·b − a·c`
+> advanced substantially — Boldo §3.2 **Lemma 4**, its power-of-two **boundary
+> discharge**, and **all of §3.2.2** (three subcases + the assembly `disc_corr_particular`)
+> are now proven, 0 sorries. The documented "hardest part" is complete. Remaining
+> on the discriminant: the full §3 correction dispatch (with the `p↔q` WLOG-symmetry
+> argument + grid-bound discharge) and §4. See the discriminant section below.
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
