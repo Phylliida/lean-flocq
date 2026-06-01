@@ -198,4 +198,57 @@ theorem rel_err_init (beta : radix) (prec : ℤ) (hp : 0 < prec)
   unfold rel_err u_ro
   exact relative_error_N_FLX beta prec hp choice x
 
+/-! ## D3: the FMA-based discriminant — error decomposition
+
+The FMA-based algorithm (no branch test, hence no Gappa) computes:
+```
+  p  := RN(b·b)        q  := RN(a·c)
+  dp := b·b − p        dq := a·c − q          (exact, via fma — see D0)
+  s1 := RN(p − q)      s2 := RN(dp − dq)
+  d  := RN(s1 + s2)
+```
+By the exact identity `(p − q) + (dp − dq) = b·b − a·c` (D1), the result `d`
+differs from the true discriminant by exactly three rounding errors — the two
+inner sums and the final sum:
+`d − (b·b − a·c) = (d − (s1+s2)) + (s1 − (p−q)) + (s2 − (dp−dq))`.
+Each is bounded by the *sharp* `v = u_ro/(1+u_ro)` relative error
+(`relative_error_N_FLX'`). The sharp form (rather than the plain `u_ro`) is what
+makes the eventual `2u` bound tight rather than `2u + O(u²)`. -/
+
+/-- **FMA-discriminant error decomposition.**
+
+`|d − (b·b − a·c)| ≤ v · (|s1+s2| + |p−q| + |dp−dq|)` with `v = u_ro/(1+u_ro)`,
+for the FMA algorithm's intermediate values. General radix. -/
+theorem disc_fma_error_decomp (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q dp dq s1 s2 d : ℝ}
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hs1 : s1 = round beta (FLX_exp prec) (Znearest choice) (p - q))
+    (hs2 : s2 = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) (s1 + s2)) :
+    |d - (b * b - a * c)|
+      ≤ u_ro beta prec / (1 + u_ro beta prec) * (|s1 + s2| + |p - q| + |dp - dq|) := by
+  set v := u_ro beta prec / (1 + u_ro beta prec) with hv
+  -- The three sharp relative-error bounds, one per rounding.
+  have eout : |d - (s1 + s2)| ≤ v * |s1 + s2| := by
+    rw [hd]; exact relative_error_N_FLX' beta prec hp choice (s1 + s2)
+  have e1 : |s1 - (p - q)| ≤ v * |p - q| := by
+    rw [hs1]; exact relative_error_N_FLX' beta prec hp choice (p - q)
+  have e2 : |s2 - (dp - dq)| ≤ v * |dp - dq| := by
+    rw [hs2]; exact relative_error_N_FLX' beta prec hp choice (dp - dq)
+  -- Exact algebraic decomposition (using the D1 identity).
+  have key : d - (b * b - a * c)
+      = (d - (s1 + s2)) + (s1 - (p - q)) + (s2 - (dp - dq)) := by
+    rw [hdp, hdq]; ring
+  rw [key]
+  have t1 : |(d - (s1 + s2)) + (s1 - (p - q)) + (s2 - (dp - dq))|
+      ≤ |(d - (s1 + s2)) + (s1 - (p - q))| + |s2 - (dp - dq)| := abs_add_le _ _
+  have t2 : |(d - (s1 + s2)) + (s1 - (p - q))|
+      ≤ |d - (s1 + s2)| + |s1 - (p - q)| := abs_add_le _ _
+  calc |(d - (s1 + s2)) + (s1 - (p - q)) + (s2 - (dp - dq))|
+      ≤ |d - (s1 + s2)| + |s1 - (p - q)| + |s2 - (dp - dq)| := by linarith [t1, t2]
+    _ ≤ v * |s1 + s2| + v * |p - q| + v * |dp - dq| := by linarith [eout, e1, e2]
+    _ = v * (|s1 + s2| + |p - q| + |dp - dq|) := by ring
+
 end LeanFlocq
