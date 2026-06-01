@@ -144,6 +144,77 @@ theorem disc_branch_subtract_exact (beta : radix) (prec : ℤ) (hp : 0 < prec)
   have hq_le : q ≤ 2 * p := by nlinarith [hcond, hpq2]
   exact disc_sterbenz_exact beta prec hp Fp Fq hq_le hp_le
 
+/-! ## Boldo §3: the branch algorithm `2·ulp(d)` bound (radix 2)
+
+Kahan's *branch* algorithm (the one Boldo 2009 proves), for `b·b − a·c`:
+```
+  p := RN(b·b)        q := RN(a·c)
+  dp := b·b − p       dq := a·c − q          (exact, via exactmult — D0)
+  if 3|p − q| ≥ p + q  then  d := RN(p − q)               -- benign
+                       else  d := RN((p − q) + RN(dp − dq))  -- correction
+```
+Boldo proves `|d − (b·b − a·c)| ≤ 2·ulp(d)` (ulps of the *result* — §8 shows the
+`ulp(b·b − a·c)` form is false at powers of two; relative ≈ 4u, with the tight
+2u being the separate Jeannerod–Louvet–Muller refinement). The factor-of-two
+ulp arguments are radix-2 specific, so this arc is at `radix2`.
+
+The shared starting point (general even radix) is the ulp-form error
+decomposition for the naive `d = RN(p − q)`: `δ ≤ ½(ulp d + ulp p + ulp q)`. -/
+
+/-- Rounding never decreases the ulp: `ulp x ≤ ulp (RN x)` (FLX). -/
+theorem ulp_le_ulp_round_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    ulp beta (FLX_exp prec) x
+      ≤ ulp beta (FLX_exp prec) (round beta (FLX_exp prec) (Znearest choice) x) := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  rcases ulp_round beta (FLX_exp prec) hValid hNF (Znearest choice) x with heq | hpow
+  · rw [heq]
+  · rw [← ulp_abs beta (FLX_exp prec) (round beta (FLX_exp prec) (Znearest choice) x), hpow,
+      ulp_bpow]
+    by_cases hx : x = 0
+    · rw [hx, ulp_FLX_0 beta prec hp]; exact bpow_ge_0 _ _
+    · rw [ulp_neq_0 beta (FLX_exp prec) hx]
+      exact bpow_le beta (by unfold cexp FLX_exp; omega)
+
+/-- **ulp-form error decomposition** (Boldo §3, the common starting bound).
+
+For `p = RN(b·b)`, `q = RN(a·c)`, `d = RN(p − q)`:
+`|d − (b·b − a·c)| ≤ ½·ulp d + ½·ulp p + ½·ulp q`,
+from the three half-ulp rounding bounds (`error_le_half_ulp_round`) on
+`d = RN(p−q)`, `p = RN(b·b)`, `q = RN(a·c)` and the algebraic split
+`d − (b·b−a·c) = (d−(p−q)) + (p−b·b) − (q−a·c)`. General radix. -/
+theorem disc_branch_err_decomp (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hde : d = round beta (FLX_exp prec) (Znearest choice) (p - q)) :
+    |d - (b * b - a * c)|
+      ≤ (1/2) * ulp beta (FLX_exp prec) d
+        + (1/2) * ulp beta (FLX_exp prec) p
+        + (1/2) * ulp beta (FLX_exp prec) q := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have ed : |d - (p - q)| ≤ (1/2) * ulp beta (FLX_exp prec) d := by
+    rw [hde]; exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (p - q)
+  have ep : |p - b * b| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+    rw [hpe]; exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b)
+  have eq' : |q - a * c| ≤ (1/2) * ulp beta (FLX_exp prec) q := by
+    rw [hqe]; exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (a * c)
+  have key : d - (b * b - a * c) = (d - (p - q)) + (p - b * b) + (-(q - a * c)) := by ring
+  rw [key]
+  have t1 : |(d - (p - q)) + (p - b * b) + (-(q - a * c))|
+      ≤ |(d - (p - q)) + (p - b * b)| + |(-(q - a * c))| := abs_add_le _ _
+  have t2 : |(d - (p - q)) + (p - b * b)| ≤ |d - (p - q)| + |p - b * b| := abs_add_le _ _
+  have t3 : |(-(q - a * c))| = |q - a * c| := abs_neg _
+  calc |(d - (p - q)) + (p - b * b) + (-(q - a * c))|
+      ≤ |d - (p - q)| + |p - b * b| + |q - a * c| := by linarith [t1, t2, t3]
+    _ ≤ (1/2) * ulp beta (FLX_exp prec) d + (1/2) * ulp beta (FLX_exp prec) p
+          + (1/2) * ulp beta (FLX_exp prec) q := by linarith [ed, ep, eq']
+
 /-! ## D2: the master error decomposition (general radix) -/
 
 /-- **Error decomposition of the naive result.**
