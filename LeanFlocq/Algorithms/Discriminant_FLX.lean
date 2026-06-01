@@ -1590,8 +1590,7 @@ theorem disc_corr_particular (beta : radix) (hbeta : beta.val = 2)
     (hq_pos : 0 < q) (hqp : q < p)
     (hulp_ne : ulp beta (FLX_exp prec) p ≠ ulp beta (FLX_exp prec) q)
     (hclose : p - q ≤ 2 * ulp beta (FLX_exp prec) q)
-    (hbranch : 3 * |p - q| < p + q)
-    (hp3 : 3 ≤ prec) :
+    (hbranch : 3 * |p - q| < p + q) :
     |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
   have hValid := FLX_exp_valid prec hp
   have hMon := FLX_exp_monotone prec
@@ -1616,14 +1615,11 @@ theorem disc_corr_particular (beta : radix) (hbeta : beta.val = 2)
       have := bpow_mag_gt beta q; rwa [abs_of_pos hq_pos] at this
     have hq_ulp := id_p_ulp_le_bpow beta (FLX_exp prec) hq_pos Fq hq_lt
     rw [hp_pow]; linarith
-  -- Grid discharge: `hgb` (cross, via `mag p = mag q + 1`) and `hgc` (direct, no-bump).
+  -- Grid discharge (unconditional, via the no-bump keystone): `hgb` cross, `hgc` direct.
   have hbb_pos : 0 < b * b := by
     rcases (mul_self_nonneg b).lt_or_eq with h | h
     · exact h
     · exfalso; rw [hpe, ← h, round_0] at hp_pos; exact lt_irrefl 0 hp_pos
-  have hgb : mag beta q ≤ mag beta b + mag beta b := by
-    have h1 := disc_mag_round_prod_le beta prec hp choice hbb_pos
-    rw [← hpe] at h1; omega
   have hac_pos : 0 < a * c := by
     by_contra h; push_neg at h
     have hqle : q ≤ 0 := by
@@ -1633,12 +1629,11 @@ theorem disc_corr_particular (beta : radix) (hbeta : beta.val = 2)
             round_le beta (FLX_exp prec) hValid (Znearest choice) h
         _ = 0 := round_0 beta (FLX_exp prec) (Znearest choice)
     linarith
-  have hq_low : bpow beta (mag beta q - 1) < q :=
-    disc_lower_in_binade beta hbeta prec hp3 hq_pos (by rw [← hp_pow]; exact hclose)
+  have hgb : mag beta q ≤ mag beta b + mag beta b := by
+    have h := disc_mag_prod_no_bump beta prec hp choice Fb Fb hbb_pos
+    rw [← hpe] at h; omega
   have hgc : mag beta q ≤ mag beta a + mag beta c := by
-    have hq_low' : bpow beta (mag beta (round beta (FLX_exp prec) (Znearest choice) (a * c)) - 1)
-        < round beta (FLX_exp prec) (Znearest choice) (a * c) := by rw [← hqe]; exact hq_low
-    have h := disc_mag_no_bump beta prec hp choice hac_pos hq_low'
+    have h := disc_mag_prod_no_bump beta prec hp choice Fa Fc hac_pos
     rw [← hqe] at h; exact h
   -- Trivial half-ulp bounds.
   have hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
@@ -1687,8 +1682,7 @@ theorem disc_corr_particular_lo (beta : radix) (hbeta : beta.val = 2)
     (hp_pos : 0 < p) (hpq : p < q)
     (hulp_ne : ulp beta (FLX_exp prec) p ≠ ulp beta (FLX_exp prec) q)
     (hclose : q - p ≤ 2 * ulp beta (FLX_exp prec) p)
-    (hbranch : 3 * |p - q| < p + q)
-    (hp3 : 3 ≤ prec) :
+    (hbranch : 3 * |p - q| < p + q) :
     |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
   have hValid := FLX_exp_valid prec hp
   have hMon := FLX_exp_monotone prec
@@ -1711,18 +1705,11 @@ theorem disc_corr_particular_lo (beta : radix) (hbeta : beta.val = 2)
       have := bpow_mag_gt beta p; rwa [abs_of_pos hp_pos] at this
     have hp_ulp := id_p_ulp_le_bpow beta (FLX_exp prec) hp_pos Fp hp_lt
     rw [hq_pow]; linarith
-  -- Grid discharge: `hgb` (direct, no-bump) and `hgc` (cross, via `mag q = mag p + 1`).
+  -- Grid discharge (unconditional, via the no-bump keystone): `hgb` direct, `hgc` cross.
   have hbb_pos : 0 < b * b := by
     rcases (mul_self_nonneg b).lt_or_eq with h | h
     · exact h
     · exfalso; rw [hpe, ← h, round_0] at hp_pos; exact lt_irrefl 0 hp_pos
-  have hp_low : bpow beta (mag beta p - 1) < p :=
-    disc_lower_in_binade beta hbeta prec hp3 hp_pos (by rw [← hq_pow]; exact hclose)
-  have hgb : mag beta p ≤ mag beta b + mag beta b := by
-    have hp_low' : bpow beta (mag beta (round beta (FLX_exp prec) (Znearest choice) (b * b)) - 1)
-        < round beta (FLX_exp prec) (Znearest choice) (b * b) := by rw [← hpe]; exact hp_low
-    have h := disc_mag_no_bump beta prec hp choice hbb_pos hp_low'
-    rw [← hpe] at h; exact h
   have hq_pos : 0 < q := lt_trans hp_pos hpq
   have hac_pos : 0 < a * c := by
     by_contra h; push_neg at h
@@ -1733,9 +1720,12 @@ theorem disc_corr_particular_lo (beta : radix) (hbeta : beta.val = 2)
             round_le beta (FLX_exp prec) hValid (Znearest choice) h
         _ = 0 := round_0 beta (FLX_exp prec) (Znearest choice)
     linarith
+  have hgb : mag beta p ≤ mag beta b + mag beta b := by
+    have h := disc_mag_prod_no_bump beta prec hp choice Fb Fb hbb_pos
+    rw [← hpe] at h; exact h
   have hgc : mag beta p ≤ mag beta a + mag beta c := by
-    have h1 := disc_mag_round_prod_le beta prec hp choice hac_pos
-    rw [← hqe] at h1; omega
+    have h := disc_mag_prod_no_bump beta prec hp choice Fa Fc hac_pos
+    rw [← hqe] at h; omega
   -- Trivial half-ulp bounds.
   have hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
     rw [hdp, abs_sub_comm, hpe]
@@ -1853,6 +1843,110 @@ theorem disc_gap_le_two_ulp (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (
   have hkr_le2 : ((2 * Mp - Mq : ℤ) : ℝ) ≤ 2 := by exact_mod_cast hk_le
   rw [hgap, huq]
   exact mul_le_mul_of_nonneg_right hkr_le2 (le_of_lt hu_pos)
+
+/-- **Boldo §3: the correction branch is within `2·ulp(d)`** (radix 2).
+
+The full dispatch of Kahan's correction branch `3|p − q| < p + q`. With `q > 0` and
+`p − q ∈ F` (Lemma 1), it splits on the ulps of `p` and `q`:
+- `ulp p = ulp q` → Lemma 4 (`disc_corr_lemma4`), its grid hypotheses discharged
+  unconditionally by `disc_mag_prod_no_bump`;
+- distinct ulps, far (`ulp p + ulp q ≤ |p − q|`) → `disc_corr_far`;
+- distinct ulps, near → the §3.2.2 particular case, oriented by `q < p`
+  (`disc_corr_particular`) or `p < q` (`disc_corr_particular_lo`), with the tight gap
+  `|p − q| ≤ 2·ulp(min)` from `disc_gap_le_two_ulp`.
+
+The WLOG `p ≥ q` of Boldo's paper is *not* assumed: both orientations are handled, by
+the genuine mirror `disc_corr_particular_lo` (the functional-rounding setting does not
+collapse them). No `prec ≥ 3` side condition — the no-bump keystone removed it. -/
+theorem disc_correction (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq g d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hbranch : 3 * |p - q| < p + q) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hp_nn : 0 ≤ p := by rw [hpe]; exact disc_p_nonneg beta prec hp choice b
+  have Fp : generic_format beta (FLX_exp prec) p := by
+    rw [hpe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have Fq : generic_format beta (FLX_exp prec) q := by
+    rw [hqe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  -- `q > 0` and `p > 0` in the correction branch (Boldo Lemma 1's first step).
+  have hq_pos : 0 < q := by
+    by_contra h; push_neg at h
+    rw [abs_of_nonneg (by linarith : (0:ℝ) ≤ p - q)] at hbranch; linarith
+  have hp_pos : 0 < p := by
+    rcases lt_or_eq_of_le hp_nn with h | h
+    · exact h
+    · exfalso; rw [← h, zero_sub, abs_neg, abs_of_pos hq_pos] at hbranch; linarith
+  -- products positive (for the no-bump grid discharge).
+  have hbb_pos : 0 < b * b := by
+    rcases (mul_self_nonneg b).lt_or_eq with h | h
+    · exact h
+    · exfalso; rw [hpe, ← h, round_0] at hp_pos; exact lt_irrefl 0 hp_pos
+  have hac_pos : 0 < a * c := by
+    by_contra h; push_neg at h
+    have hqle : q ≤ 0 := by
+      rw [hqe]
+      calc round beta (FLX_exp prec) (Znearest choice) (a * c)
+          ≤ round beta (FLX_exp prec) (Znearest choice) 0 :=
+            round_le beta (FLX_exp prec) hValid (Znearest choice) h
+        _ = 0 := round_0 beta (FLX_exp prec) (Znearest choice)
+    linarith
+  -- Lemma 1 Sterbenz ranges.
+  have hp2q : p ≤ 2 * q := by nlinarith [hbranch, le_abs_self (p - q)]
+  have hq2p : q ≤ 2 * p := by
+    nlinarith [hbranch, (by rw [abs_sub_comm]; exact le_abs_self (q - p) : q - p ≤ |p - q|)]
+  have hpqF : generic_format beta (FLX_exp prec) (p - q) :=
+    disc_branch_subtract_exact beta prec hp Fp Fq hp_nn hbranch
+  by_cases hue : ulp beta (FLX_exp prec) p = ulp beta (FLX_exp prec) q
+  · -- equal ulp → Lemma 4 (grid hypotheses discharged by the no-bump keystone).
+    have hp_ne : p ≠ 0 := ne_of_gt hp_pos
+    have hq_ne : q ≠ 0 := ne_of_gt hq_pos
+    have hcpq : cexp beta (FLX_exp prec) p = cexp beta (FLX_exp prec) q := by
+      rw [ulp_neq_0 beta (FLX_exp prec) hp_ne, ulp_neq_0 beta (FLX_exp prec) hq_ne] at hue
+      rcases lt_trichotomy (cexp beta (FLX_exp prec) p) (cexp beta (FLX_exp prec) q) with h | h | h
+      · exact absurd hue (ne_of_lt (bpow_lt beta h))
+      · exact h
+      · exact absurd hue.symm (ne_of_lt (bpow_lt beta h))
+    have hgb4 : cexp beta (FLX_exp prec) p - prec
+        ≤ cexp beta (FLX_exp prec) b + cexp beta (FLX_exp prec) b := by
+      have h := disc_mag_prod_no_bump beta prec hp choice Fb Fb hbb_pos
+      rw [← hpe] at h; unfold cexp FLX_exp; omega
+    have hgc4 : cexp beta (FLX_exp prec) p - prec
+        ≤ cexp beta (FLX_exp prec) a + cexp beta (FLX_exp prec) c := by
+      have h := disc_mag_prod_no_bump beta prec hp choice Fa Fc hac_pos
+      rw [← hqe] at h; rw [hcpq]; unfold cexp FLX_exp; omega
+    exact disc_corr_lemma4 beta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd hue hgb4 hgc4
+  · -- distinct ulps → far or particular (oriented).
+    rcases lt_trichotomy p q with hlt | heq | hgt
+    · -- p < q (case B).
+      by_cases hfar : ulp beta (FLX_exp prec) p + ulp beta (FLX_exp prec) q ≤ |p - q|
+      · exact disc_corr_far beta hbeta prec hp choice a b c hpe hqe hdp hdq hg hd hpqF hfar
+      · push_neg at hfar
+        have hgap : q - p ≤ 2 * ulp beta (FLX_exp prec) p :=
+          disc_gap_le_two_ulp beta hbeta prec hp (p := q) (q := p) Fq Fp hp_pos hlt (Ne.symm hue) hq2p
+            (by rw [abs_sub_comm, abs_of_nonneg (by linarith : (0:ℝ) ≤ q - p)] at hfar;
+                linarith [hfar])
+        exact disc_corr_particular_lo beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd
+          hp_pos hlt hue hgap hbranch
+    · exact absurd (by rw [heq]) hue
+    · -- q < p (case A).
+      by_cases hfar : ulp beta (FLX_exp prec) p + ulp beta (FLX_exp prec) q ≤ |p - q|
+      · exact disc_corr_far beta hbeta prec hp choice a b c hpe hqe hdp hdq hg hd hpqF hfar
+      · push_neg at hfar
+        have hgap : p - q ≤ 2 * ulp beta (FLX_exp prec) q :=
+          disc_gap_le_two_ulp beta hbeta prec hp Fp Fq hq_pos hgt hue hp2q
+            (by rw [abs_of_nonneg (by linarith : (0:ℝ) ≤ p - q)] at hfar; exact hfar)
+        exact disc_corr_particular beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd
+          hq_pos hgt hue hgap hbranch
 
 /-! ## D2: the master error decomposition (general radix) -/
 
