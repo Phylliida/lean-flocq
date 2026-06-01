@@ -714,6 +714,97 @@ theorem disc_prod_grid_or_pow2 (beta : radix) (prec : ℤ) (hp : 0 < prec)
     · -- on the binade `mag(b·b) = 2·mag b`: `p = β^(2·mag b)`, the boundary power.
       right; rw [hmr2, heq]; congr 1; unfold cexp FLX_exp; omega
 
+/-! ### Grid-bound discharge for the particular case
+
+The §3.2.2 subcases need grid bounds `mag(min p q) ≤ mag b + mag b` and
+`mag(min p q) ≤ mag a + mag c`. For the smaller product these split into a *cross*
+bound (about the other product's factors, safe because `mag(min) = mag(max) − 1`)
+and a *direct* bound (about its own factors, needing that rounding did not bump the
+magnitude — excluded by `prec ≥ 3` + near-cancellation). The three helpers below
+discharge both. -/
+
+/-- `mag(RN(x·y)) ≤ mag x + mag y + 1` for a positive product. Rounding lifts `mag`
+by at most one (`mag_round`); `mag(x·y) ≤ mag x + mag y` (`mag_mult`). The *cross*
+grid bound follows since the smaller product has `mag = mag(larger round) − 1`. -/
+theorem disc_mag_round_prod_le (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {x y : ℝ} (hxy : 0 < x * y) :
+    mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
+      ≤ mag beta x + mag beta y + 1 := by
+  have hValid := FLX_exp_valid prec hp
+  have hx : x ≠ 0 := left_ne_zero_of_mul (ne_of_gt hxy)
+  have hy : y ≠ 0 := right_ne_zero_of_mul (ne_of_gt hxy)
+  have hr_pos : 0 < round beta (FLX_exp prec) (Znearest choice) (x * y) :=
+    gt_0_round_gt_0_FLX beta prec hp (Znearest choice) hxy
+  have hmm : mag beta (x * y) ≤ mag beta x + mag beta y := (mag_mult beta hx hy).2
+  have hmr := mag_round beta (FLX_exp prec) hValid (Znearest choice) (ne_of_gt hr_pos)
+  have hmax : max (mag beta (x * y)) (FLX_exp prec (mag beta (x * y))) = mag beta (x * y) := by
+    apply max_eq_left; unfold FLX_exp; omega
+  rw [hmax] at hmr
+  rcases hmr with h1 | h2
+  · rw [h1]; omega
+  · rw [abs_of_pos hr_pos] at h2
+    have hbump : mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
+        = mag beta (x * y) + 1 := by rw [h2, mag_bpow]
+    omega
+
+/-- **The smaller product sits in the upper part of its binade.** If `0 < r` and the
+straddled power of two `β^(mag r)` exceeds `r` by at most `2·ulp r`, then with
+`3 ≤ prec` we have `β^(mag r − 1) < r`: near-cancellation keeps `r` within
+`2·ulp r ≤ β^(mag r − 2)` of `β^(mag r)`, well above the bottom power `β^(mag r − 1)`.
+Radix 2. This is what excludes the magnitude-bumping configuration. -/
+theorem disc_lower_in_binade (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp3 : 3 ≤ prec)
+    {r : ℝ} (hr_pos : 0 < r)
+    (hclose : bpow beta (mag beta r) - r ≤ 2 * ulp beta (FLX_exp prec) r) :
+    bpow beta (mag beta r - 1) < r := by
+  have hr_ne := ne_of_gt hr_pos
+  have hcr : cexp beta (FLX_exp prec) r = mag beta r - prec := by unfold cexp FLX_exp; rfl
+  have hulp : ulp beta (FLX_exp prec) r = bpow beta (mag beta r - prec) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hr_ne, hcr]
+  have h2ulp : 2 * ulp beta (FLX_exp prec) r = bpow beta (mag beta r - prec + 1) := by
+    rw [hulp, show mag beta r - prec + 1 = (mag beta r - prec) + 1 from by ring,
+      bpow_plus, bpow_one, hbeta]; push_cast; ring
+  have hle : bpow beta (mag beta r - prec + 1) ≤ bpow beta (mag beta r - 2) :=
+    bpow_le beta (by omega)
+  have hsplit1 : bpow beta (mag beta r) = 4 * bpow beta (mag beta r - 2) := by
+    rw [show mag beta r = (mag beta r - 2) + 1 + 1 from by ring, bpow_plus, bpow_plus,
+      bpow_one, hbeta]; push_cast; ring
+  have hsplit2 : bpow beta (mag beta r - 1) = 2 * bpow beta (mag beta r - 2) := by
+    rw [show mag beta r - 1 = (mag beta r - 2) + 1 from by ring, bpow_plus, bpow_one, hbeta]
+    push_cast; ring
+  rw [h2ulp] at hclose
+  have hβ2_pos : 0 < bpow beta (mag beta r - 2) := bpow_gt_0 _ _
+  rw [hsplit2]
+  linarith [hclose, hle, hβ2_pos, hsplit1]
+
+/-- **No magnitude-bump for the smaller product.** If `r = RN(x·y) > 0` lies in the
+upper part of its binade (`β^(mag r − 1) < r`), rounding did not bump `mag`, so
+`mag r ≤ mag x + mag y`. (Otherwise `r = β^(mag r − 1)`, the bottom power.) This is
+the *direct* grid bound. -/
+theorem disc_mag_no_bump (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {x y : ℝ} (hxy : 0 < x * y)
+    (hr_low : bpow beta (mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y)) - 1)
+        < round beta (FLX_exp prec) (Znearest choice) (x * y)) :
+    mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
+      ≤ mag beta x + mag beta y := by
+  have hValid := FLX_exp_valid prec hp
+  have hx : x ≠ 0 := left_ne_zero_of_mul (ne_of_gt hxy)
+  have hy : y ≠ 0 := right_ne_zero_of_mul (ne_of_gt hxy)
+  have hr_pos : 0 < round beta (FLX_exp prec) (Znearest choice) (x * y) :=
+    gt_0_round_gt_0_FLX beta prec hp (Znearest choice) hxy
+  have hmm : mag beta (x * y) ≤ mag beta x + mag beta y := (mag_mult beta hx hy).2
+  have hmr := mag_round beta (FLX_exp prec) hValid (Znearest choice) (ne_of_gt hr_pos)
+  have hmax : max (mag beta (x * y)) (FLX_exp prec (mag beta (x * y))) = mag beta (x * y) := by
+    apply max_eq_left; unfold FLX_exp; omega
+  rw [hmax] at hmr
+  rcases hmr with h1 | h2
+  · rw [h1]; exact hmm
+  · exfalso
+    rw [abs_of_pos hr_pos] at h2
+    have hbump : mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
+        = mag beta (x * y) + 1 := by rw [h2, mag_bpow]
+    rw [hbump, show mag beta (x * y) + 1 - 1 = mag beta (x * y) from by ring, h2] at hr_low
+    exact lt_irrefl _ hr_low
+
 /-! ### Boldo §3.2.2: the particular power-of-two cases — geometric setup
 
 When `ulp p ≠ ulp q` (so Lemma 4 does not apply) and the products nearly cancel
@@ -1397,8 +1488,7 @@ theorem disc_corr_particular (beta : radix) (hbeta : beta.val = 2)
     (hulp_ne : ulp beta (FLX_exp prec) p ≠ ulp beta (FLX_exp prec) q)
     (hclose : p - q ≤ 2 * ulp beta (FLX_exp prec) q)
     (hbranch : 3 * |p - q| < p + q)
-    (hgb : mag beta q ≤ mag beta b + mag beta b)
-    (hgc : mag beta q ≤ mag beta a + mag beta c) :
+    (hp3 : 3 ≤ prec) :
     |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
   have hValid := FLX_exp_valid prec hp
   have hMon := FLX_exp_monotone prec
@@ -1423,6 +1513,30 @@ theorem disc_corr_particular (beta : radix) (hbeta : beta.val = 2)
       have := bpow_mag_gt beta q; rwa [abs_of_pos hq_pos] at this
     have hq_ulp := id_p_ulp_le_bpow beta (FLX_exp prec) hq_pos Fq hq_lt
     rw [hp_pow]; linarith
+  -- Grid discharge: `hgb` (cross, via `mag p = mag q + 1`) and `hgc` (direct, no-bump).
+  have hbb_pos : 0 < b * b := by
+    rcases (mul_self_nonneg b).lt_or_eq with h | h
+    · exact h
+    · exfalso; rw [hpe, ← h, round_0] at hp_pos; exact lt_irrefl 0 hp_pos
+  have hgb : mag beta q ≤ mag beta b + mag beta b := by
+    have h1 := disc_mag_round_prod_le beta prec hp choice hbb_pos
+    rw [← hpe] at h1; omega
+  have hac_pos : 0 < a * c := by
+    by_contra h; push_neg at h
+    have hqle : q ≤ 0 := by
+      rw [hqe]
+      calc round beta (FLX_exp prec) (Znearest choice) (a * c)
+          ≤ round beta (FLX_exp prec) (Znearest choice) 0 :=
+            round_le beta (FLX_exp prec) hValid (Znearest choice) h
+        _ = 0 := round_0 beta (FLX_exp prec) (Znearest choice)
+    linarith
+  have hq_low : bpow beta (mag beta q - 1) < q :=
+    disc_lower_in_binade beta hbeta prec hp3 hq_pos (by rw [← hp_pow]; exact hclose)
+  have hgc : mag beta q ≤ mag beta a + mag beta c := by
+    have hq_low' : bpow beta (mag beta (round beta (FLX_exp prec) (Znearest choice) (a * c)) - 1)
+        < round beta (FLX_exp prec) (Znearest choice) (a * c) := by rw [← hqe]; exact hq_low
+    have h := disc_mag_no_bump beta prec hp choice hac_pos hq_low'
+    rw [← hqe] at h; exact h
   -- Trivial half-ulp bounds.
   have hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
     rw [hdp, abs_sub_comm, hpe]
@@ -1471,8 +1585,7 @@ theorem disc_corr_particular_lo (beta : radix) (hbeta : beta.val = 2)
     (hulp_ne : ulp beta (FLX_exp prec) p ≠ ulp beta (FLX_exp prec) q)
     (hclose : q - p ≤ 2 * ulp beta (FLX_exp prec) p)
     (hbranch : 3 * |p - q| < p + q)
-    (hgb : mag beta p ≤ mag beta b + mag beta b)
-    (hgc : mag beta p ≤ mag beta a + mag beta c) :
+    (hp3 : 3 ≤ prec) :
     |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
   have hValid := FLX_exp_valid prec hp
   have hMon := FLX_exp_monotone prec
@@ -1495,6 +1608,31 @@ theorem disc_corr_particular_lo (beta : radix) (hbeta : beta.val = 2)
       have := bpow_mag_gt beta p; rwa [abs_of_pos hp_pos] at this
     have hp_ulp := id_p_ulp_le_bpow beta (FLX_exp prec) hp_pos Fp hp_lt
     rw [hq_pow]; linarith
+  -- Grid discharge: `hgb` (direct, no-bump) and `hgc` (cross, via `mag q = mag p + 1`).
+  have hbb_pos : 0 < b * b := by
+    rcases (mul_self_nonneg b).lt_or_eq with h | h
+    · exact h
+    · exfalso; rw [hpe, ← h, round_0] at hp_pos; exact lt_irrefl 0 hp_pos
+  have hp_low : bpow beta (mag beta p - 1) < p :=
+    disc_lower_in_binade beta hbeta prec hp3 hp_pos (by rw [← hq_pow]; exact hclose)
+  have hgb : mag beta p ≤ mag beta b + mag beta b := by
+    have hp_low' : bpow beta (mag beta (round beta (FLX_exp prec) (Znearest choice) (b * b)) - 1)
+        < round beta (FLX_exp prec) (Znearest choice) (b * b) := by rw [← hpe]; exact hp_low
+    have h := disc_mag_no_bump beta prec hp choice hbb_pos hp_low'
+    rw [← hpe] at h; exact h
+  have hq_pos : 0 < q := lt_trans hp_pos hpq
+  have hac_pos : 0 < a * c := by
+    by_contra h; push_neg at h
+    have hqle : q ≤ 0 := by
+      rw [hqe]
+      calc round beta (FLX_exp prec) (Znearest choice) (a * c)
+          ≤ round beta (FLX_exp prec) (Znearest choice) 0 :=
+            round_le beta (FLX_exp prec) hValid (Znearest choice) h
+        _ = 0 := round_0 beta (FLX_exp prec) (Znearest choice)
+    linarith
+  have hgc : mag beta p ≤ mag beta a + mag beta c := by
+    have h1 := disc_mag_round_prod_le beta prec hp choice hac_pos
+    rw [← hqe] at h1; omega
   -- Trivial half-ulp bounds.
   have hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
     rw [hdp, abs_sub_comm, hpe]
@@ -1519,6 +1657,99 @@ theorem disc_corr_particular_lo (beta : radix) (hbeta : beta.val = 2)
           (by rw [neg_mul_neg]; exact not_le.mpr hopp)
       exact disc_corr_particular_opp_neg_lo beta hbeta prec hp choice a b c hdp hdq hg hd
         hp_pos hpq hmag hpqF hpq_ge hdp_bd hdq_bd (le_of_lt hdp_neg) hdq_nn
+
+/-! ### Boldo §3 — the full correction dispatch
+
+The correction branch (`3|p − q| < p + q`, `p ≠ q`) splits — after `p = q` (handled
+by `disc_corr_pq_eq`) — on the ulps of `p` and `q`:
+- `ulp p = ulp q` → Lemma 4 (`disc_corr_lemma4`);
+- distinct ulps, far (`ulp p + ulp q ≤ |p − q|`) → `disc_corr_far`;
+- distinct ulps, near → the §3.2.2 particular case, oriented by `q < p` (case A,
+  `disc_corr_particular`) or `p < q` (case B, `disc_corr_particular_lo`).
+
+The two structural facts the dispatch must supply to the particular cases are the
+*tight* gap bound `p − q ≤ 2·ulp(min)` (the "not-far" test only gives `< 3·ulp(min)`)
+and the grid bounds on `mag(min p q)`. Both are proved here. -/
+
+/-- **Tight gap in the distinct-ulp near regime.** With `q < p`, distinct ulps, and
+`p ≤ 2q` (Lemma 1), `mag p = mag q + 1` so `ulp p = 2·ulp q`. If moreover the gap is
+not "far" (`p − q < ulp p + ulp q = 3·ulp q`), then `p − q ≤ 2·ulp q`: writing both
+floats over the common grid `β^(cexp q)` (with `cexp p = cexp q + 1`), `p − q` is an
+integer multiple of `ulp q` strictly below `3·ulp q`. Radix 2. -/
+theorem disc_gap_le_two_ulp (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    {p q : ℝ}
+    (Fp : generic_format beta (FLX_exp prec) p)
+    (Fq : generic_format beta (FLX_exp prec) q)
+    (hq_pos : 0 < q) (hqp : q < p)
+    (hulp_ne : ulp beta (FLX_exp prec) p ≠ ulp beta (FLX_exp prec) q)
+    (hp_le : p ≤ 2 * q)
+    (hnotfar : p - q < ulp beta (FLX_exp prec) p + ulp beta (FLX_exp prec) q) :
+    p - q ≤ 2 * ulp beta (FLX_exp prec) q := by
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have hq_ne : q ≠ 0 := ne_of_gt hq_pos
+  have hp_ne : p ≠ 0 := ne_of_gt hp_pos
+  set mp := mag beta p with hmp
+  set mq := mag beta q with hmq
+  have hcp0 : cexp beta (FLX_exp prec) p = mp - prec := by unfold cexp FLX_exp; rw [← hmp]
+  have hcq0 : cexp beta (FLX_exp prec) q = mq - prec := by unfold cexp FLX_exp; rw [← hmq]
+  -- `mag p = mag q + 1`.
+  have hq_ub : q < bpow beta mq := by
+    have := bpow_mag_gt beta q; rwa [abs_of_pos hq_pos, ← hmq] at this
+  have hmag_le : mq ≤ mp := by
+    have := mag_le_abs beta hq_ne (y := p)
+      (by rw [abs_of_pos hq_pos, abs_of_pos hp_pos]; linarith)
+    rwa [← hmp, ← hmq] at this
+  have hmag_lt : mq < mp := by
+    rcases lt_or_eq_of_le hmag_le with h | h
+    · exact h
+    · exact absurd (by rw [ulp_neq_0 beta (FLX_exp prec) hp_ne,
+        ulp_neq_0 beta (FLX_exp prec) hq_ne, hcp0, hcq0, h]) hulp_ne
+  have hp_lt2 : p < bpow beta (mq + 1) := by
+    have hd : bpow beta (mq + 1) = 2 * bpow beta mq := by
+      rw [bpow_plus, bpow_one, hbeta]; push_cast; ring
+    rw [hd]; linarith [hp_le, hq_ub]
+  have hmag_ub : mp ≤ mq + 1 := by
+    have := mag_le_bpow beta hp_ne (show |p| < bpow beta (mq + 1) by rwa [abs_of_pos hp_pos])
+    rwa [← hmp] at this
+  have hmag : mp = mq + 1 := by omega
+  -- `cexp p = cexp q + 1`; both floats over the common grid `u = β^(cexp q)`.
+  have hcpq : cexp beta (FLX_exp prec) p = cexp beta (FLX_exp prec) q + 1 := by
+    rw [hcp0, hcq0, hmag]; ring
+  have huq : ulp beta (FLX_exp prec) q = bpow beta (cexp beta (FLX_exp prec) q) :=
+    ulp_neq_0 beta (FLX_exp prec) hq_ne
+  have hup : ulp beta (FLX_exp prec) p = bpow beta (cexp beta (FLX_exp prec) p) :=
+    ulp_neq_0 beta (FLX_exp prec) hp_ne
+  have hbpow_cp : bpow beta (cexp beta (FLX_exp prec) p)
+      = 2 * bpow beta (cexp beta (FLX_exp prec) q) := by
+    rw [hcpq, bpow_plus, bpow_one, hbeta]; push_cast; ring
+  have hpm : p = ((Ztrunc (scaled_mantissa beta (FLX_exp prec) p) : ℤ) : ℝ)
+      * bpow beta (cexp beta (FLX_exp prec) p) := by
+    have h := Fp; unfold generic_format F2R at h; exact h
+  have hqm : q = ((Ztrunc (scaled_mantissa beta (FLX_exp prec) q) : ℤ) : ℝ)
+      * bpow beta (cexp beta (FLX_exp prec) q) := by
+    have h := Fq; unfold generic_format F2R at h; exact h
+  set Mp := (Ztrunc (scaled_mantissa beta (FLX_exp prec) p) : ℤ) with hMpdef
+  set Mq := (Ztrunc (scaled_mantissa beta (FLX_exp prec) q) : ℤ) with hMqdef
+  set u := bpow beta (cexp beta (FLX_exp prec) q) with hu
+  have hu_pos : 0 < u := bpow_gt_0 _ _
+  have hgap : p - q = ((2 * Mp - Mq : ℤ) : ℝ) * u := by
+    rw [hpm, hqm, hbpow_cp]; push_cast; ring
+  -- the integer `k = 2 Mp − Mq` lies in `{1, 2}`.
+  have hkr_pos : 0 < ((2 * Mp - Mq : ℤ) : ℝ) := by
+    by_contra h; push_neg at h
+    have hle : ((2 * Mp - Mq : ℤ) : ℝ) * u ≤ 0 := mul_nonpos_of_nonpos_of_nonneg h (le_of_lt hu_pos)
+    rw [← hgap] at hle; linarith
+  have h3u : ulp beta (FLX_exp prec) p + ulp beta (FLX_exp prec) q = 3 * u := by
+    rw [hup, hbpow_cp, huq]; ring
+  have hkr_lt : ((2 * Mp - Mq : ℤ) : ℝ) < 3 := by
+    rw [h3u, hgap] at hnotfar
+    exact lt_of_mul_lt_mul_right (by linarith [hnotfar]) (le_of_lt hu_pos)
+  have hk_le : (2 * Mp - Mq : ℤ) ≤ 2 := by
+    have : (2 * Mp - Mq : ℤ) < 3 := by exact_mod_cast hkr_lt
+    omega
+  have hkr_le2 : ((2 * Mp - Mq : ℤ) : ℝ) ≤ 2 := by exact_mod_cast hk_le
+  rw [hgap, huq]
+  exact mul_le_mul_of_nonneg_right hkr_le2 (le_of_lt hu_pos)
 
 /-! ## D2: the master error decomposition (general radix) -/
 
