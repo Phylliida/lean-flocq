@@ -716,36 +716,11 @@ theorem disc_prod_grid_or_pow2 (beta : radix) (prec : ℤ) (hp : 0 < prec)
 
 /-! ### Grid-bound discharge for the particular case
 
-The §3.2.2 subcases need grid bounds `mag(min p q) ≤ mag b + mag b` and
-`mag(min p q) ≤ mag a + mag c`. For the smaller product these split into a *cross*
-bound (about the other product's factors, safe because `mag(min) = mag(max) − 1`)
-and a *direct* bound (about its own factors, needing that rounding did not bump the
-magnitude — excluded by `prec ≥ 3` + near-cancellation). The three helpers below
-discharge both. -/
-
-/-- `mag(RN(x·y)) ≤ mag x + mag y + 1` for a positive product. Rounding lifts `mag`
-by at most one (`mag_round`); `mag(x·y) ≤ mag x + mag y` (`mag_mult`). The *cross*
-grid bound follows since the smaller product has `mag = mag(larger round) − 1`. -/
-theorem disc_mag_round_prod_le (beta : radix) (prec : ℤ) (hp : 0 < prec)
-    (choice : ℤ → Bool) {x y : ℝ} (hxy : 0 < x * y) :
-    mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
-      ≤ mag beta x + mag beta y + 1 := by
-  have hValid := FLX_exp_valid prec hp
-  have hx : x ≠ 0 := left_ne_zero_of_mul (ne_of_gt hxy)
-  have hy : y ≠ 0 := right_ne_zero_of_mul (ne_of_gt hxy)
-  have hr_pos : 0 < round beta (FLX_exp prec) (Znearest choice) (x * y) :=
-    gt_0_round_gt_0_FLX beta prec hp (Znearest choice) hxy
-  have hmm : mag beta (x * y) ≤ mag beta x + mag beta y := (mag_mult beta hx hy).2
-  have hmr := mag_round beta (FLX_exp prec) hValid (Znearest choice) (ne_of_gt hr_pos)
-  have hmax : max (mag beta (x * y)) (FLX_exp prec (mag beta (x * y))) = mag beta (x * y) := by
-    apply max_eq_left; unfold FLX_exp; omega
-  rw [hmax] at hmr
-  rcases hmr with h1 | h2
-  · rw [h1]; omega
-  · rw [abs_of_pos hr_pos] at h2
-    have hbump : mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
-        = mag beta (x * y) + 1 := by rw [h2, mag_bpow]
-    omega
+The §3.2.2 subcases (and Lemma 4) need grid bounds `mag(RN(b·b)) ≤ mag b + mag b` and
+`mag(RN(a·c)) ≤ mag a + mag c`. Both follow from the single keystone below: a product
+of two `prec`-significand floats is too small (by a factor argument) to round up to the
+binade-doubling power `β^(mag x+mag y)`, so its magnitude never bumps. This discharges
+every grid hypothesis *unconditionally* — no `prec ≥ 3`, no near-cancellation needed. -/
 
 /-- **Products never bump the magnitude.** `mag(RN(x·y)) ≤ mag x + mag y` for nonzero
 `x·y` with `x, y ∈ F` — *unconditional*. Since `|x| ≤ β^(mag x) − ulp x` and likewise
@@ -849,64 +824,6 @@ theorem disc_mag_prod_no_bump (beta : radix) (prec : ℤ) (hp : 0 < prec)
       _ = (1/2) * bpow beta (ex + ey - prec) := by ring
   have hP_pos : (0:ℝ) < bpow beta (ex + ey - prec) := bpow_gt_0 _ _
   linarith [hgap, hxy_ub', hsmall, hP_pos]
-
-/-- **The smaller product sits in the upper part of its binade.** If `0 < r` and the
-straddled power of two `β^(mag r)` exceeds `r` by at most `2·ulp r`, then with
-`3 ≤ prec` we have `β^(mag r − 1) < r`: near-cancellation keeps `r` within
-`2·ulp r ≤ β^(mag r − 2)` of `β^(mag r)`, well above the bottom power `β^(mag r − 1)`.
-Radix 2. This is what excludes the magnitude-bumping configuration. -/
-theorem disc_lower_in_binade (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp3 : 3 ≤ prec)
-    {r : ℝ} (hr_pos : 0 < r)
-    (hclose : bpow beta (mag beta r) - r ≤ 2 * ulp beta (FLX_exp prec) r) :
-    bpow beta (mag beta r - 1) < r := by
-  have hr_ne := ne_of_gt hr_pos
-  have hcr : cexp beta (FLX_exp prec) r = mag beta r - prec := by unfold cexp FLX_exp; rfl
-  have hulp : ulp beta (FLX_exp prec) r = bpow beta (mag beta r - prec) := by
-    rw [ulp_neq_0 beta (FLX_exp prec) hr_ne, hcr]
-  have h2ulp : 2 * ulp beta (FLX_exp prec) r = bpow beta (mag beta r - prec + 1) := by
-    rw [hulp, show mag beta r - prec + 1 = (mag beta r - prec) + 1 from by ring,
-      bpow_plus, bpow_one, hbeta]; push_cast; ring
-  have hle : bpow beta (mag beta r - prec + 1) ≤ bpow beta (mag beta r - 2) :=
-    bpow_le beta (by omega)
-  have hsplit1 : bpow beta (mag beta r) = 4 * bpow beta (mag beta r - 2) := by
-    rw [show mag beta r = (mag beta r - 2) + 1 + 1 from by ring, bpow_plus, bpow_plus,
-      bpow_one, hbeta]; push_cast; ring
-  have hsplit2 : bpow beta (mag beta r - 1) = 2 * bpow beta (mag beta r - 2) := by
-    rw [show mag beta r - 1 = (mag beta r - 2) + 1 from by ring, bpow_plus, bpow_one, hbeta]
-    push_cast; ring
-  rw [h2ulp] at hclose
-  have hβ2_pos : 0 < bpow beta (mag beta r - 2) := bpow_gt_0 _ _
-  rw [hsplit2]
-  linarith [hclose, hle, hβ2_pos, hsplit1]
-
-/-- **No magnitude-bump for the smaller product.** If `r = RN(x·y) > 0` lies in the
-upper part of its binade (`β^(mag r − 1) < r`), rounding did not bump `mag`, so
-`mag r ≤ mag x + mag y`. (Otherwise `r = β^(mag r − 1)`, the bottom power.) This is
-the *direct* grid bound. -/
-theorem disc_mag_no_bump (beta : radix) (prec : ℤ) (hp : 0 < prec)
-    (choice : ℤ → Bool) {x y : ℝ} (hxy : 0 < x * y)
-    (hr_low : bpow beta (mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y)) - 1)
-        < round beta (FLX_exp prec) (Znearest choice) (x * y)) :
-    mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
-      ≤ mag beta x + mag beta y := by
-  have hValid := FLX_exp_valid prec hp
-  have hx : x ≠ 0 := left_ne_zero_of_mul (ne_of_gt hxy)
-  have hy : y ≠ 0 := right_ne_zero_of_mul (ne_of_gt hxy)
-  have hr_pos : 0 < round beta (FLX_exp prec) (Znearest choice) (x * y) :=
-    gt_0_round_gt_0_FLX beta prec hp (Znearest choice) hxy
-  have hmm : mag beta (x * y) ≤ mag beta x + mag beta y := (mag_mult beta hx hy).2
-  have hmr := mag_round beta (FLX_exp prec) hValid (Znearest choice) (ne_of_gt hr_pos)
-  have hmax : max (mag beta (x * y)) (FLX_exp prec (mag beta (x * y))) = mag beta (x * y) := by
-    apply max_eq_left; unfold FLX_exp; omega
-  rw [hmax] at hmr
-  rcases hmr with h1 | h2
-  · rw [h1]; exact hmm
-  · exfalso
-    rw [abs_of_pos hr_pos] at h2
-    have hbump : mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
-        = mag beta (x * y) + 1 := by rw [h2, mag_bpow]
-    rw [hbump, show mag beta (x * y) + 1 - 1 = mag beta (x * y) from by ring, h2] at hr_low
-    exact lt_irrefl _ hr_low
 
 /-! ### Boldo §3.2.2: the particular power-of-two cases — geometric setup
 
@@ -1947,6 +1864,41 @@ theorem disc_correction (beta : radix) (hbeta : beta.val = 2)
             (by rw [abs_of_nonneg (by linarith : (0:ℝ) ≤ p - q)] at hfar; exact hfar)
         exact disc_corr_particular beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd
           hq_pos hgt hue hgap hbranch
+
+/-- **Boldo §3 capstone: Kahan's branch algorithm is within `2·ulp(d)`** (radix 2,
+real test). Combining the benign branch (`disc_branch_benign`) and the correction
+branch (`disc_correction`): for the result
+
+```
+  d = if p + q ≤ 3·|p − q| then ◦(p − q) else ◦((p − q) + ◦(dp − dq))
+```
+
+of Kahan's discriminant algorithm with the *real* test `3|p − q| ≥ p + q`, the error
+`|d − (b·b − a·c)| ≤ 2·ulp(d)`. This is the full result of Boldo (2009) §3 — every case
+of the branch algorithm, both orientations, 0 `sorry`s. (The §4 reconciliation of the
+real test with the *rounded* floating-point test `3·◦|p − q| ≥ ◦(p + q)` remains.) -/
+theorem disc_branch_real_test (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq g d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = if p + q ≤ 3 * |p - q|
+              then round beta (FLX_exp prec) (Znearest choice) (p - q)
+              else round beta (FLX_exp prec) (Znearest choice) ((p - q) + g)) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  rw [hd]
+  by_cases htest : p + q ≤ 3 * |p - q|
+  · rw [if_pos htest]
+    exact disc_branch_benign beta hbeta prec hp choice a b c hpe hqe rfl htest
+  · rw [if_neg htest]
+    push_neg at htest
+    exact disc_correction beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg rfl htest
 
 /-! ## D2: the master error decomposition (general radix) -/
 
