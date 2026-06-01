@@ -634,6 +634,44 @@ theorem disc_corr_lemma4 (beta : radix) (prec : ℤ) (hp : 0 < prec)
     have hbound : |dp - dq| ≤ bpow beta (prec + E) := by rw [← hulp_p]; exact hdpdq_le
     exact disc_diff_on_grid_exact beta prec hp E _ _ hdp_E hdq_E hbound
 
+/-- **The grid hypothesis holds unless the product rounds to a power of two.**
+
+For `b ≠ 0`, either `cexp(◦(b·b)) − prec ≤ 2·cexp b` (the grid hypothesis of
+Lemma 4) holds, or `◦(b·b)` is the boundary power of two `β^(2·cexp b + 2·prec) =
+β^(2·mag b)`. From `mag_mult` (`mag(b·b) ≤ 2·mag b`) and `mag_round` (rounding
+either preserves `mag` or jumps to the next power of `β`): the grid bound fails
+*only* when `b·b` rounds up across the binade `2·mag b` — exactly the case that
+feeds Boldo's §3.2.2 particular cases. This is the tool that splits Lemma 4's
+clean regime from its power-of-two boundary. -/
+theorem disc_prod_grid_or_pow2 (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {b : ℝ} (hb : b ≠ 0) :
+    cexp beta (FLX_exp prec) (round beta (FLX_exp prec) (Znearest choice) (b * b)) - prec
+        ≤ cexp beta (FLX_exp prec) b + cexp beta (FLX_exp prec) b
+      ∨ round beta (FLX_exp prec) (Znearest choice) (b * b)
+        = bpow beta (cexp beta (FLX_exp prec) b + cexp beta (FLX_exp prec) b + 2 * prec) := by
+  have hValid := FLX_exp_valid prec hp
+  have hbb_pos : 0 < b * b := mul_self_pos.mpr hb
+  have hp_pos : 0 < round beta (FLX_exp prec) (Znearest choice) (b * b) :=
+    gt_0_round_gt_0_FLX beta prec hp (Znearest choice) hbb_pos
+  have hp_ne : round beta (FLX_exp prec) (Znearest choice) (b * b) ≠ 0 := ne_of_gt hp_pos
+  have hmag_mult : mag beta (b * b) ≤ mag beta b + mag beta b := (mag_mult beta hb hb).2
+  have hmr := mag_round beta (FLX_exp prec) hValid (Znearest choice) hp_ne
+  have hmax : max (mag beta (b * b)) (FLX_exp prec (mag beta (b * b))) = mag beta (b * b) := by
+    apply max_eq_left; unfold FLX_exp; omega
+  rw [hmax] at hmr
+  set p := round beta (FLX_exp prec) (Znearest choice) (b * b) with hpdef
+  rcases hmr with hmr1 | hmr2
+  · -- rounding preserved `mag`: `mag p = mag(b·b) ≤ 2·mag b`.
+    left; unfold cexp FLX_exp; omega
+  · -- rounding jumped to `β^(mag(b·b))`; `p = β^(mag(b·b))` since `p > 0`.
+    rw [abs_of_pos hp_pos] at hmr2
+    have hmagp : mag beta p = mag beta (b * b) + 1 := by rw [hmr2, mag_bpow]
+    rcases lt_or_eq_of_le hmag_mult with hlt | heq
+    · -- below the binade: `mag p = mag(b·b)+1 ≤ 2·mag b`.
+      left; unfold cexp FLX_exp; omega
+    · -- on the binade `mag(b·b) = 2·mag b`: `p = β^(2·mag b)`, the boundary power.
+      right; rw [hmr2, heq]; congr 1; unfold cexp FLX_exp; omega
+
 /-! ## D2: the master error decomposition (general radix) -/
 
 /-- **Error decomposition of the naive result.**
