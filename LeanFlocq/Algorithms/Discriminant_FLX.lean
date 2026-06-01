@@ -251,4 +251,104 @@ theorem disc_fma_error_decomp (beta : radix) (prec : ℤ) (hp : 0 < prec)
     _ ≤ v * |s1 + s2| + v * |p - q| + v * |dp - dq| := by linarith [eout, e1, e2]
     _ = v * (|s1 + s2| + |p - q| + |dp - dq|) := by ring
 
+/-! ## D3: the opposite-sign (no-cancellation) 2u bound
+
+The canonical Kahan determinant algorithm (John D. Cook's form), specialized to
+the discriminant `b·b − a·c`:
+```
+  w := RN(a·c)        e := w − a·c        (e exact, via fma — D0)
+  f := RN(b·b − w)    x := RN(f + e)
+```
+Here `b·b − a·c = (b·b − w) + e`, so the result has only TWO rounding errors:
+`x − (b·b − a·c) = (f − (b·b − w)) + (x − (f + e))`.
+
+When `a·c ≤ 0` (the discriminant is `b·b + |a·c|`, a sum of squares — *no
+cancellation*), this is enough to prove the full `2u` relative bound directly,
+with no grid/Gappa machinery. This is the regime Jeannerod–Louvet–Muller single
+out, and it is exactly what CAD's positive-definite predicates hit.
+
+The general (cancelling) case `a·c > 0` needs their grid-level argument and is
+left for a faithful port of the published proof. -/
+
+/-- **Kahan discriminant, opposite-sign case: relative error ≤ 2u.**
+
+For `a·c ≤ 0`, the FMA algorithm `w = RN(a·c)`, `e = w − a·c`, `f = RN(b·b − w)`,
+`x = RN(f + e)` computes `b·b − a·c` with relative error at most `2·u_ro`.
+General radix; no format hypotheses needed (the fma step makes `e` exact, which
+is what the equation `e = w − a·c` encodes). -/
+theorem disc_kahan_opp_sign_2u (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ) (hac : a * c ≤ 0)
+    {w e f x : ℝ}
+    (hw : w = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (he : e = w - a * c)
+    (hf : f = round beta (FLX_exp prec) (Znearest choice) (b * b - w))
+    (hx : x = round beta (FLX_exp prec) (Znearest choice) (f + e)) :
+    |x - (b * b - a * c)| ≤ 2 * u_ro beta prec * |b * b - a * c| := by
+  -- Notation: u = unit roundoff, v = sharp relative error u/(1+u).
+  have hu_nn : 0 ≤ u_ro beta prec := u_ro_pos beta prec
+  set u := u_ro beta prec with hu_def
+  set v := u / (1 + u) with hv_def
+  have h1pu : (0 : ℝ) < 1 + u := by linarith
+  have hvu : v * (1 + u) = u := by rw [hv_def]; field_simp
+  have hv_nn : 0 ≤ v := by rw [hv_def]; positivity
+  -- The sharp per-rounding bound, in `v` form.
+  have rel : ∀ z : ℝ, |round beta (FLX_exp prec) (Znearest choice) z - z| ≤ v * |z| := by
+    intro z; rw [hv_def, hu_def]; exact relative_error_N_FLX' beta prec hp choice z
+  -- A reusable triangle inequality `|s - t| ≤ |s| + |t|`.
+  have habs_sub : ∀ s t : ℝ, |s - t| ≤ |s| + |t| := fun s t => by
+    calc |s - t| = |s + (-t)| := by ring_nf
+      _ ≤ |s| + |(-t)| := abs_add_le _ _
+      _ = |s| + |t| := by rw [abs_neg]
+  -- The discriminant is nonnegative, and dominates |a·c|.
+  have hD_nn : 0 ≤ b * b - a * c := by nlinarith [mul_self_nonneg b]
+  have hQ_le_D : |a * c| ≤ b * b - a * c := by
+    rw [abs_of_nonpos hac]; nlinarith [mul_self_nonneg b]
+  -- Per-step error bounds.
+  have he_bd : |e| ≤ v * |a * c| := by
+    rw [he, hw]; exact rel (a * c)
+  -- εf = f − (b·b − w);  |b·b − w| ≤ D(1+v).
+  have hbw_eq : b * b - w = (b * b - a * c) - e := by rw [he]; ring
+  have hbw : |b * b - w| ≤ (b * b - a * c) * (1 + v) := by
+    calc |b * b - w| = |(b * b - a * c) - e| := by rw [hbw_eq]
+      _ ≤ |b * b - a * c| + |e| := habs_sub _ _
+      _ = (b * b - a * c) + |e| := by rw [abs_of_nonneg hD_nn]
+      _ ≤ (b * b - a * c) + v * |a * c| := by linarith [he_bd]
+      _ ≤ (b * b - a * c) + v * (b * b - a * c) := by
+            have := mul_le_mul_of_nonneg_left hQ_le_D hv_nn; linarith
+      _ = (b * b - a * c) * (1 + v) := by ring
+  have hef : |f - (b * b - w)| ≤ v * ((b * b - a * c) * (1 + v)) := by
+    calc |f - (b * b - w)| ≤ v * |b * b - w| := by rw [hf]; exact rel (b * b - w)
+      _ ≤ v * ((b * b - a * c) * (1 + v)) := mul_le_mul_of_nonneg_left hbw hv_nn
+  -- εx = x − (f + e);  f + e = D + εf, so |f + e| ≤ D(1 + v(1+v)).
+  have hfe_eq : f + e = (b * b - a * c) + (f - (b * b - w)) := by rw [he]; ring
+  have hfe : |f + e| ≤ (b * b - a * c) * (1 + v * (1 + v)) := by
+    calc |f + e| = |(b * b - a * c) + (f - (b * b - w))| := by rw [hfe_eq]
+      _ ≤ |b * b - a * c| + |f - (b * b - w)| := abs_add_le _ _
+      _ = (b * b - a * c) + |f - (b * b - w)| := by rw [abs_of_nonneg hD_nn]
+      _ ≤ (b * b - a * c) + v * ((b * b - a * c) * (1 + v)) := by linarith [hef]
+      _ = (b * b - a * c) * (1 + v * (1 + v)) := by ring
+  have hex : |x - (f + e)| ≤ v * ((b * b - a * c) * (1 + v * (1 + v))) := by
+    calc |x - (f + e)| ≤ v * |f + e| := by rw [hx]; exact rel (f + e)
+      _ ≤ v * ((b * b - a * c) * (1 + v * (1 + v))) := mul_le_mul_of_nonneg_left hfe hv_nn
+  -- Assemble:  x − D = εf + εx.
+  have hsplit : x - (b * b - a * c) = (f - (b * b - w)) + (x - (f + e)) := by rw [he]; ring
+  -- Scalar fact:  v·(2 + 2v + v²) ≤ 2u.  (Multiply by (1−v) > 0 and use u(1−v) = v.)
+  have hv_le_u : v ≤ u := by rw [hv_def]; exact div_le_self hu_nn (by linarith)
+  have hu_lt1 : u < 1 := by rw [hu_def]; exact u_ro_lt_1 beta prec hp
+  have h1mv_pos : (0 : ℝ) < 1 - v := by
+    have := lt_of_le_of_lt hv_le_u hu_lt1; linarith
+  have huv : u * (1 - v) = v := by linear_combination -hvu
+  have hscalar : v * (2 + 2 * v + v * v) ≤ 2 * u := by
+    nlinarith [huv, h1mv_pos, hv_nn,
+      mul_nonneg (mul_nonneg hv_nn hv_nn) hv_nn,
+      mul_nonneg (mul_nonneg (mul_nonneg hv_nn hv_nn) hv_nn) hv_nn]
+  calc |x - (b * b - a * c)|
+      = |(f - (b * b - w)) + (x - (f + e))| := by rw [hsplit]
+    _ ≤ |f - (b * b - w)| + |x - (f + e)| := abs_add_le _ _
+    _ ≤ v * ((b * b - a * c) * (1 + v))
+          + v * ((b * b - a * c) * (1 + v * (1 + v))) := by linarith [hef, hex]
+    _ = (b * b - a * c) * (v * (2 + 2 * v + v * v)) := by ring
+    _ ≤ (b * b - a * c) * (2 * u) := mul_le_mul_of_nonneg_left hscalar hD_nn
+    _ = 2 * u * |b * b - a * c| := by rw [abs_of_nonneg hD_nn]; ring
+
 end LeanFlocq
