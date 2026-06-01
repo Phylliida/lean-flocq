@@ -178,6 +178,24 @@ theorem ulp_le_ulp_round_FLX (beta : radix) (prec : ℤ) (hp : 0 < prec)
     · rw [ulp_neq_0 beta (FLX_exp prec) hx]
       exact bpow_le beta (by unfold cexp FLX_exp; omega)
 
+/-- Radix 2: `ulp(2·x) = 2·ulp(x)` (doubling shifts one binade). -/
+theorem ulp_two_mul_r2 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    (x : ℝ) :
+    ulp beta (FLX_exp prec) (2 * x) = 2 * ulp beta (FLX_exp prec) x := by
+  have hb : bpow beta 1 = 2 := by rw [bpow_one, hbeta]; norm_num
+  have hs := ulp_FLX_exact_shift beta prec hp x 1
+  rw [hb] at hs
+  rw [show (2 : ℝ) * x = x * 2 from by ring, hs]; ring
+
+/-- Radix 2: `ulp(x/2) = ulp(x)/2`. -/
+theorem ulp_half_r2 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    (x : ℝ) :
+    ulp beta (FLX_exp prec) (x / 2) = ulp beta (FLX_exp prec) x / 2 := by
+  have hb : bpow beta (-1) = 1 / 2 := by unfold bpow; rw [hbeta]; norm_num
+  have hs := ulp_FLX_exact_shift beta prec hp x (-1)
+  rw [hb] at hs
+  rw [show x / 2 = x * (1 / 2) from by ring, hs]; ring
+
 /-- **ulp-form error decomposition** (Boldo §3, the common starting bound).
 
 For `p = RN(b·b)`, `q = RN(a·c)`, `d = RN(p − q)`:
@@ -214,6 +232,82 @@ theorem disc_branch_err_decomp (beta : radix) (prec : ℤ) (hp : 0 < prec)
       ≤ |d - (p - q)| + |p - b * b| + |q - a * c| := by linarith [t1, t2, t3]
     _ ≤ (1/2) * ulp beta (FLX_exp prec) d + (1/2) * ulp beta (FLX_exp prec) p
           + (1/2) * ulp beta (FLX_exp prec) q := by linarith [ed, ep, eq']
+
+/-- **Benign-case ulp key** (radix 2, Boldo §3.1).
+
+Under the benign test `3|p − q| ≥ p + q` with `p ≥ 0`, the products' ulps are
+controlled by the ulp of the result: `ulp p + ulp q ≤ 3·ulp(RN(p − q))`. Three
+subcases (`p ≥ q ≥ 0`, `p ≥ q > ` negative, `q > p`), each using the radix-2
+doubling/halving ulp shifts and `ulp ≤ ulp∘round`. -/
+theorem disc_benign_ulp_key (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {p q : ℝ}
+    (hp_nn : 0 ≤ p)
+    (hcond : p + q ≤ 3 * |p - q|) :
+    ulp beta (FLX_exp prec) p + ulp beta (FLX_exp prec) q
+      ≤ 3 * ulp beta (FLX_exp prec) (round beta (FLX_exp prec) (Znearest choice) (p - q)) := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  set R := round beta (FLX_exp prec) (Znearest choice) (p - q) with hR
+  have hround : ulp beta (FLX_exp prec) (p - q) ≤ ulp beta (FLX_exp prec) R := by
+    rw [hR]; exact ulp_le_ulp_round_FLX beta prec hp choice (p - q)
+  have hud0 : 0 ≤ ulp beta (FLX_exp prec) R := ulp_ge_0 _ _ _
+  rcases le_or_lt q p with hqp | hqp
+  · -- q ≤ p:  |p - q| = p - q,  2q ≤ p,  p - q ≥ p/2.
+    have habs : |p - q| = p - q := abs_of_nonneg (by linarith)
+    rw [habs] at hcond
+    have h2q : 2 * q ≤ p := by linarith
+    have hpq2 : p / 2 ≤ p - q := by linarith
+    rcases le_or_lt 0 q with hq0 | hq0
+    · -- q ≥ 0:  2·ulp q ≤ ulp p  and  ulp p / 2 ≤ ulp R.
+      have f1 : 2 * ulp beta (FLX_exp prec) q ≤ ulp beta (FLX_exp prec) p := by
+        rw [← ulp_two_mul_r2 beta hbeta prec hp q]
+        exact ulp_le_pos beta (FLX_exp prec) hValid hMon (by linarith) h2q
+      have f2 : ulp beta (FLX_exp prec) p / 2 ≤ ulp beta (FLX_exp prec) R := by
+        rw [← ulp_half_r2 beta hbeta prec hp p]
+        exact le_trans (ulp_le_pos beta (FLX_exp prec) hValid hMon (by linarith) hpq2) hround
+      linarith
+    · -- q < 0:  ulp p ≤ ulp R  and  ulp q ≤ ulp R.
+      have f1 : ulp beta (FLX_exp prec) p ≤ ulp beta (FLX_exp prec) R :=
+        le_trans (ulp_le_pos beta (FLX_exp prec) hValid hMon hp_nn (by linarith)) hround
+      have f2 : ulp beta (FLX_exp prec) q ≤ ulp beta (FLX_exp prec) R := by
+        refine le_trans ?_ hround
+        apply ulp_le beta (FLX_exp prec) hValid hMon
+        rw [habs, abs_of_neg hq0]; linarith
+      linarith
+  · -- q > p:  |p - q| = q - p,  2p ≤ q,  q - p ≥ q/2.
+    have hq_pos : 0 < q := lt_of_le_of_lt hp_nn hqp
+    have habs : |p - q| = q - p := by rw [abs_of_nonpos (by linarith)]; ring
+    rw [habs] at hcond
+    have h2p : 2 * p ≤ q := by linarith
+    have hpq2 : q / 2 ≤ q - p := by linarith
+    have f1 : 2 * ulp beta (FLX_exp prec) p ≤ ulp beta (FLX_exp prec) q := by
+      rw [← ulp_two_mul_r2 beta hbeta prec hp p]
+      exact ulp_le_pos beta (FLX_exp prec) hValid hMon (by linarith) h2p
+    have f2 : ulp beta (FLX_exp prec) q / 2 ≤ ulp beta (FLX_exp prec) R := by
+      rw [← ulp_half_r2 beta hbeta prec hp q]
+      refine le_trans ?_ hround
+      apply ulp_le beta (FLX_exp prec) hValid hMon
+      rw [habs, abs_of_nonneg (by linarith : (0:ℝ) ≤ q / 2)]; linarith
+    linarith
+
+/-- **Boldo §3.1: the benign branch is within `2·ulp(d)`** (radix 2).
+
+When `3|p − q| ≥ p + q`, the algorithm returns `d = RN(p − q)`, and
+`|d − (b·b − a·c)| ≤ 2·ulp(d)`. Combines the ulp-form decomposition with the
+benign ulp key. -/
+theorem disc_branch_benign (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hde : d = round beta (FLX_exp prec) (Znearest choice) (p - q))
+    (hcond : p + q ≤ 3 * |p - q|) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hp_nn : 0 ≤ p := by rw [hpe]; exact disc_p_nonneg beta prec hp choice b
+  have hdecomp := disc_branch_err_decomp beta prec hp choice a b c hpe hqe hde
+  have hkey := disc_benign_ulp_key beta hbeta prec hp choice hp_nn hcond
+  rw [← hde] at hkey
+  linarith [hdecomp, hkey]
 
 /-! ## D2: the master error decomposition (general radix) -/
 
