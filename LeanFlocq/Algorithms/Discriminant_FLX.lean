@@ -364,6 +364,32 @@ theorem disc_corr_exact (beta : radix) (prec : ℤ) (hp : 0 < prec)
   rw [hd, hs]
   exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b - a * c)
 
+/-- The product-error difference is bounded by half the ulps of the products:
+`|dp − dq| ≤ ½·ulp p + ½·ulp q`. General radix. -/
+theorem disc_corr_dpdq_bound (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q dp dq : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q) :
+    |dp - dq| ≤ (1/2) * ulp beta (FLX_exp prec) p + (1/2) * ulp beta (FLX_exp prec) q := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hdp_bd : |b * b - p| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+    rw [abs_sub_comm, hpe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b)
+  have hdq_bd : |a * c - q| ≤ (1/2) * ulp beta (FLX_exp prec) q := by
+    rw [abs_sub_comm, hqe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (a * c)
+  have htri : |dp - dq| ≤ |b * b - p| + |a * c - q| := by
+    have h := abs_add_le (b * b - p) (-(a * c - q))
+    rw [show (b * b - p) + -(a * c - q) = dp - dq from by rw [hdp, hdq]; ring,
+      abs_neg] at h
+    exact h
+  linarith
+
 /-- **Boldo §3.2.1 general case: small correction ⟹ within `2·ulp d`** (radix 2).
 
 When `|dp − dq| ≤ ½|p − q|` (the regime `|p − q| ≥ 3·min(ulp p, ulp q)`), the
@@ -406,6 +432,54 @@ theorem disc_corr_general (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp
     rw [hd]; exact le_trans hulp_g (ulp_le_ulp_round_FLX beta prec hp choice ((p - q) + g))
   have hdecomp := disc_corr_err_decomp beta prec hp choice a b c hdp hdq hg hd
   linarith [hdecomp, hulp_gd, ulp_ge_0 beta (FLX_exp prec) d]
+
+/-- **Correction branch, products far apart: `ulp p + ulp q ≤ |p − q| ⟹ δ ≤ 2·ulp d`.**
+
+Combines the `|dp − dq| ≤ ½(ulp p + ulp q)` bound with the general case. -/
+theorem disc_corr_far (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q dp dq g d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hpqF : generic_format beta (FLX_exp prec) (p - q))
+    (hfar : ulp beta (FLX_exp prec) p + ulp beta (FLX_exp prec) q ≤ |p - q|) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hbd := disc_corr_dpdq_bound beta prec hp choice a b c hpe hqe hdp hdq
+  have hsmall : |dp - dq| ≤ |p - q| / 2 := by linarith
+  exact disc_corr_general beta hbeta prec hp choice a b c hdp hdq hg hd hpqF hsmall
+
+/-- **Correction branch, `p = q`: `δ ≤ 2·ulp d`** (in fact `d = RN(b·b − a·c)`).
+
+When `p = q`, `p − q = 0`, `g = RN(dp − dq) = RN(b·b − a·c)`, and the outer round
+is the identity, so `d = RN(b·b − a·c)` and `δ ≤ ½·ulp d`. -/
+theorem disc_corr_pq_eq (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q dp dq g d : ℝ}
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hpq_eq : p = q) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hdpdq : dp - dq = b * b - a * c := by rw [hdp, hdq, hpq_eq]; ring
+  have hg' : g = round beta (FLX_exp prec) (Znearest choice) (b * b - a * c) := by
+    rw [hg, hdpdq]
+  have hg_F : generic_format beta (FLX_exp prec) g := by
+    rw [hg']; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have hd' : d = g := by
+    rw [hd, show p - q = 0 from by rw [hpq_eq]; ring, zero_add]
+    exact round_generic beta (FLX_exp prec) (Znearest choice) hg_F
+  rw [hd', hg']
+  have herr := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b - a * c)
+  have h0 := ulp_ge_0 beta (FLX_exp prec) (round beta (FLX_exp prec) (Znearest choice) (b * b - a * c))
+  linarith
 
 /-! ## D2: the master error decomposition (general radix) -/
 
