@@ -4,7 +4,7 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `c9037a8`+)
+## Status (as of commit `1b47729`+)
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -478,7 +478,9 @@ specific, so this arc is at `beta.val = 2`. Ported so far (radix 2 unless noted)
 The opposite-sign `2u` (sharper than Boldo there) + §3.1 + the §3.2 analytic
 machinery stand as delivered. Next session: Lemma 4 → particular → assembly → §4.
 
-**~34800 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
+**~34826 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
+(Newest: `Algorithms/Discriminant_FLX.lean`, 747 lines / 27 theorems — the
+in-progress Kahan discriminant port; see the discriminant section above.)
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -523,7 +525,8 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Algorithms/ErrFMA.lean` | 251 | `Pff/Pff.v` `FmaErr` (23446–25161), `Pff2Flocq.v` `ErrFMA_correct` (1057) | **Exact error of the FMA (Boldo–Muller) — E0/E1 done, E2 L1 + β2=0 branch typed.** `a·b + c = r1 + r2 + r3` exactly. `twoproduct_eft`/`twosum_eft` (existential EFT interfaces), **`ErrFMA_chain`** (`a·b+c = β1+β2+α2`), **`errfma_gat_exact`** (L1 = Pff `gatCorrect`: `β1−r1 ∈ F` via the engine + `round_N_pt` closeness), **`ErrFMA_be2_zero`** (Pff `FmaErr_aux1`: `a·b+c = r1+γ+α2` when β2=0, via L1 + idempotency). |
 | `Algorithms/ErrFMA_L2.lean` | 776 | `Pff/Pff.v` `FmaErr_aux2`/`gaCorrect`/`Midpoint_aux` (24318–24786, 23856–24316) | **ErrFMA L2 (β2≠0) — COMPLETE.** The Flocq-native replacement for Pff's MSB/LSB. **`errfma_be2_mult_bpow`** (β2 a multiple of `β^min(cexp u1, cexp α1)` via `round_repr_same_exp`), **`errfma_al2_lt_bpow`** (`|α2| < β^min(...)`), **`nonneg_bpow_mult_lt_eq_zero`**/**`neg_bpow_squeeze`** (divisibility squeeze), **`errfma_be2_eq_bpow_upper`**/**`errfma_be2_eq_bpow_lower`** (upper/lower midpoint cores via `round_N_{le,ge}_midp` + squeeze; lower has the `pred_pos` power-of-β branch), **`errfma_be2_div_dichotomy`** (`β1=r1 ∨ β2` a `β^(cexp β1−2)`-multiple; `be1<0` sign-reduces via `round_N_opp`), **`format_mult_bpow_of_cexp_ge`**, **`errfma_ga_exact`** (`(β1−r1)+β2 ∈ F`), **`ErrFMA_be2_nonzero`** (`FmaErr_aux2`), **`ErrFMA_correct`** (the full `FmaErr`: `a·b+c = r1+γ+α2`, both branches + edge cases), **`ErrFMA_threefloat`** (`Fma_FTS`: `a·b+c = r1+r2+r3` via precondition-free `TwoSum(γ,α2)`; `α2∈F` via `plus_error`, `u2∈F` via `mult_error_FLX`). |
 
-**Total: ~785 Lean theorems vs ~480 substantive Coq theorems** (we have extras
+| `Algorithms/Discriminant_FLX.lean` | 747 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — IN PROGRESS.** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus ported from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Full `2u` for the opposite-sign (sum-of-squares) case**: `disc_kahan_error_decomp` (2-error, any sign) + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ |x−(b·b−a·c)| ≤ 2·u_ro·|b·b−a·c|`, sharper than Boldo there). **Boldo branch-algorithm `2·ulp(d)` port (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit `ulp_le_ulp_round_FLX`/`ulp_two_mul_r2`/`ulp_half_r2`/`disc_branch_err_decomp`; **§3.1 benign DONE** (`disc_branch_benign` via `disc_benign_ulp_key`); **§3.2 analytic half DONE** (`disc_corr_err_decomp`, `disc_corr_exact`=Lemma 3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`). Remaining: §3.2 Lemma 4 (integer mantissa) + particular power-of-two cases + assembly + §4 (rounded test, Lemmas 5–12). |
+**Total: ~812 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
 ## Build setup
@@ -768,8 +771,8 @@ The relevant algorithms, sized roughly:
 | ~~`TwoSum` (no precondition)~~ ✓ **done at FLT in `Algorithms/TwoSum.lean` (70 lines, branching form)** | same, general inputs | ~~~400~~ 70 |
 | ~~`Veltkamp` splitting~~ ✓ **DONE at FLX 2026-05-31** (full Veltkamp_Even arc complete, both odd and even radix; `Algorithms/Veltkamp.lean`) | split `x` into hi/lo parts of `prec/2` bits | ~~~400~~ 4161 |
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
-| `ErrFMA` | FMA with an explicit error term | ~500 |
-| Compensated discriminant (`b² − ac`) | sharp error bound for the quadratic discriminant | ~600 |
+| ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
+| Compensated discriminant (`b² − ac`) — **IN PROGRESS** (`Algorithms/Discriminant_FLX.lean`): opposite-sign `2u` DONE; Boldo branch `2·ulp(d)` port §3.1 + §3.2-analytic done, §3.2-discrete + §4 remain | sharp error bound for the quadratic discriminant | ~600 |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
 (roughly 10× ratio).
@@ -934,7 +937,13 @@ to BigInt rationals.
    (`RoundMinusRound_FLX.lean`), L1, β2=0, and the entire L2/β2≠0 midpoint-
    dichotomy arc (`ErrFMA_L2.lean`) are done — **Pff's ~1700-line MSB/LSB `FmaErr`
    replaced by ~700 lines, no MSB/LSB.**
-7. Compensated discriminant (1 session, applies the above).
+7. Compensated discriminant `b·b − a·c` — **IN PROGRESS** (`Algorithms/Discriminant_FLX.lean`,
+   Boldo 2009 `boldo.pdf`). DONE: structural core (D0–D2), opposite-sign `2u`
+   (sharper than Boldo), and the Boldo branch `2·ulp(d)` arc §3.1 (benign) + §3.2
+   analytic machinery. REMAINING (next session): §3.2 Lemma 4 (integer mantissa) →
+   particular power-of-two cases (succ/pred) → correction assembly → full §3 theorem
+   → §4 (rounded-test disagreement, Lemmas 5–12). Not "1 session" — Boldo's own
+   proof was ~5000 Coq lines; this is a multi-session climb, well underway.
 
 #### Veltkamp_Even scope
 
