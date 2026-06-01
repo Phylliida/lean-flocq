@@ -1031,6 +1031,135 @@ theorem disc_corr_particular_opp_pos (beta : radix) (hbeta : beta.val = 2)
   have hud := ulp_ge_0 beta (FLX_exp prec) d
   linarith [hdecomp, hulp_g_2d, hud]
 
+/-! ### Boldo §3.2.2 assembly
+
+In the particular regime — correction branch, `q < p`, distinct ulps, and the
+near-cancellation `p − q ≤ 2·ulp q` — `p` is exactly the straddled power of two
+`β^(mag q)`, and `p − q ≥ ulp q`. Combined with the straddle (`mag p = mag q + 1`)
+and `p − q ∈ F` (Lemma 1), this supplies every structural fact the three subcases
+need; dispatching on the signs of `dp, dq` then closes all of §3.2.2. -/
+
+/-- **`p` is the straddled power of two** (radix 2). In the particular regime, `p`
+is the unique float in `[β^(mag q), β^(mag q) + ulp q]` with `mag p = mag q + 1`,
+namely `β^(mag q)`: the next float above `β^(mag q)` is `β^(mag q) + 2·ulp q`, which
+exceeds the upper bound `β^(mag q) + ulp q`. -/
+theorem disc_particular_p_pow2 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    {p q : ℝ}
+    (Fp : generic_format beta (FLX_exp prec) p)
+    (Fq : generic_format beta (FLX_exp prec) q)
+    (hq_pos : 0 < q) (hqp : q < p)
+    (hmag : mag beta p = mag beta q + 1)
+    (hclose : p - q ≤ 2 * ulp beta (FLX_exp prec) q) :
+    p = bpow beta (mag beta q) := by
+  have hValid := FLX_exp_valid prec hp
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have hq_ne : q ≠ 0 := ne_of_gt hq_pos
+  have hulp_pos : 0 < ulp beta (FLX_exp prec) q := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hq_ne]; exact bpow_gt_0 _ _
+  -- `β^(mag q) ≤ p` (from `mag p = mag q + 1`).
+  have hpow_le_p : bpow beta (mag beta q) ≤ p := by
+    have h := bpow_mag_le beta (ne_of_gt hp_pos)
+    rw [abs_of_pos hp_pos, hmag, show mag beta q + 1 - 1 = mag beta q from by ring] at h
+    exact h
+  -- `q + ulp q ≤ β^(mag q)`, so `p ≤ β^(mag q) + ulp q`.
+  have hq_lt : q < bpow beta (mag beta q) := by
+    have := bpow_mag_gt beta q; rwa [abs_of_pos hq_pos] at this
+  have hq_ulp : q + ulp beta (FLX_exp prec) q ≤ bpow beta (mag beta q) :=
+    id_p_ulp_le_bpow beta (FLX_exp prec) hq_pos Fq hq_lt
+  have hp_ub : p ≤ bpow beta (mag beta q) + ulp beta (FLX_exp prec) q := by linarith [hclose, hq_ulp]
+  -- If `p ≠ β^(mag q)`, the successor `β^(mag q) + 2·ulp q ≤ p` contradicts the upper bound.
+  by_contra hne
+  have hlt : bpow beta (mag beta q) < p := lt_of_le_of_ne hpow_le_p (Ne.symm hne)
+  have hFpow : generic_format beta (FLX_exp prec) (bpow beta (mag beta q)) :=
+    generic_format_bpow beta (FLX_exp prec) (mag beta q) (by unfold FLX_exp; omega)
+  have hsucc_le := succ_le_lt_aux beta (FLX_exp prec) hValid hFpow Fp
+    (le_of_lt (bpow_gt_0 _ _)) hlt
+  rw [succ_eq_pos beta (FLX_exp prec) (le_of_lt (bpow_gt_0 _ _))] at hsucc_le
+  have hulp_pow : ulp beta (FLX_exp prec) (bpow beta (mag beta q))
+      = 2 * ulp beta (FLX_exp prec) q := by
+    rw [ulp_bpow, ulp_neq_0 beta (FLX_exp prec) hq_ne]
+    have hcq : cexp beta (FLX_exp prec) q = mag beta q - prec := by unfold cexp FLX_exp; rfl
+    rw [hcq, show FLX_exp prec (mag beta q + 1) = (mag beta q - prec) + 1 from by unfold FLX_exp; ring,
+      bpow_plus, bpow_one, hbeta]; push_cast; ring
+  rw [hulp_pow] at hsucc_le
+  linarith [hsucc_le, hp_ub, hulp_pos]
+
+/-- **§3.2.2 assembled: the particular case is within `2·ulp d`** (radix 2).
+
+Correction branch (`3|p − q| < p + q`), `q < p`, distinct ulps, near cancellation
+(`p − q ≤ 2·ulp q`). The straddle gives `mag p = mag q + 1`; `p = β^(mag q)` (the
+power of two); `p − q ∈ F` (Lemma 1) and `p − q ≥ ulp q` (spacing). Dispatching on
+`sign(dp·dq)` routes into the three subcases — same-sign (a), opposite/`dp−dq≥0`
+(b.i), opposite/`dp−dq≤0` (b.ii). The grid bounds `hgb`, `hgc` are passed through.
+
+`a, b, c` are floats; `dp, dq` are the (exact) product errors. -/
+theorem disc_corr_particular (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq g d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hq_pos : 0 < q) (hqp : q < p)
+    (hulp_ne : ulp beta (FLX_exp prec) p ≠ ulp beta (FLX_exp prec) q)
+    (hclose : p - q ≤ 2 * ulp beta (FLX_exp prec) q)
+    (hbranch : 3 * |p - q| < p + q)
+    (hgb : mag beta q ≤ mag beta b + mag beta b)
+    (hgc : mag beta q ≤ mag beta a + mag beta c) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have hq0 : q ≠ 0 := ne_of_gt hq_pos
+  have Fp : generic_format beta (FLX_exp prec) p := by
+    rw [hpe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have Fq : generic_format beta (FLX_exp prec) q := by
+    rw [hqe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have habs : |p - q| = p - q := abs_of_nonneg (by linarith)
+  -- Straddle: `mag p = mag q + 1`; then `p = β^(mag q)`.
+  obtain ⟨hmag, -, -⟩ := disc_straddle beta prec hp hq_pos hqp hulp_ne
+    (by rw [habs]; exact hclose)
+  have hp_pow : p = bpow beta (mag beta q) :=
+    disc_particular_p_pow2 beta hbeta prec hp Fp Fq hq_pos hqp hmag hclose
+  -- `p − q ∈ F` (Lemma 1) and `p − q ≥ ulp q`.
+  have hpqF : generic_format beta (FLX_exp prec) (p - q) :=
+    disc_branch_subtract_exact beta prec hp Fp Fq (le_of_lt hp_pos) hbranch
+  have hpq_ge : ulp beta (FLX_exp prec) q ≤ p - q := by
+    have hq_lt : q < bpow beta (mag beta q) := by
+      have := bpow_mag_gt beta q; rwa [abs_of_pos hq_pos] at this
+    have hq_ulp := id_p_ulp_le_bpow beta (FLX_exp prec) hq_pos Fq hq_lt
+    rw [hp_pow]; linarith
+  -- Trivial half-ulp bounds.
+  have hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+    rw [hdp, abs_sub_comm, hpe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b)
+  have hdq_bd : |dq| ≤ (1/2) * ulp beta (FLX_exp prec) q := by
+    rw [hdq, abs_sub_comm, hqe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (a * c)
+  -- Dispatch on the sign of `dp · dq`.
+  rcases le_or_lt 0 (dp * dq) with hsame | hopp
+  · exact disc_corr_particular_same_sign beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd
+      hq_pos hqp hmag hgb hgc hsame
+  · rcases le_or_lt 0 dp with hdp_nn | hdp_neg
+    · -- `dp ≥ 0`, `dq < 0` ⟹ subcase (b.i).
+      have hdq_np : dq ≤ 0 := by
+        by_contra h; push_neg at h; exact absurd (mul_nonneg hdp_nn (le_of_lt h)) (not_le.mpr hopp)
+      exact disc_corr_particular_opp_pos beta hbeta prec hp choice a b c hdp hdq hg hd
+        hq_pos hqp hmag hpqF hpq_ge hdp_bd hdq_bd hdp_nn hdq_np
+    · -- `dp < 0`, `dq > 0` ⟹ subcase (b.ii).
+      have hdq_nn : 0 ≤ dq := by
+        by_contra h; push_neg at h
+        exact absurd (mul_nonneg (le_of_lt (neg_pos.mpr hdp_neg)) (le_of_lt (neg_pos.mpr h)))
+          (by rw [neg_mul_neg]; exact not_le.mpr hopp)
+      exact disc_corr_particular_opp_neg beta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd
+        hq0 hp_pow hgb hgc (le_of_lt hdp_neg) hdq_nn
+
 /-! ## D2: the master error decomposition (general radix) -/
 
 /-- **Error decomposition of the naive result.**
