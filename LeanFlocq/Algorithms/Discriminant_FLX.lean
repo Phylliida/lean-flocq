@@ -1448,6 +1448,78 @@ theorem disc_corr_particular (beta : radix) (hbeta : beta.val = 2)
       exact disc_corr_particular_opp_neg beta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd
         hq0 hp_pow hgb hgc (le_of_lt hdp_neg) hdq_nn
 
+/-- **§3.2.2 assembled, mirror orientation** (`0 < p < q`, radix 2).
+
+The `p < q` counterpart of `disc_corr_particular`. Boldo's WLOG `p ≥ q` covers only
+the `q < p` orientation in our functional setting; here `q` is the larger product and
+the straddled power of two is `q = β^(mag p)`. The geometry (`disc_straddle`,
+`disc_particular_p_pow2`) is reused by swapped instantiation, and the sign dispatch
+routes into the three mirror subcases (`_lo`). `q − p ≥ ulp p` is the mirror spacing. -/
+theorem disc_corr_particular_lo (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq g d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hp_pos : 0 < p) (hpq : p < q)
+    (hulp_ne : ulp beta (FLX_exp prec) p ≠ ulp beta (FLX_exp prec) q)
+    (hclose : q - p ≤ 2 * ulp beta (FLX_exp prec) p)
+    (hbranch : 3 * |p - q| < p + q)
+    (hgb : mag beta p ≤ mag beta b + mag beta b)
+    (hgc : mag beta p ≤ mag beta a + mag beta c) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hp0 : p ≠ 0 := ne_of_gt hp_pos
+  have Fp : generic_format beta (FLX_exp prec) p := by
+    rw [hpe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have Fq : generic_format beta (FLX_exp prec) q := by
+    rw [hqe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  -- Straddle (swapped instantiation): `mag q = mag p + 1`; then `q = β^(mag p)`.
+  obtain ⟨hmag, -, -⟩ := disc_straddle beta prec hp (p := q) (q := p) hp_pos hpq
+    hulp_ne.symm (by rw [abs_of_nonneg (by linarith : (0:ℝ) ≤ q - p)]; exact hclose)
+  have hq_pow : q = bpow beta (mag beta p) :=
+    disc_particular_p_pow2 beta hbeta prec hp Fq Fp hp_pos hpq hmag hclose
+  -- `p − q ∈ F` (Lemma 1) and `q − p ≥ ulp p`.
+  have hpqF : generic_format beta (FLX_exp prec) (p - q) :=
+    disc_branch_subtract_exact beta prec hp Fp Fq (le_of_lt hp_pos) hbranch
+  have hpq_ge : ulp beta (FLX_exp prec) p ≤ q - p := by
+    have hp_lt : p < bpow beta (mag beta p) := by
+      have := bpow_mag_gt beta p; rwa [abs_of_pos hp_pos] at this
+    have hp_ulp := id_p_ulp_le_bpow beta (FLX_exp prec) hp_pos Fp hp_lt
+    rw [hq_pow]; linarith
+  -- Trivial half-ulp bounds.
+  have hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+    rw [hdp, abs_sub_comm, hpe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b)
+  have hdq_bd : |dq| ≤ (1/2) * ulp beta (FLX_exp prec) q := by
+    rw [hdq, abs_sub_comm, hqe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (a * c)
+  -- Dispatch on the sign of `dp · dq`.
+  rcases le_or_lt 0 (dp * dq) with hsame | hopp
+  · exact disc_corr_particular_same_sign_lo beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd
+      hp_pos hpq hmag hgb hgc hsame
+  · rcases le_or_lt 0 dp with hdp_nn | hdp_neg
+    · -- `dp ≥ 0`, `dq < 0` ⟹ exact subcase.
+      have hdq_np : dq ≤ 0 := by
+        by_contra h; push_neg at h; exact absurd (mul_nonneg hdp_nn (le_of_lt h)) (not_le.mpr hopp)
+      exact disc_corr_particular_opp_pos_lo beta prec hp choice Fa Fb Fc hpe hqe hdp hdq hg hd
+        hp0 hq_pow hgb hgc hdp_nn hdq_np
+    · -- `dp < 0`, `dq > 0` ⟹ magnitude subcase.
+      have hdq_nn : 0 ≤ dq := by
+        by_contra h; push_neg at h
+        exact absurd (mul_nonneg (le_of_lt (neg_pos.mpr hdp_neg)) (le_of_lt (neg_pos.mpr h)))
+          (by rw [neg_mul_neg]; exact not_le.mpr hopp)
+      exact disc_corr_particular_opp_neg_lo beta hbeta prec hp choice a b c hdp hdq hg hd
+        hp_pos hpq hmag hpqF hpq_ge hdp_bd hdq_bd (le_of_lt hdp_neg) hdq_nn
+
 /-! ## D2: the master error decomposition (general radix) -/
 
 /-- **Error decomposition of the naive result.**
