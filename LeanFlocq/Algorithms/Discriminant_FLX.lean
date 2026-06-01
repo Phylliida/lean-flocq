@@ -309,6 +309,61 @@ theorem disc_branch_benign (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (h
   rw [← hde] at hkey
   linarith [hdecomp, hkey]
 
+/-! ### Boldo §3.2: the correction branch
+
+When `3|p − q| < p + q` the products nearly cancel; the algorithm returns
+`d = RN((p − q) + g)` with `g = RN(dp − dq)` (and `p − q` exact by Lemma 1).
+Writing `b·b − a·c = (p − q) + (dp − dq)` (D1), the error splits into the outer
+rounding and the inner correction rounding. -/
+
+/-- **Correction-branch error decomposition.**
+
+For `g = RN(dp − dq)` and `d = RN((p − q) + g)` (with `dp = b·b − p`,
+`dq = a·c − q`): `|d − (b·b − a·c)| ≤ ½·ulp d + ½·ulp g`. General radix. -/
+theorem disc_corr_err_decomp (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q dp dq g d : ℝ}
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g)) :
+    |d - (b * b - a * c)|
+      ≤ (1/2) * ulp beta (FLX_exp prec) d + (1/2) * ulp beta (FLX_exp prec) g := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have eo : |d - ((p - q) + g)| ≤ (1/2) * ulp beta (FLX_exp prec) d := by
+    rw [hd]; exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice ((p - q) + g)
+  have ei : |g - (dp - dq)| ≤ (1/2) * ulp beta (FLX_exp prec) g := by
+    rw [hg]; exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (dp - dq)
+  have key : d - (b * b - a * c) = (d - ((p - q) + g)) + (g - (dp - dq)) := by
+    rw [hdp, hdq]; ring
+  rw [key]
+  calc |(d - ((p - q) + g)) + (g - (dp - dq))|
+      ≤ |d - ((p - q) + g)| + |g - (dp - dq)| := abs_add_le _ _
+    _ ≤ (1/2) * ulp beta (FLX_exp prec) d + (1/2) * ulp beta (FLX_exp prec) g := by linarith
+
+/-- **Boldo Lemma 3: if `dp − dq` is exact, the result is within `½·ulp d`.**
+
+Then `g = dp − dq` and `(p − q) + g = b·b − a·c`, so `d = RN(b·b − a·c)`. -/
+theorem disc_corr_exact (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q dp dq g d : ℝ}
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hexact : generic_format beta (FLX_exp prec) (dp - dq)) :
+    |d - (b * b - a * c)| ≤ (1/2) * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hg_exact : g = dp - dq := by
+    rw [hg]; exact round_generic beta (FLX_exp prec) (Znearest choice) hexact
+  have hs : (p - q) + g = b * b - a * c := by rw [hg_exact, hdp, hdq]; ring
+  rw [hd, hs]
+  exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b - a * c)
+
 /-! ## D2: the master error decomposition (general radix) -/
 
 /-- **Error decomposition of the naive result.**
