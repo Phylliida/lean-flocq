@@ -565,6 +565,48 @@ theorem disc_prod_err_mult_bpow (beta : radix) (prec : ℤ) (hp : 0 < prec)
     unfold F2R
     rw [hexp]; push_cast; ring
 
+/-- **Orientation-agnostic inner-exactness core.**
+
+Given the two product errors `dp = b·b − p`, `dq = a·c − q` and a common grid
+exponent `E` lying below both product grids (`E ≤ 2·cexp b` and
+`E ≤ cexp a + cexp c`), if `|dp − dq| ≤ β^(prec+E)` then `dp − dq` is computed
+*exactly*. Both errors are integer multiples of their product grids
+(`disc_prod_err_mult_bpow`); coarsening each onto the common `β^E`
+(`disc_bpow_coarsen`) puts the difference on a single grid, where
+`disc_diff_on_grid_exact` finishes. This is the shared engine of *both*
+orientations of the §3.2.2 particular case — the reference grid is
+`E = mag(min p q) − 2·prec`. General radix. -/
+theorem disc_inner_exact (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (E : ℤ)
+    (hEb : E ≤ cexp beta (FLX_exp prec) b + cexp beta (FLX_exp prec) b)
+    (hEac : E ≤ cexp beta (FLX_exp prec) a + cexp beta (FLX_exp prec) c)
+    (hbound : |dp - dq| ≤ bpow beta (prec + E)) :
+    generic_format beta (FLX_exp prec) (dp - dq) := by
+  obtain ⟨Mdp0, hMdp0⟩ := disc_prod_err_mult_bpow beta prec hp choice Fb Fb
+  obtain ⟨Mdq0, hMdq0⟩ := disc_prod_err_mult_bpow beta prec hp choice Fa Fc
+  have hdp_eq : dp = (Mdp0 : ℝ)
+      * bpow beta (cexp beta (FLX_exp prec) b + cexp beta (FLX_exp prec) b) := by
+    rw [hdp, hpe]; exact hMdp0
+  have hdq_eq : dq = (Mdq0 : ℝ)
+      * bpow beta (cexp beta (FLX_exp prec) a + cexp beta (FLX_exp prec) c) := by
+    rw [hdq, hqe]; exact hMdq0
+  have hdp_E : dp = ((Mdp0 * beta.val
+        ^ (cexp beta (FLX_exp prec) b + cexp beta (FLX_exp prec) b - E).toNat : ℤ) : ℝ)
+        * bpow beta E := by rw [hdp_eq]; exact disc_bpow_coarsen beta Mdp0 E _ hEb
+  have hdq_E : dq = ((Mdq0 * beta.val
+        ^ (cexp beta (FLX_exp prec) a + cexp beta (FLX_exp prec) c - E).toNat : ℤ) : ℝ)
+        * bpow beta E := by rw [hdq_eq]; exact disc_bpow_coarsen beta Mdq0 E _ hEac
+  exact disc_diff_on_grid_exact beta prec hp E _ _ hdp_E hdq_E hbound
+
 /-- **Boldo Lemma 4: equal ulps ⟹ `δ ≤ 2·ulp(d)`** (general radix).
 
 When `ulp p = ulp q` and neither product crosses a binade under rounding (the
@@ -1027,6 +1069,252 @@ theorem disc_corr_particular_opp_pos (beta : radix) (hbeta : beta.val = 2)
   have hulp_g_2d : ulp beta (FLX_exp prec) g ≤ 2 * ulp beta (FLX_exp prec) d := by
     rw [hulp2] at hulp_g_le; linarith
   -- `δ ≤ ½·ulp d + ½·ulp g ≤ 3/2·ulp d ≤ 2·ulp d`.
+  have hdecomp := disc_corr_err_decomp beta prec hp choice a b c hdp hdq hg hd
+  have hud := ulp_ge_0 beta (FLX_exp prec) d
+  linarith [hdecomp, hulp_g_2d, hud]
+
+/-! ### Boldo §3.2.2 — the mirror orientation `p < q`
+
+The three subcases above assume `q < p` (Boldo's WLOG `p ≥ q`). In our *functional*
+rounding setting that WLOG is not free: the swap `(p, dp) ↔ (q, dq)` only flips the
+algorithm's result to `−d` under a *flipped* tie-breaker, and negating the (positive)
+products leaves the positive regime. So the `p < q` orientation — which the square
+discriminant genuinely reaches (e.g. `p = 7`, `q = 8`) — needs its own mirror. The
+geometry (`disc_straddle`, `disc_particular_p_pow2`) is polymorphic in `{p q}` and
+reused by swapped instantiation; only the three sign-subcases are mirrored here.
+Now `q` is the larger product and the straddled power of two is `q = β^(mag p)`. -/
+
+/-- **Mirror subcase (a): same-sign correction is exact** (`p < q`, radix 2).
+Symmetric to `disc_corr_particular_same_sign`: `|dp − dq| ≤ ½·ulp q = ulp p`
+(the smaller product `p` is the reference grid), so `dp − dq` is exact. -/
+theorem disc_corr_particular_same_sign_lo (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq g d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hp_pos : 0 < p) (hpq : p < q)
+    (hmag : mag beta q = mag beta p + 1)
+    (hgb : mag beta p ≤ mag beta b + mag beta b)
+    (hgc : mag beta p ≤ mag beta a + mag beta c)
+    (hsame : 0 ≤ dp * dq) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hp0 : p ≠ 0 := ne_of_gt hp_pos
+  have hq0 : q ≠ 0 := ne_of_gt (lt_trans hp_pos hpq)
+  -- `ulp q = 2·ulp p` (radix 2, `mag q = mag p + 1`).
+  have hulp_q_2p : ulp beta (FLX_exp prec) q = 2 * ulp beta (FLX_exp prec) p := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hq0, ulp_neq_0 beta (FLX_exp prec) hp0]
+    have hcp : cexp beta (FLX_exp prec) p = mag beta p - prec := by unfold cexp FLX_exp; rfl
+    have hcq : cexp beta (FLX_exp prec) q = mag beta q - prec := by unfold cexp FLX_exp; rfl
+    rw [hcq, hcp, hmag, show mag beta p + 1 - prec = (mag beta p - prec) + 1 from by ring,
+      bpow_plus, bpow_one, hbeta]; push_cast; ring
+  have hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+    rw [hdp, abs_sub_comm, hpe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b)
+  have hdq_bd : |dq| ≤ (1/2) * ulp beta (FLX_exp prec) q := by
+    rw [hdq, abs_sub_comm, hqe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (a * c)
+  have hdp_le_p : |dp| ≤ ulp beta (FLX_exp prec) p := by
+    have := ulp_ge_0 beta (FLX_exp prec) p; linarith [hdp_bd]
+  have hdq_le_p : |dq| ≤ ulp beta (FLX_exp prec) p := by
+    rw [hulp_q_2p] at hdq_bd; linarith [hdq_bd]
+  have hbound_ulp : |dp - dq| ≤ ulp beta (FLX_exp prec) p :=
+    abs_sub_le_of_same_sign hsame hdp_le_p hdq_le_p
+  set E := mag beta p - 2 * prec with hE
+  have hbound : |dp - dq| ≤ bpow beta (prec + E) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hp0] at hbound_ulp
+    have hcp : cexp beta (FLX_exp prec) p = mag beta p - prec := by unfold cexp FLX_exp; rfl
+    rw [hcp, show mag beta p - prec = prec + E from by omega] at hbound_ulp
+    exact hbound_ulp
+  have hcb : cexp beta (FLX_exp prec) b = mag beta b - prec := by unfold cexp FLX_exp; rfl
+  have hca : cexp beta (FLX_exp prec) a = mag beta a - prec := by unfold cexp FLX_exp; rfl
+  have hcc : cexp beta (FLX_exp prec) c = mag beta c - prec := by unfold cexp FLX_exp; rfl
+  have hEb : E ≤ cexp beta (FLX_exp prec) b + cexp beta (FLX_exp prec) b := by rw [hcb]; omega
+  have hEac : E ≤ cexp beta (FLX_exp prec) a + cexp beta (FLX_exp prec) c := by rw [hca, hcc]; omega
+  have hF := disc_inner_exact beta prec hp choice Fa Fb Fc hpe hqe hdp hdq E hEb hEac hbound
+  have h3 := disc_corr_exact beta prec hp choice a b c hdp hdq hg hd hF
+  have h0 := ulp_ge_0 beta (FLX_exp prec) d
+  linarith
+
+/-- **Mirror subcase (exact): opposite-sign, `dp − dq ≥ 0`, is exact** (`p < q`,
+general radix). Here `q = β^(mag p)` is the straddled power of two (the *larger*
+product). `dq ≤ 0` forces `a·c ≤ q = β^(mag p)`, and `a·c > 0` (since `q = RN(a·c) > 0`
+by round-monotonicity — no squareness needed, unlike the `q < p` orientation where it
+came free from `b·b`), so `mag(a·c) ≤ mag p` and the *input*-ulp bound gives the sharper
+`|dq| ≤ ½·ulp p`. With `|dp| ≤ ½·ulp p`, opposite signs give `|dp − dq| ≤ ulp p`. -/
+theorem disc_corr_particular_opp_pos_lo (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq g d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hp0 : p ≠ 0)
+    (hq_pow : q = bpow beta (mag beta p))
+    (hgb : mag beta p ≤ mag beta b + mag beta b)
+    (hgc : mag beta p ≤ mag beta a + mag beta c)
+    (hdp_nn : 0 ≤ dp) (hdq_np : dq ≤ 0) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hq_pos : 0 < q := by rw [hq_pow]; exact bpow_gt_0 _ _
+  have hq0 : q ≠ 0 := ne_of_gt hq_pos
+  -- `a·c > 0` (else `q = RN(a·c) ≤ RN 0 = 0`).
+  have hac_pos : 0 < a * c := by
+    by_contra h; push_neg at h
+    have hqle : q ≤ 0 := by
+      rw [hqe]
+      calc round beta (FLX_exp prec) (Znearest choice) (a * c)
+          ≤ round beta (FLX_exp prec) (Znearest choice) 0 :=
+            round_le beta (FLX_exp prec) hValid (Znearest choice) h
+        _ = 0 := round_0 beta (FLX_exp prec) (Znearest choice)
+    linarith
+  -- Sharper `|dq| ≤ ½·ulp p` from `dq ≤ 0 ⟹ a·c ≤ β^(mag p)`.
+  have hdq_bd : |dq| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+    by_cases hdq0 : dq = 0
+    · rw [hdq0, abs_zero]; have := ulp_ge_0 beta (FLX_exp prec) p; linarith
+    · have hac_lt : a * c < bpow beta (mag beta p) := by
+        rw [← hq_pow]
+        rcases lt_or_eq_of_le (by rw [hdq] at hdq_np; linarith : a * c ≤ q) with h | h
+        · exact h
+        · exact absurd (by rw [hdq, h]; ring) hdq0
+      have hac_ne : a * c ≠ 0 := ne_of_gt hac_pos
+      have hmag_ac : mag beta (a * c) ≤ mag beta p :=
+        mag_le_bpow beta hac_ne (by rwa [abs_of_pos hac_pos])
+      have h1 : |dq| ≤ (1/2) * ulp beta (FLX_exp prec) (a * c) := by
+        rw [hdq, abs_sub_comm, hqe]
+        exact error_le_half_ulp beta (FLX_exp prec) hValid choice (a * c)
+      have h2 : ulp beta (FLX_exp prec) (a * c) ≤ ulp beta (FLX_exp prec) p := by
+        rw [ulp_neq_0 beta (FLX_exp prec) hac_ne, ulp_neq_0 beta (FLX_exp prec) hp0]
+        have hcac : cexp beta (FLX_exp prec) (a * c) = mag beta (a * c) - prec := by
+          unfold cexp FLX_exp; rfl
+        have hcp : cexp beta (FLX_exp prec) p = mag beta p - prec := by unfold cexp FLX_exp; rfl
+        rw [hcac, hcp]; exact bpow_le beta (by omega)
+      linarith [mul_le_mul_of_nonneg_left h2 (by norm_num : (0:ℝ) ≤ 1/2)]
+  have hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+    rw [hdp, abs_sub_comm, hpe]
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b)
+  have hbound_ulp : |dp - dq| ≤ ulp beta (FLX_exp prec) p := by
+    have hrw : |dp - dq| = dp + (-dq) := by
+      rw [abs_of_nonneg (by linarith : (0:ℝ) ≤ dp - dq)]; ring
+    have e1 : dp ≤ (1/2) * ulp beta (FLX_exp prec) p := le_trans (le_abs_self _) hdp_bd
+    have e2 : -dq ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+      rw [← abs_of_nonpos hdq_np]; exact hdq_bd
+    rw [hrw]; linarith
+  set E := mag beta p - 2 * prec with hE
+  have hbound : |dp - dq| ≤ bpow beta (prec + E) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hp0] at hbound_ulp
+    have hcp : cexp beta (FLX_exp prec) p = mag beta p - prec := by unfold cexp FLX_exp; rfl
+    rw [hcp, show mag beta p - prec = prec + E from by omega] at hbound_ulp
+    exact hbound_ulp
+  have hcb : cexp beta (FLX_exp prec) b = mag beta b - prec := by unfold cexp FLX_exp; rfl
+  have hca : cexp beta (FLX_exp prec) a = mag beta a - prec := by unfold cexp FLX_exp; rfl
+  have hcc : cexp beta (FLX_exp prec) c = mag beta c - prec := by unfold cexp FLX_exp; rfl
+  have hEb : E ≤ cexp beta (FLX_exp prec) b + cexp beta (FLX_exp prec) b := by rw [hcb]; omega
+  have hEac : E ≤ cexp beta (FLX_exp prec) a + cexp beta (FLX_exp prec) c := by rw [hca, hcc]; omega
+  have hF := disc_inner_exact beta prec hp choice Fa Fb Fc hpe hqe hdp hdq E hEb hEac hbound
+  have h3 := disc_corr_exact beta prec hp choice a b c hdp hdq hg hd hF
+  have h0 := ulp_ge_0 beta (FLX_exp prec) d
+  linarith
+
+/-- **Mirror subcase (magnitude): opposite-sign, `dp − dq ≤ 0`, within `3/2·ulp d`**
+(`p < q`, radix 2). The mirror of `disc_corr_particular_opp_pos`: `dp ≤ 0 ≤ dq`, so
+`g = RN(dp − dq) ∈ [−2·ulp p, 0]`; `d ≤ p − q ≤ −ulp p` so `|d| ≥ ulp p`, hence
+`ulp g ≤ ulp(2·ulp p) = 2·ulp(ulp p) ≤ 2·ulp d` and `δ ≤ 3/2·ulp d ≤ 2·ulp d`. -/
+theorem disc_corr_particular_opp_neg_lo (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp : 0 < prec) (choice : ℤ → Bool) (a b c : ℝ)
+    {p q dp dq g d : ℝ}
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hp_pos : 0 < p) (hpq : p < q)
+    (hmag : mag beta q = mag beta p + 1)
+    (hpqF : generic_format beta (FLX_exp prec) (p - q))
+    (hpq_ge : ulp beta (FLX_exp prec) p ≤ q - p)
+    (hdp_bd : |dp| ≤ (1/2) * ulp beta (FLX_exp prec) p)
+    (hdq_bd : |dq| ≤ (1/2) * ulp beta (FLX_exp prec) q)
+    (hdp_np : dp ≤ 0) (hdq_nn : 0 ≤ dq) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hp0 : p ≠ 0 := ne_of_gt hp_pos
+  have hq0 : q ≠ 0 := ne_of_gt (lt_trans hp_pos hpq)
+  have hup_nn : 0 ≤ ulp beta (FLX_exp prec) p := ulp_ge_0 _ _ _
+  -- `ulp q = 2·ulp p` (radix 2).
+  have hulp_q_2p : ulp beta (FLX_exp prec) q = 2 * ulp beta (FLX_exp prec) p := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hq0, ulp_neq_0 beta (FLX_exp prec) hp0]
+    have hcp : cexp beta (FLX_exp prec) p = mag beta p - prec := by unfold cexp FLX_exp; rfl
+    have hcq : cexp beta (FLX_exp prec) q = mag beta q - prec := by unfold cexp FLX_exp; rfl
+    rw [hcq, hcp, hmag, show mag beta p + 1 - prec = (mag beta p - prec) + 1 from by ring,
+      bpow_plus, bpow_one, hbeta]; push_cast; ring
+  -- `−2·ulp p ≤ dp − dq ≤ 0`.
+  have hdpdq_np : dp - dq ≤ 0 := by linarith
+  have hndp_le : -dp ≤ (1/2) * ulp beta (FLX_exp prec) p := by
+    rw [← abs_of_nonpos hdp_np]; exact hdp_bd
+  have hdq_le : dq ≤ (1/2) * ulp beta (FLX_exp prec) q := le_trans (le_abs_self _) hdq_bd
+  have hdpdq_ge : -(2 * ulp beta (FLX_exp prec) p) ≤ dp - dq := by
+    rw [hulp_q_2p] at hdq_le; linarith
+  -- `2·ulp p = β^(mag p − prec + 1) ∈ F`, and its negation.
+  have h2ulpp_eq : 2 * ulp beta (FLX_exp prec) p = bpow beta (mag beta p - prec + 1) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hp0]
+    have hcp : cexp beta (FLX_exp prec) p = mag beta p - prec := by unfold cexp FLX_exp; rfl
+    rw [hcp, show mag beta p - prec + 1 = (mag beta p - prec) + 1 from by ring, bpow_plus,
+      bpow_one, hbeta]; push_cast; ring
+  have h2ulpp_F : generic_format beta (FLX_exp prec) (2 * ulp beta (FLX_exp prec) p) := by
+    rw [h2ulpp_eq]; exact generic_format_bpow beta (FLX_exp prec) _ (by unfold FLX_exp; omega)
+  have hneg2ulpp_F : generic_format beta (FLX_exp prec) (-(2 * ulp beta (FLX_exp prec) p)) :=
+    generic_format_opp beta (FLX_exp prec) h2ulpp_F
+  -- `−2·ulp p ≤ g ≤ 0`.
+  have hg_np : g ≤ 0 := by
+    rw [hg]
+    exact round_le_generic beta (FLX_exp prec) hValid (Znearest choice)
+      (generic_format_0 _ _) hdpdq_np
+  have hg_ge : -(2 * ulp beta (FLX_exp prec) p) ≤ g := by
+    rw [hg]
+    exact round_ge_generic beta (FLX_exp prec) hValid (Znearest choice) hneg2ulpp_F hdpdq_ge
+  -- `d ≤ p − q ≤ −ulp p`, so `|d| ≥ ulp p`.
+  have hd_le : d ≤ p - q := by
+    rw [hd]
+    have hmono := round_le beta (FLX_exp prec) hValid (Znearest choice)
+      (by linarith : (p - q) + g ≤ p - q)
+    have heq := round_generic beta (FLX_exp prec) (Znearest choice) hpqF
+    linarith [hmono, heq]
+  have hd_np : d ≤ -ulp beta (FLX_exp prec) p := by linarith [hd_le, hpq_ge]
+  have hd_neg : d ≤ 0 := by linarith [hup_nn]
+  have hd_abs : ulp beta (FLX_exp prec) p ≤ |d| := by
+    rw [abs_of_nonpos hd_neg]; linarith [hd_np]
+  -- `ulp g ≤ ulp(2·ulp p) = 2·ulp(ulp p) ≤ 2·ulp d`.
+  have hg_abs : |g| ≤ 2 * ulp beta (FLX_exp prec) p := by
+    rw [abs_of_nonpos hg_np]; linarith [hg_ge]
+  have hulp_g_le : ulp beta (FLX_exp prec) g
+      ≤ ulp beta (FLX_exp prec) (2 * ulp beta (FLX_exp prec) p) := by
+    apply ulp_le beta (FLX_exp prec) hValid hMon
+    rw [abs_of_nonneg (by linarith [hup_nn] : (0:ℝ) ≤ 2 * ulp beta (FLX_exp prec) p)]
+    exact hg_abs
+  have hulp2 := ulp_two_mul_r2 beta hbeta prec hp (ulp beta (FLX_exp prec) p)
+  have hulp_up_d : ulp beta (FLX_exp prec) (ulp beta (FLX_exp prec) p)
+      ≤ ulp beta (FLX_exp prec) d := by
+    apply ulp_le beta (FLX_exp prec) hValid hMon
+    rw [abs_of_nonneg hup_nn]
+    exact hd_abs
+  have hulp_g_2d : ulp beta (FLX_exp prec) g ≤ 2 * ulp beta (FLX_exp prec) d := by
+    rw [hulp2] at hulp_g_le; linarith
   have hdecomp := disc_corr_err_decomp beta prec hp choice a b c hdp hdq hg hd
   have hud := ulp_ge_0 beta (FLX_exp prec) d
   linarith [hdecomp, hulp_g_2d, hud]
