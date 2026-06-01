@@ -417,7 +417,42 @@ with NO MSB/LSB.** Built in stages:
 **ErrFMA is FULLY COMPLETE** — the verified error-free transformation for the FMA,
 `a·b + c = r1 + r2 + r3`, all Flocq-native.
 
-**~34079 lines of Lean across 35 files. 0 `sorry`s. All files build clean.**
+**Compensated discriminant `b·b − a·c` (sixth algorithm) — STRUCTURAL CORE +
+OPPOSITE-SIGN 2u DONE; general cancelling case is the remaining work
+(2026-06-01).** `Algorithms/Discriminant_FLX.lean`. Kahan's discriminant computes
+`b·b − a·c` to relative error `≤ 2u` (and absolute `≤ (β+1)/2` ulps), even under
+catastrophic cancellation — the keystone for verified quadratic intersections and
+Shewchuk-style adaptive predicates. The published proof (Jeannerod–Louvet–Muller,
+*Math. Comp.* 82 (2013), the 2×2-determinant analysis; Boldo 2009 for the
+branch-test original) is a grid-level argument. Landed so far, all Flocq-native,
+0 sorries:
+
+- **D0 (general radix)** — `disc_fma_error_exact`: the fma error steps
+  `RN(x·y − RN(x·y)) = x·y − RN(x·y)` (so `dp,dq` are exact); `disc_prod_error_format`.
+- **D1 (general radix)** — `disc_corrected_value`: `(p−q)+(dp−dq) = b·b − a·c`
+  exactly (the ErrFMA-chain analog); `disc_sterbenz_exact`: the cancelling
+  subtraction is Sterbenz-exact; `disc_p_nonneg`.
+- **D2 (general radix)** — `disc_naive_error_bound`: the master decomposition
+  `|d − (b·b−a·c)| ≤ u_ro·(|d|+|p|+|q|)` for the naive `d = RN(p−q)`.
+- **Relative-error calculus** — ported from Boldo's `flocq/examples/Triangle.v`
+  (sibling Kahan triangle-area proof): `rel_err`, `rel_err_{aux,0,opp,init}`.
+- **D3 decompositions** — `disc_fma_error_decomp` (symmetric algorithm, 3 sharp
+  `v=u_ro/(1+u_ro)` errors) and **`disc_kahan_error_decomp`** (the canonical
+  Cook/Kahan algorithm `w=RN(ac), e=w−ac, f=RN(b²−w), x=RN(f+e)`, 2 errors:
+  `|x−(b·b−a·c)| ≤ v·(|b²−w| + |f+e|)`, any sign).
+- **D3 opposite-sign 2u — DONE**: **`disc_kahan_opp_sign_2u`**: for `a·c ≤ 0`
+  (the sum-of-squares `b²+|ac|`, *no cancellation* — the positive-definite case
+  CAD predicates hit), the **full** `|x − (b·b−a·c)| ≤ 2·u_ro·|b·b−a·c|`,
+  general radix, no format hypotheses. Closes via the 2-error split, `|ac| ≤ D`,
+  and the scalar fact `v(2+2v+v²) ≤ 2u` (from `u(1−v)=v`).
+
+**Remaining: the cancelling case `a·c > 0`.** Naive magnitude bounds blow up
+(`ε_f = RN(b²−w)−(b²−w)` is unbounded relative to a tiny `|D|`); the tight `2u`
+needs the published grid/ulp case-analysis. All paper mirrors were access-blocked
+this session (Anubis/403) — a faithful port needs the PDF. The opposite-sign 2u
++ the general decomposition stand as the delivered milestone.
+
+**~34800 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
