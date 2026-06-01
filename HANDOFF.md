@@ -461,13 +461,22 @@ specific, so this arc is at `beta.val = 2`. Ported so far (radix 2 unless noted)
   `ulp_half_r2` — radix-2 `ulp(2x)=2ulp(x)`, `ulp(x/2)=ulp(x)/2`.
 - **`disc_branch_benign`** (§3.1 DONE) — benign branch `3|p−q|≥p+q` ⟹ `δ ≤ 2·ulp(d)`,
   via `disc_benign_ulp_key` (`ulp p+ulp q ≤ 3·ulp(RN(p−q))`, 3 sign subcases).
+- **§3.2 correction-branch machinery (analytic half DONE):**
+  `disc_corr_err_decomp` (`δ ≤ ½ulp d + ½ulp g`, `g=RN(dp−dq)`),
+  `disc_corr_exact` (**Lemma 3**: `dp−dq` exact ⟹ `δ≤½ulp d`),
+  `disc_corr_dpdq_bound` (`|dp−dq| ≤ ½ulp p + ½ulp q`),
+  `disc_corr_general` (`|dp−dq|≤½|p−q|` ⟹ `δ≤2ulp d`),
+  `disc_corr_far` (`ulp p+ulp q ≤ |p−q|` ⟹ `δ≤2ulp d`),
+  `disc_corr_pq_eq` (`p=q` ⟹ `d=RN(b·b−a·c)`, `δ≤½ulp d`).
 
-**Remaining for the full `2·ulp(d)`:** §3.2 **correction branch** (Lemmas 2–4:
-`|RN(dp−dq)|≤2|p−q|`; `dp−dq` exact ⟹ `δ≤½ulp d`; `ulp p=ulp q ⟹ dp−dq` exact;
-general case `|p−q|≥3min ulp`; particular power-of-two cases via succ/pred), then
-§4 (the *rounded* test `◦(p+q)≤◦(3◦|p−q|)` can disagree with the real test —
-Lemmas 5–12, incl. the number-theoretic Lemma 9). §3.2 is the trickier half.
-The opposite-sign `2u` (sharper than Boldo there) + §3.1 stand as delivered.
+**Remaining for the full `2·ulp(d)`** (the *discrete/number-theoretic* half):
+- **Lemma 4**: `ulp p = ulp q ⟹ dp−dq` exact (integer-mantissa at common exponent).
+- **Particular power-of-two cases** (`ulp p ≠ ulp q`, `|p−q| ∈ {min,2min}`, `p,q` near
+  `2^k`): the `p=1,q=1⁻/1⁻⁻` sub-analysis (succ/pred + integer mantissa) — the hardest.
+- **Correction assembly** (case-split p=q / far / Lemma 4 / particular) + **full §3 theorem**.
+- **§4** (rounded test `◦(p+q)≤◦(3◦|p−q|)` vs real test; Lemmas 5–12, incl. number-theoretic Lemma 9).
+The opposite-sign `2u` (sharper than Boldo there) + §3.1 + the §3.2 analytic
+machinery stand as delivered. Next session: Lemma 4 → particular → assembly → §4.
 
 **~34800 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
 
