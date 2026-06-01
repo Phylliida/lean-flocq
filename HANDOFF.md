@@ -446,11 +446,28 @@ branch-test original) is a grid-level argument. Landed so far, all Flocq-native,
   general radix, no format hypotheses. Closes via the 2-error split, `|ac| ≤ D`,
   and the scalar fact `v(2+2v+v²) ≤ 2u` (from `u(1−v)=v`).
 
-**Remaining: the cancelling case `a·c > 0`.** Naive magnitude bounds blow up
-(`ε_f = RN(b²−w)−(b²−w)` is unbounded relative to a tiny `|D|`); the tight `2u`
-needs the published grid/ulp case-analysis. All paper mirrors were access-blocked
-this session (Anubis/403) — a faithful port needs the PDF. The opposite-sign 2u
-+ the general decomposition stand as the delivered milestone.
+**Boldo branch-algorithm `2·ulp(d)` port — IN PROGRESS (have the PDF).** Danielle
+supplied Boldo (2009) (`lean-flocq/boldo.pdf`). It proves the *branch* algorithm
+`if 3|p−q| ≥ p+q then d=RN(p−q) else d=RN((p−q)+RN(dp−dq))` to `|d−(b·b−a·c)| ≤
+2·ulp(d)` (ulps of the result ≈ 4u relative; §8: the `ulp(b·b−a·c)` form is *false*
+at powers of two, only `4·ulp(b·b−a·c)` holds; the tight relative-2u is the separate
+Jeannerod–Louvet–Muller paper, not in hand). The factor-of-two ulp steps are radix-2
+specific, so this arc is at `beta.val = 2`. Ported so far (radix 2 unless noted):
+- `disc_branch_subtract_exact` — **Boldo Lemma 1**: branch condition `3|p−q|<p+q`
+  (+ `p≥0`) ⟹ `q>0 ∧ p≤2q ∧ q≤2p` ⟹ `p−q` exact (Sterbenz).
+- `disc_branch_err_decomp` (general radix) — `δ ≤ ½(ulp d + ulp p + ulp q)` for the
+  naive `d=RN(p−q)`, from three half-ulp bounds.
+- `ulp_le_ulp_round_FLX` (general) — `ulp x ≤ ulp(RN x)`; `ulp_two_mul_r2` /
+  `ulp_half_r2` — radix-2 `ulp(2x)=2ulp(x)`, `ulp(x/2)=ulp(x)/2`.
+- **`disc_branch_benign`** (§3.1 DONE) — benign branch `3|p−q|≥p+q` ⟹ `δ ≤ 2·ulp(d)`,
+  via `disc_benign_ulp_key` (`ulp p+ulp q ≤ 3·ulp(RN(p−q))`, 3 sign subcases).
+
+**Remaining for the full `2·ulp(d)`:** §3.2 **correction branch** (Lemmas 2–4:
+`|RN(dp−dq)|≤2|p−q|`; `dp−dq` exact ⟹ `δ≤½ulp d`; `ulp p=ulp q ⟹ dp−dq` exact;
+general case `|p−q|≥3min ulp`; particular power-of-two cases via succ/pred), then
+§4 (the *rounded* test `◦(p+q)≤◦(3◦|p−q|)` can disagree with the real test —
+Lemmas 5–12, incl. the number-theoretic Lemma 9). §3.2 is the trickier half.
+The opposite-sign `2u` (sharper than Boldo there) + §3.1 stand as delivered.
 
 **~34800 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
 
