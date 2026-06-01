@@ -161,4 +161,41 @@ theorem disc_naive_error_bound (beta : radix) (prec : ℤ) (hp : 0 < prec)
           linarith [e1, e2, e3]
     _ = u_ro beta prec * (|d| + |p| + |q|) := by ring
 
+/-! ## Relative-error calculus (after Boldo, `flocq/examples/Triangle.v`)
+
+Boldo's proof of the sibling Kahan triangle-area algorithm threads a relative
+error `e` through each operation via the predicate `rel_err x y e := |x−y| ≤
+e·|y|` and a small composable algebra. We port the foundational layer here; it
+is the backbone of the forthcoming `2u` assembly (and is reusable across the
+whole Kahan family). `eps` in Boldo's notation is our `u_ro`.
+
+Note: Boldo's `err_add` needs *nonnegative* operands, so it does NOT cover the
+discriminant's cancelling subtraction `p − q`; that case goes through
+Sterbenz-exactness (`disc_sterbenz_exact`) instead. -/
+
+/-- Boldo's relative-error predicate: `x` approximates `y` to relative error `e`. -/
+def rel_err (x y e : ℝ) : Prop := |x - y| ≤ e * |y|
+
+/-- Weaken the relative-error bound (`err_aux`). -/
+theorem rel_err_aux {x y e1 e2 : ℝ} (h : rel_err x y e1) (he : e1 ≤ e2) :
+    rel_err x y e2 :=
+  h.trans (mul_le_mul_of_nonneg_right he (abs_nonneg y))
+
+/-- Exact values have zero relative error (`err_0`). -/
+theorem rel_err_0 (x : ℝ) : rel_err x x 0 := by
+  simp [rel_err]
+
+/-- Relative error is preserved under negation (`err_opp`). -/
+theorem rel_err_opp {x y e : ℝ} (h : rel_err x y e) : rel_err (-x) (-y) e := by
+  unfold rel_err at h ⊢
+  rw [show -x - -y = -(x - y) from by ring, abs_neg, abs_neg]
+  exact h
+
+/-- Rounding introduces relative error at most `u_ro` (`err_init`). -/
+theorem rel_err_init (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (x : ℝ) :
+    rel_err (round beta (FLX_exp prec) (Znearest choice) x) x (u_ro beta prec) := by
+  unfold rel_err u_ro
+  exact relative_error_N_FLX beta prec hp choice x
+
 end LeanFlocq
