@@ -498,20 +498,28 @@ radix): near-cancellation + distinct ulps ⟹ `q<p` straddle a power of `β`
   `g=RN(dp−dq) ∈ [0,2ulp q]`, `d ≥ p−q ≥ ulp q`, so `ulp g ≤ 2ulp d`, giving
   `δ ≤ 3/2·ulp d ≤ 2ulp d` (the one non-exact subcase).
 
-**Remaining for the full `2·ulp(d)`:**
-- **§3.2.2 assembly**: from the regime establish `p=β^(mag q)`, discharge the grid
-  bounds `hgb` (`mag q ≤ 2mag b`, unconditional via `disc_prod_grid_or_pow2`-style)
-  and `hgc` (`mag q ≤ mag a+mag c`, from `q<β^(mag q)` excluding the round-up), derive
-  `p−q∈F` (Lemma 1) and `p−q≥ulp q` (spacing), and dispatch on the signs of `dp,dq`
-  into (a)/(b.i)/(b.ii).
-- **Correction assembly** (case-split p=q / far / Lemma 4 / particular) + **full §3 theorem**.
-- **§4** (rounded test `◦(p+q)≤◦(3◦|p−q|)` vs real test; Lemmas 5–12, incl. number-theoretic Lemma 9).
-The opposite-sign `2u` (sharper than Boldo there) + §3.1 + §3.2 analytic + **Lemma 4 +
-boundary-discharge + the entire §3.2.2 subcase analysis** stand as delivered. Next session:
-§3.2.2 assembly → full §3 correction theorem → §4.
+**§3.2.2 ASSEMBLED** (`disc_corr_particular`, radix 2): correction branch + `q<p` +
+distinct ulps + near cancellation (`p−q ≤ 2ulp q`) ⟹ `δ ≤ 2ulp d`. Establishes
+`p=β^(mag q)` (`disc_particular_p_pow2`, via `succ_le_lt_aux`), `p−q∈F` (Lemma 1),
+`p−q≥ulp q` (`id_p_ulp_le_bpow`), and dispatches on `sign(dp·dq)` into (a)/(b.i)/(b.ii).
+Grid bounds `hgb`/`hgc` are passed through (discharge below).
 
-**~35376 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
-(Newest: `Algorithms/Discriminant_FLX.lean`, 1297 lines / 37 theorems — the
+**Remaining for the full `2·ulp(d)`:**
+- **Full §3 correction theorem** — dispatch the correction branch (`3|p−q|<p+q`, p≠q)
+  into: `|p−q| ≥ ulp p+ulp q` → `disc_corr_far`; else `ulp p=ulp q` → Lemma 4
+  (`disc_corr_lemma4`); else → `disc_corr_particular`. **Complications**: WLOG `q<p`
+  needs the `p↔q` symmetry of the bound (swap `b·b ↔ a·c`: `d↔−d`, `b·b−a·c ↔ −(…)`,
+  `|·|`/`ulp` preserved) OR a symmetric particular lemma; and discharging the grid
+  bounds — `hgb` (`mag q ≤ 2mag b`) unconditional from `mag_round`+`mag_mult`, `hgc`
+  (`mag q ≤ mag a+mag c`) needs `prec ≥ 3` + close to exclude `q=β^(mag q−1)`.
+- **Full §3** (benign `disc_branch_benign` + correction) — both branches of the test.
+- **§4** (rounded test `◦(p+q)≤◦(3◦|p−q|)` vs real test; Lemmas 5–12, incl. number-theoretic Lemma 9).
+Delivered: opposite-sign `2u` + §3.1 benign + §3.2 analytic + **Lemma 4 + boundary-discharge
++ the entire §3.2.2 (all three subcases AND their assembly)**. Next session: full §3 correction
+dispatch (WLOG symmetry + grid-bound discharge) → full §3 → §4.
+
+**~35505 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
+(Newest: `Algorithms/Discriminant_FLX.lean`, 1426 lines / 39 theorems — the
 in-progress Kahan discriminant port; see the discriminant section above.)
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
@@ -557,7 +565,7 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Algorithms/ErrFMA.lean` | 251 | `Pff/Pff.v` `FmaErr` (23446–25161), `Pff2Flocq.v` `ErrFMA_correct` (1057) | **Exact error of the FMA (Boldo–Muller) — E0/E1 done, E2 L1 + β2=0 branch typed.** `a·b + c = r1 + r2 + r3` exactly. `twoproduct_eft`/`twosum_eft` (existential EFT interfaces), **`ErrFMA_chain`** (`a·b+c = β1+β2+α2`), **`errfma_gat_exact`** (L1 = Pff `gatCorrect`: `β1−r1 ∈ F` via the engine + `round_N_pt` closeness), **`ErrFMA_be2_zero`** (Pff `FmaErr_aux1`: `a·b+c = r1+γ+α2` when β2=0, via L1 + idempotency). |
 | `Algorithms/ErrFMA_L2.lean` | 776 | `Pff/Pff.v` `FmaErr_aux2`/`gaCorrect`/`Midpoint_aux` (24318–24786, 23856–24316) | **ErrFMA L2 (β2≠0) — COMPLETE.** The Flocq-native replacement for Pff's MSB/LSB. **`errfma_be2_mult_bpow`** (β2 a multiple of `β^min(cexp u1, cexp α1)` via `round_repr_same_exp`), **`errfma_al2_lt_bpow`** (`|α2| < β^min(...)`), **`nonneg_bpow_mult_lt_eq_zero`**/**`neg_bpow_squeeze`** (divisibility squeeze), **`errfma_be2_eq_bpow_upper`**/**`errfma_be2_eq_bpow_lower`** (upper/lower midpoint cores via `round_N_{le,ge}_midp` + squeeze; lower has the `pred_pos` power-of-β branch), **`errfma_be2_div_dichotomy`** (`β1=r1 ∨ β2` a `β^(cexp β1−2)`-multiple; `be1<0` sign-reduces via `round_N_opp`), **`format_mult_bpow_of_cexp_ge`**, **`errfma_ga_exact`** (`(β1−r1)+β2 ∈ F`), **`ErrFMA_be2_nonzero`** (`FmaErr_aux2`), **`ErrFMA_correct`** (the full `FmaErr`: `a·b+c = r1+γ+α2`, both branches + edge cases), **`ErrFMA_threefloat`** (`Fma_FTS`: `a·b+c = r1+r2+r3` via precondition-free `TwoSum(γ,α2)`; `α2∈F` via `plus_error`, `u2∈F` via `mult_error_FLX`). |
 
-| `Algorithms/Discriminant_FLX.lean` | 938 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — IN PROGRESS.** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus ported from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Full `2u` for the opposite-sign (sum-of-squares) case**: `disc_kahan_error_decomp` (2-error, any sign) + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ |x−(b·b−a·c)| ≤ 2·u_ro·|b·b−a·c|`, sharper than Boldo there). **Boldo branch-algorithm `2·ulp(d)` port (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit `ulp_le_ulp_round_FLX`/`ulp_two_mul_r2`/`ulp_half_r2`/`disc_branch_err_decomp`; **§3.1 benign DONE** (`disc_branch_benign` via `disc_benign_ulp_key`); **§3.2 analytic half DONE** (`disc_corr_err_decomp`, `disc_corr_exact`=Lemma 3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`); **§3.2 Lemma 4 DONE** (`disc_corr_lemma4` = `ulp p=ulp q ⟹ δ≤2ulp d`, via the general-radix grid-difference exactness `disc_diff_on_grid_exact` + product-grid membership `disc_prod_err_mult_bpow` + `disc_bpow_coarsen`); **boundary-discharge `disc_prod_grid_or_pow2`** (grid hyp holds OR `RN(b·b)` is a power of two); **§3.2.2 ALL THREE SUBCASES DONE** — geometric foundation `disc_straddle`, exactness core `disc_corr_particular_exact` (`|dp−dq|≤ulp q ⟹ dp−dq∈F`), subcase (a) `disc_corr_particular_same_sign`, (b.ii) `disc_corr_particular_opp_neg`, (b.i) `disc_corr_particular_opp_pos`, plus helper `abs_sub_le_of_same_sign`. Remaining: §3.2.2 assembly (establish `p=β^(mag q)`, discharge grid bounds, dispatch on signs) + full §3 correction theorem + §4 (rounded test, Lemmas 5–12). |
+| `Algorithms/Discriminant_FLX.lean` | 938 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — IN PROGRESS.** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus ported from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Full `2u` for the opposite-sign (sum-of-squares) case**: `disc_kahan_error_decomp` (2-error, any sign) + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ |x−(b·b−a·c)| ≤ 2·u_ro·|b·b−a·c|`, sharper than Boldo there). **Boldo branch-algorithm `2·ulp(d)` port (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit `ulp_le_ulp_round_FLX`/`ulp_two_mul_r2`/`ulp_half_r2`/`disc_branch_err_decomp`; **§3.1 benign DONE** (`disc_branch_benign` via `disc_benign_ulp_key`); **§3.2 analytic half DONE** (`disc_corr_err_decomp`, `disc_corr_exact`=Lemma 3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`); **§3.2 Lemma 4 DONE** (`disc_corr_lemma4` = `ulp p=ulp q ⟹ δ≤2ulp d`, via the general-radix grid-difference exactness `disc_diff_on_grid_exact` + product-grid membership `disc_prod_err_mult_bpow` + `disc_bpow_coarsen`); **boundary-discharge `disc_prod_grid_or_pow2`** (grid hyp holds OR `RN(b·b)` is a power of two); **§3.2.2 COMPLETE** — geometric foundation `disc_straddle`, exactness core `disc_corr_particular_exact` (`|dp−dq|≤ulp q ⟹ dp−dq∈F`), subcases (a) `disc_corr_particular_same_sign` / (b.ii) `disc_corr_particular_opp_neg` / (b.i) `disc_corr_particular_opp_pos` (+ helper `abs_sub_le_of_same_sign`), and the **assembly** `disc_corr_particular` (`p=β^(mag q)` via `disc_particular_p_pow2` + Lemma 1 + spacing + sign dispatch). Remaining: full §3 correction theorem (general/Lemma 4/particular dispatch + WLOG symmetry + grid-bound discharge) + §4 (rounded test, Lemmas 5–12). |
 **Total: ~812 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
@@ -804,7 +812,7 @@ The relevant algorithms, sized roughly:
 | ~~`Veltkamp` splitting~~ ✓ **DONE at FLX 2026-05-31** (full Veltkamp_Even arc complete, both odd and even radix; `Algorithms/Veltkamp.lean`) | split `x` into hi/lo parts of `prec/2` bits | ~~~400~~ 4161 |
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
 | ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
-| Compensated discriminant (`b² − ac`) — **IN PROGRESS** (`Algorithms/Discriminant_FLX.lean`): opposite-sign `2u` DONE; Boldo branch `2·ulp(d)` port §3.1 + §3.2-analytic + **§3.2 Lemma 4 + boundary-discharge + all three §3.2.2 subcases** done, §3.2.2 assembly + §4 remain | sharp error bound for the quadratic discriminant | ~600 |
+| Compensated discriminant (`b² − ac`) — **IN PROGRESS** (`Algorithms/Discriminant_FLX.lean`): opposite-sign `2u` DONE; Boldo branch `2·ulp(d)` port §3.1 + §3.2-analytic + **§3.2 Lemma 4 + boundary-discharge + all of §3.2.2 (3 subcases + assembly)** done, full §3 correction dispatch + §4 remain | sharp error bound for the quadratic discriminant | ~600 |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
 (roughly 10× ratio).
