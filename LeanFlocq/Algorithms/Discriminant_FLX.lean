@@ -747,6 +747,109 @@ theorem disc_mag_round_prod_le (beta : radix) (prec : ℤ) (hp : 0 < prec)
         = mag beta (x * y) + 1 := by rw [h2, mag_bpow]
     omega
 
+/-- **Products never bump the magnitude.** `mag(RN(x·y)) ≤ mag x + mag y` for nonzero
+`x·y` with `x, y ∈ F` — *unconditional*. Since `|x| ≤ β^(mag x) − ulp x` and likewise
+for `y`, the product `|x·y| ≤ (β^(mag x) − ulp x)(β^(mag y) − ulp y) =
+β^(mag x+mag y)(1 − β^(−prec))²` lies strictly below the round-up midpoint
+`β^(mag x+mag y)(1 − ½β^(−prec))` of the power `β^(mag x+mag y)` (because
+`(1−t)² < 1 − ½t` for `0 < t = β^(−prec) ≤ ½`). So rounding cannot reach that power.
+This is the keystone making every §3.2 product grid bound unconditional — in
+particular it discharges Boldo Lemma 4's grid hypotheses with no side conditions. -/
+theorem disc_mag_prod_no_bump (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {x y : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (Fy : generic_format beta (FLX_exp prec) y)
+    (hxy : 0 < x * y) :
+    mag beta (round beta (FLX_exp prec) (Znearest choice) (x * y))
+      ≤ mag beta x + mag beta y := by
+  have hValid := FLX_exp_valid prec hp
+  have hx : x ≠ 0 := left_ne_zero_of_mul (ne_of_gt hxy)
+  have hy : y ≠ 0 := right_ne_zero_of_mul (ne_of_gt hxy)
+  have hxa : (0:ℝ) < |x| := abs_pos.mpr hx
+  have hya : (0:ℝ) < |y| := abs_pos.mpr hy
+  set ex := mag beta x with hex
+  set ey := mag beta y with hey
+  have hcexp_ax : ulp beta (FLX_exp prec) |x| = bpow beta (ex - prec) := by
+    rw [ulp_abs, ulp_neq_0 beta (FLX_exp prec) hx]; unfold cexp FLX_exp; rw [← hex]
+  have hcexp_ay : ulp beta (FLX_exp prec) |y| = bpow beta (ey - prec) := by
+    rw [ulp_abs, ulp_neq_0 beta (FLX_exp prec) hy]; unfold cexp FLX_exp; rw [← hey]
+  have hxlt : |x| < bpow beta ex := by have := bpow_mag_gt beta x; rwa [← hex] at this
+  have hylt : |y| < bpow beta ey := by have := bpow_mag_gt beta y; rwa [← hey] at this
+  have hFax : generic_format beta (FLX_exp prec) |x| := generic_format_abs beta (FLX_exp prec) Fx
+  have hFay : generic_format beta (FLX_exp prec) |y| := generic_format_abs beta (FLX_exp prec) Fy
+  have hxb : |x| + bpow beta (ex - prec) ≤ bpow beta ex := by
+    have h := id_p_ulp_le_bpow beta (FLX_exp prec) hxa hFax (e := ex) hxlt
+    rwa [hcexp_ax] at h
+  have hyb : |y| + bpow beta (ey - prec) ≤ bpow beta ey := by
+    have h := id_p_ulp_le_bpow beta (FLX_exp prec) hya hFay (e := ey) hylt
+    rwa [hcexp_ay] at h
+  have hxy_eq : x * y = |x| * |y| := by rw [← abs_mul, abs_of_pos hxy]
+  -- bpow product identities.
+  have hpe1 : bpow beta ex * bpow beta ey = bpow beta (ex + ey) := by rw [← bpow_plus]
+  have hpe2 : bpow beta (ex - prec) * bpow beta ey = bpow beta (ex + ey - prec) := by
+    rw [← bpow_plus]; congr 1; ring
+  have hpe3 : bpow beta ex * bpow beta (ey - prec) = bpow beta (ex + ey - prec) := by
+    rw [← bpow_plus]; congr 1; ring
+  have hpe4 : bpow beta (ex - prec) * bpow beta (ey - prec) = bpow beta (ex + ey - 2 * prec) := by
+    rw [← bpow_plus]; congr 1; ring
+  -- product upper bound, expanded over the common power.
+  have hbnnx : (0:ℝ) ≤ bpow beta ex - bpow beta (ex - prec) := by linarith [hxb, hxa]
+  have hxy_ub : x * y ≤ (bpow beta ex - bpow beta (ex - prec))
+      * (bpow beta ey - bpow beta (ey - prec)) := by
+    rw [hxy_eq]
+    exact mul_le_mul (by linarith [hxb]) (by linarith [hyb]) (le_of_lt hya) hbnnx
+  have hexp : (bpow beta ex - bpow beta (ex - prec)) * (bpow beta ey - bpow beta (ey - prec))
+      = bpow beta (ex + ey) - 2 * bpow beta (ex + ey - prec) + bpow beta (ex + ey - 2 * prec) := by
+    have hdist : (bpow beta ex - bpow beta (ex - prec)) * (bpow beta ey - bpow beta (ey - prec))
+        = bpow beta ex * bpow beta ey - bpow beta ex * bpow beta (ey - prec)
+          - bpow beta (ex - prec) * bpow beta ey
+          + bpow beta (ex - prec) * bpow beta (ey - prec) := by ring
+    rw [hdist, hpe1, hpe3, hpe2, hpe4]; ring
+  have hxy_ub' : x * y ≤ bpow beta (ex + ey) - 2 * bpow beta (ex + ey - prec)
+      + bpow beta (ex + ey - 2 * prec) := by rw [hexp] at hxy_ub; exact hxy_ub
+  -- round-up exclusion.
+  by_contra hcon
+  push_neg at hcon
+  set r := round beta (FLX_exp prec) (Znearest choice) (x * y) with hr
+  have hr_pos : 0 < r := by rw [hr]; exact gt_0_round_gt_0_FLX beta prec hp (Znearest choice) hxy
+  have hr_ge : bpow beta (ex + ey) ≤ r := by
+    have h := bpow_mag_le beta (ne_of_gt hr_pos)
+    rw [abs_of_pos hr_pos] at h
+    exact le_trans (bpow_le beta (by omega)) h
+  have herr : |r - x * y| ≤ (1/2) * ulp beta (FLX_exp prec) (x * y) := by
+    rw [hr]; exact error_le_half_ulp beta (FLX_exp prec) hValid choice (x * y)
+  have hulp_xy : ulp beta (FLX_exp prec) (x * y) ≤ bpow beta (ex + ey - prec) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) (ne_of_gt hxy)]
+    apply bpow_le beta
+    have hmm : mag beta (x * y) ≤ ex + ey := by
+      have := (mag_mult beta hx hy).2; rw [← hex, ← hey] at this; exact this
+    unfold cexp FLX_exp; omega
+  have hgap : bpow beta (ex + ey) - x * y ≤ (1/2) * bpow beta (ex + ey - prec) := by
+    have h2 : r - x * y ≤ |r - x * y| := le_abs_self _
+    have h3 : (1/2) * ulp beta (FLX_exp prec) (x * y) ≤ (1/2) * bpow beta (ex + ey - prec) :=
+      mul_le_mul_of_nonneg_left hulp_xy (by norm_num)
+    linarith [hr_ge, h2, herr, h3]
+  -- `β^(ex+ey−2prec) ≤ ½·β^(ex+ey−prec)` since `β^(−prec) ≤ ½`.
+  have h2le : (2:ℝ) ≤ bpow beta prec := by
+    calc (2:ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+      _ = bpow beta 1 := (bpow_one beta).symm
+      _ ≤ bpow beta prec := bpow_le beta hp
+  have hmul1 : bpow beta (-prec) * bpow beta prec = 1 := by
+    rw [← bpow_plus, neg_add_cancel, bpow_zero]
+  have hbp : bpow beta (-prec) ≤ 1/2 := by
+    have hpos : 0 < bpow beta prec := bpow_gt_0 _ _
+    nlinarith [hmul1, h2le, hpos, bpow_gt_0 beta (-prec)]
+  have hsmall : bpow beta (ex + ey - 2 * prec) ≤ (1/2) * bpow beta (ex + ey - prec) := by
+    have hsplit : bpow beta (ex + ey - 2 * prec)
+        = bpow beta (ex + ey - prec) * bpow beta (-prec) := by rw [← bpow_plus]; congr 1; ring
+    rw [hsplit]
+    calc bpow beta (ex + ey - prec) * bpow beta (-prec)
+        ≤ bpow beta (ex + ey - prec) * (1/2) :=
+          mul_le_mul_of_nonneg_left hbp (le_of_lt (bpow_gt_0 _ _))
+      _ = (1/2) * bpow beta (ex + ey - prec) := by ring
+  have hP_pos : (0:ℝ) < bpow beta (ex + ey - prec) := bpow_gt_0 _ _
+  linarith [hgap, hxy_ub', hsmall, hP_pos]
+
 /-- **The smaller product sits in the upper part of its binade.** If `0 < r` and the
 straddled power of two `β^(mag r)` exceeds `r` by at most `2·ulp r`, then with
 `3 ≤ prec` we have `β^(mag r − 1) < r`: near-cancellation keeps `r` within
