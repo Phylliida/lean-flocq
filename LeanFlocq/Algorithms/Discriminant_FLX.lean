@@ -116,6 +116,34 @@ theorem disc_p_nonneg (beta : radix) (prec : ℤ) (Hp : 0 < prec)
   round_ge_generic beta (FLX_exp prec) (FLX_exp_valid prec Hp) (Znearest choice)
     (generic_format_0 beta (FLX_exp prec)) (mul_self_nonneg b)
 
+/-- **Boldo's Lemma 1 (branch-test ⟹ exact subtraction).**
+
+In the correction branch `3|p − q| < p + q` (with `p = RN(b·b) ≥ 0`), the two
+products are forced into Sterbenz range: first `q > 0` (else the condition is
+absurd), then `p ≤ 2q` and `q ≤ 2p`, so `p − q` is computed exactly.
+
+This is the gateway to the entire cancellation-case analysis of Kahan's
+branch algorithm. Reference: Boldo (2009), Lemma 1. -/
+theorem disc_branch_subtract_exact (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    {p q : ℝ}
+    (Fp : generic_format beta (FLX_exp prec) p)
+    (Fq : generic_format beta (FLX_exp prec) q)
+    (hp_nn : 0 ≤ p)
+    (hcond : 3 * |p - q| < p + q) :
+    generic_format beta (FLX_exp prec) (p - q) := by
+  have hpq1 : p - q ≤ |p - q| := le_abs_self _
+  have hpq2 : q - p ≤ |p - q| := by rw [abs_sub_comm]; exact le_abs_self _
+  -- q > 0: otherwise p + q ≤ |p - q| = p - q, contradicting 3|p-q| < p+q.
+  have hq_pos : 0 < q := by
+    by_contra h
+    push_neg at h
+    have habs : |p - q| = p - q := abs_of_nonneg (by linarith)
+    rw [habs] at hcond; linarith
+  -- Sterbenz range, from the condition and |p-q| ≥ ±(p-q).
+  have hp_le : p ≤ 2 * q := by nlinarith [hcond, hpq1]
+  have hq_le : q ≤ 2 * p := by nlinarith [hcond, hpq2]
+  exact disc_sterbenz_exact beta prec hp Fp Fq hq_le hp_le
+
 /-! ## D2: the master error decomposition (general radix) -/
 
 /-- **Error decomposition of the naive result.**
