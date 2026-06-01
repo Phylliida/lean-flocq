@@ -2228,4 +2228,76 @@ theorem disc_fp_lemma5 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 
   rw [hdelta_abs]
   linarith [hbd, hulp_p_le, hulp_qd, ulp_ge_0 beta (FLX_exp prec) q]
 
+/-- **Boldo §4 Lemma 6** (radix 2, `prec ≥ 2`). In the first disagreement, `p` and `q`
+are very near to half of each other: `3·q ≤ 2·p` (equivalently `q ≤ p(1+2t)/(2+t)`,
+`t = β^(−prec)`; equivalently `p − q ≥ q/2`). From the FP-benign test
+`◦(p+q) ≤ ◦(3(p−q))` and the half-ulp/relative-ulp bounds: `(p+q) − 3(p−q) ≤ ulp(◦(3(p−q)))
+≤ ◦(3(p−q))·β^(1−prec)`, and `◦(3(p−q))(1 − β^(1−prec)/2) ≤ 3(p−q)`; combining (without
+division) gives `4q − 2p ≤ β^(1−prec)(2p − q)`, and `β^(1−prec) ≤ ½` closes it. -/
+theorem disc_fp_lemma6 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp2 : 2 ≤ prec)
+    (choice : ℤ → Bool) {p q : ℝ}
+    (hq_pos : 0 < q) (hqp : q < p)
+    (hfp_benign : round beta (FLX_exp prec) (Znearest choice) (p + q)
+                ≤ round beta (FLX_exp prec) (Znearest choice) (3 * (p - q))) :
+    3 * q ≤ 2 * p := by
+  have hp : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have hR_pos : (0:ℝ) < 3 * (p - q) := by linarith
+  set S := round beta (FLX_exp prec) (Znearest choice) (p + q) with hS
+  set T := round beta (FLX_exp prec) (Znearest choice) (3 * (p - q)) with hT
+  set w := bpow beta (1 - prec) with hw_def
+  have hw_pos : (0:ℝ) < w := bpow_gt_0 _ _
+  have hw_le : w ≤ 1/2 := by
+    rw [hw_def]
+    have h1 : bpow beta (1 - prec) * bpow beta (prec - 1) = 1 := by
+      rw [← bpow_plus, show (1 - prec) + (prec - 1) = 0 from by ring, bpow_zero]
+    have h2 : (2:ℝ) ≤ bpow beta (prec - 1) := by
+      calc (2:ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+        _ = bpow beta 1 := (bpow_one beta).symm
+        _ ≤ bpow beta (prec - 1) := bpow_le beta (by omega)
+    nlinarith [h1, h2, bpow_gt_0 beta (1 - prec), bpow_gt_0 beta (prec - 1)]
+  have hS_pos : 0 < S := by
+    rw [hS]; exact gt_0_round_gt_0_FLX beta prec hp (Znearest choice) (by linarith)
+  have hT_pos : 0 < T := by
+    rw [hT]; exact gt_0_round_gt_0_FLX beta prec hp (Znearest choice) hR_pos
+  -- error and relative-ulp bounds.
+  have hA : (p + q) - S ≤ (1/2) * ulp beta (FLX_exp prec) S := by
+    have herr := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (p + q)
+    rw [← hS] at herr
+    linarith [neg_le_of_abs_le herr]
+  have hC : T - 3 * (p - q) ≤ (1/2) * ulp beta (FLX_exp prec) T := by
+    have herr := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (3 * (p - q))
+    rw [← hT] at herr
+    linarith [le_abs_self (T - 3 * (p - q)), herr]
+  have hD : ulp beta (FLX_exp prec) S ≤ ulp beta (FLX_exp prec) T := by
+    apply ulp_le beta (FLX_exp prec) hValid hMon
+    rw [abs_of_pos hS_pos, abs_of_pos hT_pos]; exact hfp_benign
+  have hE : ulp beta (FLX_exp prec) T ≤ T * w := by
+    have h := ulp_FLX_le beta prec hp T
+    rwa [abs_of_pos hT_pos, ← hw_def] at h
+  -- `(p+q) − 3(p−q) ≤ ulp T`.
+  have hchain : (p + q) - 3 * (p - q) ≤ ulp beta (FLX_exp prec) T := by
+    linarith [hA, hC, hD, hfp_benign]
+  -- `T(1 − w/2) ≤ 3(p−q)`.
+  have hTR : T * (1 - w/2) ≤ 3 * (p - q) := by
+    have hexp : T * (1 - w/2) = T - (1/2) * (T * w) := by ring
+    rw [hexp]
+    have hhalf : (1/2) * ulp beta (FLX_exp prec) T ≤ (1/2) * (T * w) :=
+      mul_le_mul_of_nonneg_left hE (by norm_num)
+    linarith [hC, hhalf]
+  -- combine (multiplicatively, no division) and finish.
+  have h1mw : (0:ℝ) ≤ 1 - w/2 := by linarith
+  have hchain2 : 4 * q - 2 * p ≤ T * w := by linarith [le_trans hchain hE]
+  have hcombo : (4 * q - 2 * p) * (1 - w/2) ≤ 3 * (p - q) * w := by
+    calc (4 * q - 2 * p) * (1 - w/2)
+        ≤ (T * w) * (1 - w/2) := mul_le_mul_of_nonneg_right hchain2 h1mw
+      _ = w * (T * (1 - w/2)) := by ring
+      _ ≤ w * (3 * (p - q)) := mul_le_mul_of_nonneg_left hTR (le_of_lt hw_pos)
+      _ = 3 * (p - q) * w := by ring
+  nlinarith [hcombo, mul_nonneg (show (0:ℝ) ≤ 1/2 - w by linarith)
+    (show (0:ℝ) ≤ 2 * p - q by linarith)]
+
 end LeanFlocq
