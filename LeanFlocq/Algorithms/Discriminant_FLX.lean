@@ -270,6 +270,34 @@ out, and it is exactly what CAD's positive-definite predicates hit.
 The general (cancelling) case `a·c > 0` needs their grid-level argument and is
 left for a faithful port of the published proof. -/
 
+/-- **Kahan discriminant error decomposition (any sign).**
+
+For the canonical algorithm, the result differs from `b·b − a·c` by exactly two
+rounding errors (the `f`-round and the `x`-round):
+`|x − (b·b − a·c)| ≤ v · (|b·b − w| + |f + e|)`, `v = u_ro/(1+u_ro)`.
+General radix, no sign hypothesis. This is the unconditional scaffold; the
+opposite-sign case below sharpens it to the full `2u`. -/
+theorem disc_kahan_error_decomp (beta : radix) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {w e f x : ℝ}
+    (he : e = w - a * c)
+    (hf : f = round beta (FLX_exp prec) (Znearest choice) (b * b - w))
+    (hx : x = round beta (FLX_exp prec) (Znearest choice) (f + e)) :
+    |x - (b * b - a * c)|
+      ≤ u_ro beta prec / (1 + u_ro beta prec) * (|b * b - w| + |f + e|) := by
+  set v := u_ro beta prec / (1 + u_ro beta prec) with hv_def
+  have hef : |f - (b * b - w)| ≤ v * |b * b - w| := by
+    rw [hf]; exact relative_error_N_FLX' beta prec hp choice (b * b - w)
+  have hex : |x - (f + e)| ≤ v * |f + e| := by
+    rw [hx]; exact relative_error_N_FLX' beta prec hp choice (f + e)
+  have hsplit : x - (b * b - a * c) = (f - (b * b - w)) + (x - (f + e)) := by
+    rw [he]; ring
+  calc |x - (b * b - a * c)|
+      = |(f - (b * b - w)) + (x - (f + e))| := by rw [hsplit]
+    _ ≤ |f - (b * b - w)| + |x - (f + e)| := abs_add_le _ _
+    _ ≤ v * |b * b - w| + v * |f + e| := by linarith [hef, hex]
+    _ = v * (|b * b - w| + |f + e|) := by ring
+
 /-- **Kahan discriminant, opposite-sign case: relative error ≤ 2u.**
 
 For `a·c ≤ 0`, the FMA algorithm `w = RN(a·c)`, `e = w − a·c`, `f = RN(b·b − w)`,
