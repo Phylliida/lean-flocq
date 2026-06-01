@@ -483,21 +483,23 @@ specific, so this arc is at `beta.val = 2`. Ported so far (radix 2 unless noted)
   From `mag_mult` + `mag_round`. Cleanly separates Lemma 4's clean regime from the boundary.
 
 **Remaining for the full `2·ulp(d)`** (the *discrete/number-theoretic* half):
-- **Particular power-of-two cases (§3.2.2)** — the boundary now isolated by
+- **Particular power-of-two cases (§3.2.2)** — the boundary isolated by
   `disc_prod_grid_or_pow2` (one of `p,q` an exact rounded power of two; under `ulp p=ulp q`
   with `p≠q` it is the smaller, strictly inside the shared binade only on the other side).
-  Needs the "p,q straddle `2^k`" structural setup (succ/pred via `pred_pos`, exact values
-  `q = 2^k − ulp q` etc.) then Boldo's three subcases: (a) `dp,dq` same sign ⟹ `dp−dq` exact
-  (finer-grid `disc_diff_on_grid_exact`); (b.i) opposite sign, `dp−dq ≥ 0` ⟹ `δ ≤ 3/2·ulp d`
-  (magnitude); (b.ii) opposite sign, `dp−dq ≤ 0` ⟹ exact. **The hardest part.**
+  **Geometric foundation DONE** (`disc_straddle`, general radix): in the near-cancellation
+  regime with distinct ulps, `q<p` straddle a power of `β` (`mag p = mag q + 1`,
+  `q < β^(mag q) ≤ p`). **Remaining**: the exact-value layer (`q = β^(mag q) − ulp q` etc.
+  via `pred_pos`/`succ`) feeding Boldo's three subcases: (a) `dp,dq` same sign ⟹ `dp−dq`
+  exact (finer-grid `disc_diff_on_grid_exact`); (b.i) opposite sign, `dp−dq ≥ 0` ⟹
+  `δ ≤ 3/2·ulp d` (magnitude); (b.ii) opposite sign, `dp−dq ≤ 0` ⟹ exact. **The hardest part.**
 - **Correction assembly** (case-split p=q / far / Lemma 4 / particular) + **full §3 theorem**.
 - **§4** (rounded test `◦(p+q)≤◦(3◦|p−q|)` vs real test; Lemmas 5–12, incl. number-theoretic Lemma 9).
 The opposite-sign `2u` (sharper than Boldo there) + §3.1 + §3.2 analytic + **Lemma 4 + its
-boundary-discharge tool** stand as delivered. Next session: §3.2.2 straddle setup → subcases
-(a)/(b.i)/(b.ii) → correction assembly → §4.
+boundary-discharge tool + the §3.2.2 straddle foundation** stand as delivered. Next session:
+§3.2.2 exact-value layer → subcases (a)/(b.i)/(b.ii) → correction assembly → §4.
 
-**~35017 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
-(Newest: `Algorithms/Discriminant_FLX.lean`, 938 lines / 31 theorems — the
+**~35086 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
+(Newest: `Algorithms/Discriminant_FLX.lean`, 1007 lines / 32 theorems — the
 in-progress Kahan discriminant port; see the discriminant section above.)
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
@@ -543,7 +545,7 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Algorithms/ErrFMA.lean` | 251 | `Pff/Pff.v` `FmaErr` (23446–25161), `Pff2Flocq.v` `ErrFMA_correct` (1057) | **Exact error of the FMA (Boldo–Muller) — E0/E1 done, E2 L1 + β2=0 branch typed.** `a·b + c = r1 + r2 + r3` exactly. `twoproduct_eft`/`twosum_eft` (existential EFT interfaces), **`ErrFMA_chain`** (`a·b+c = β1+β2+α2`), **`errfma_gat_exact`** (L1 = Pff `gatCorrect`: `β1−r1 ∈ F` via the engine + `round_N_pt` closeness), **`ErrFMA_be2_zero`** (Pff `FmaErr_aux1`: `a·b+c = r1+γ+α2` when β2=0, via L1 + idempotency). |
 | `Algorithms/ErrFMA_L2.lean` | 776 | `Pff/Pff.v` `FmaErr_aux2`/`gaCorrect`/`Midpoint_aux` (24318–24786, 23856–24316) | **ErrFMA L2 (β2≠0) — COMPLETE.** The Flocq-native replacement for Pff's MSB/LSB. **`errfma_be2_mult_bpow`** (β2 a multiple of `β^min(cexp u1, cexp α1)` via `round_repr_same_exp`), **`errfma_al2_lt_bpow`** (`|α2| < β^min(...)`), **`nonneg_bpow_mult_lt_eq_zero`**/**`neg_bpow_squeeze`** (divisibility squeeze), **`errfma_be2_eq_bpow_upper`**/**`errfma_be2_eq_bpow_lower`** (upper/lower midpoint cores via `round_N_{le,ge}_midp` + squeeze; lower has the `pred_pos` power-of-β branch), **`errfma_be2_div_dichotomy`** (`β1=r1 ∨ β2` a `β^(cexp β1−2)`-multiple; `be1<0` sign-reduces via `round_N_opp`), **`format_mult_bpow_of_cexp_ge`**, **`errfma_ga_exact`** (`(β1−r1)+β2 ∈ F`), **`ErrFMA_be2_nonzero`** (`FmaErr_aux2`), **`ErrFMA_correct`** (the full `FmaErr`: `a·b+c = r1+γ+α2`, both branches + edge cases), **`ErrFMA_threefloat`** (`Fma_FTS`: `a·b+c = r1+r2+r3` via precondition-free `TwoSum(γ,α2)`; `α2∈F` via `plus_error`, `u2∈F` via `mult_error_FLX`). |
 
-| `Algorithms/Discriminant_FLX.lean` | 938 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — IN PROGRESS.** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus ported from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Full `2u` for the opposite-sign (sum-of-squares) case**: `disc_kahan_error_decomp` (2-error, any sign) + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ |x−(b·b−a·c)| ≤ 2·u_ro·|b·b−a·c|`, sharper than Boldo there). **Boldo branch-algorithm `2·ulp(d)` port (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit `ulp_le_ulp_round_FLX`/`ulp_two_mul_r2`/`ulp_half_r2`/`disc_branch_err_decomp`; **§3.1 benign DONE** (`disc_branch_benign` via `disc_benign_ulp_key`); **§3.2 analytic half DONE** (`disc_corr_err_decomp`, `disc_corr_exact`=Lemma 3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`); **§3.2 Lemma 4 DONE** (`disc_corr_lemma4` = `ulp p=ulp q ⟹ δ≤2ulp d`, via the general-radix grid-difference exactness `disc_diff_on_grid_exact` + product-grid membership `disc_prod_err_mult_bpow` + `disc_bpow_coarsen`); **boundary-discharge `disc_prod_grid_or_pow2`** (grid hyp holds OR `RN(b·b)` is a power of two). Remaining: §3.2.2 particular power-of-two cases (the boundary, now isolated) + assembly + §4 (rounded test, Lemmas 5–12). |
+| `Algorithms/Discriminant_FLX.lean` | 938 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — IN PROGRESS.** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus ported from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Full `2u` for the opposite-sign (sum-of-squares) case**: `disc_kahan_error_decomp` (2-error, any sign) + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ |x−(b·b−a·c)| ≤ 2·u_ro·|b·b−a·c|`, sharper than Boldo there). **Boldo branch-algorithm `2·ulp(d)` port (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit `ulp_le_ulp_round_FLX`/`ulp_two_mul_r2`/`ulp_half_r2`/`disc_branch_err_decomp`; **§3.1 benign DONE** (`disc_branch_benign` via `disc_benign_ulp_key`); **§3.2 analytic half DONE** (`disc_corr_err_decomp`, `disc_corr_exact`=Lemma 3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`); **§3.2 Lemma 4 DONE** (`disc_corr_lemma4` = `ulp p=ulp q ⟹ δ≤2ulp d`, via the general-radix grid-difference exactness `disc_diff_on_grid_exact` + product-grid membership `disc_prod_err_mult_bpow` + `disc_bpow_coarsen`); **boundary-discharge `disc_prod_grid_or_pow2`** (grid hyp holds OR `RN(b·b)` is a power of two); **§3.2.2 geometric foundation `disc_straddle`** (distinct ulps + near-cancellation ⟹ `q<p` straddle a power of `β`, `mag p = mag q + 1`). Remaining: §3.2.2 exact-value layer + three subcases + assembly + §4 (rounded test, Lemmas 5–12). |
 **Total: ~812 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
