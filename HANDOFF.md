@@ -14,9 +14,10 @@ session, possibly someone else.
 > (`disc_corr_particular_lo` — Boldo's relational WLOG does *not* collapse in the
 > functional-rounding setting), and the **unconditional grid discharge**
 > (`disc_mag_prod_no_bump`: products never bump magnitude, killing the `prec≥3` side
-> condition and the equal-ulp boundary Boldo glosses). **§4 started** (`disc_fp_lemma5`);
-> the remaining §4 derivations (Lemmas 6–12, incl. the number-theoretic Lemma 9) are
-> worked out in the discriminant section for transcription next session.
+> condition and the equal-ulp boundary Boldo glosses). **§4.1 analytic core done**
+> (`disc_fp_lemma5/6/7`, all first-try); remaining is the number-theoretic L8+L9
+> (`ulp p>ulp q` impossible — full integer roadmap + a choice-robustness insight in the
+> discriminant section) and §4.2 + the FP-test capstone.
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -545,37 +546,49 @@ Capstone `disc_branch_real_test`: Kahan's branch algorithm `d = if p+q≤3|p−q
 else ◦((p−q)+◦(dp−dq))` satisfies `|d−(b·b−a·c)| ≤ 2·ulp d` under the *real* test — the full
 result of Boldo (2009) §3, both branches, **0 `sorry`s**.
 
-**§4 — STARTED (Lemma 5 done).** Reconciling the real test with the *floating-point*
-test `◦(p+q) ≤ ◦(3·|p−q|)` (with `◦(p−q)=p−q` exact in Sterbenz range). The two tests
-disagree only in a thin sliver (Boldo's `p=27,q=14` 5-digit example). **`disc_fp_lemma5`
-DONE** (§4.1, the easy `cexp q ≤ cexp d` case: `d=p−q` exact ⟹ `δ=|dp−dq| ≤ 3/2·ulp q ≤
-3/2·ulp d`). The rest, with the derivations worked out so next session can transcribe:
+**§4 — §4.1 ANALYTIC CORE DONE (Lemmas 5,6,7).** Reconciling the real test with the
+*floating-point* test `◦(p+q) ≤ ◦(3·|p−q|)` (with `◦(p−q)=p−q` exact in Sterbenz range).
+The two tests disagree only in a thin sliver (Boldo's `p=27,q=14` 5-digit example).
+**`disc_fp_lemma5`/`_lemma6`/`_lemma7` DONE** (all built first-try). Remaining in §4.1: the
+number-theoretic L8+L9; then §4.2 and the capstone.
 
 - **§4.1 (real corr, program runs benign `d=◦(p−q)=p−q`):**
-  - **L6** `q ≤ p(1+2t)/(2+t)` i.e. **`3q ≤ 2p`** (so `d=p−q ≥ q/2`), `t:=β^(−prec)`, needs `prec≥2`.
-    *Chain (worked out):* `S:=◦(p+q)`, `T:=◦(3(p−q))`, `w:=β^(1−prec)`. From `(p+q)−S ≤ ½ulp S`
-    [`error_le_half_ulp_round`], `S ≤ T` [FP benign], `T−R ≤ ½ulp T` [R:=3(p−q)], `ulp S ≤ ulp T`
-    [`ulp_le`, both >0] get `(p+q)−R ≤ ulp T`. Then `ulp T ≤ T·w` [**`ulp_FLX_le`**] and
-    `T−R ≤ ½ulp T ≤ ½Tw` ⟹ `T(1−w/2) ≤ R`. Combine (mult, avoid division):
-    `((p+q)−R)(1−w/2) ≤ Tw(1−w/2) ≤ Rw` ⟹ (sub `R=3(p−q)`, `(p+q)−R=4q−2p`) `4q−2p ≤ w(2p−q)`;
-    with `w≤½` and `2p−q>0` ⟹ `4q−2p ≤ ½(2p−q)` ⟹ `9q/2 ≤ 3p` ⟹ `3q ≤ 2p`. ✓
-  - **L7** `ulp p=ulp q ⟹ δ≤2ulp d`: `δ=|dp−dq| ≤ ulp q` (equal ulps), and `d≥q/2` (L6) ⟹
-    `ulp q ≤ 2·ulp d` (`ulp_le` + `ulp_half_r2`). Easy given L6.
-  - **L8** `ulp p>ulp q ⟹ 2q=p⁺` (successor; `p<2q` and `p⁺≤2q`, then `p⁺⁺≥p+2ulp p > 2q`).
-  - **L9** `ulp p>ulp q` is **IMPOSSIBLE** — the **number-theoretic crux**. Disprove `2q=p⁺`
-    by significand case analysis on `n_q`: if `q` a power of 2, `p=(2q)⁻` gives `ulp p=ulp q`
-    (contra); else `n_q=2^(prec−1)+1`, `p=2^(prec+e_q)`, and `◦(3|p−q|)≠◦(p+q)` by explicit
-    integer arithmetic. (Mantissa-level, like `disc_gap_le_two_ulp`/`disc_mag_prod_no_bump`.)
-  - Assembly: L5/L7/L8/L9 ⟹ first-disagreement bound.
+  - **L5 DONE** (`disc_fp_lemma5`): easy `cexp q ≤ cexp d` case, `δ=|dp−dq| ≤ 3/2·ulp q ≤ 3/2·ulp d`.
+  - **L6 DONE** (`disc_fp_lemma6`): **`3q ≤ 2p`** (so `d=p−q ≥ q/2`), needs `prec≥2`. The chain
+    internally derives the **SHARP** form **`4q−2p ≤ w(2p−q)`** (`w:=β^(1−prec)`) before weakening
+    to `3q≤2p` — L8 will need the sharp form, so either re-expose it or re-derive (it's the
+    `hchain2`/`hcombo` step right before the final `nlinarith`).
+  - **L7 DONE** (`disc_fp_lemma7`): `ulp p=ulp q ⟹ δ≤2ulp d` (via L6's `d≥q/2`).
+  - **L8+L9 — REMAINING, the number-theoretic crux.** `ulp p > ulp q` is IMPOSSIBLE. Full integer
+    structure worked out (transcribe next session):
+    - Straddle: `ulp p>ulp q` + `p<2q` (real corr) ⟹ `mag p=mag q+1`, `ulp p=2ulp q`. Significands
+      `q=n_q·2^(e_q)`, `p=2n_p·2^(e_q)` (`e_q=cexp q`), `2^(prec−1)≤n_p,n_q<2^prec`.
+    - Integer constraints: `n_p<n_q` (p<2q), `3n_q≤4n_p` (L6), `2n_p−n_q<2^(prec−1)` (from the
+      assembly's `cexp d<cexp q` ⟹ `d=(2n_p−n_q)2^(e_q)<2^(e_q+prec−1)`), `2n_p−n_q≥1` (d>0).
+    - **L8** `n_q=n_p+1`: `succ p ≤ 2q` (p<2q, `2q∈F`, `succ_le_lt_aux`) ⟹ `n_q≥n_p+1`; and
+      `2q≤succ p` from `succ(succ p)>2q` (needs the **sharp L6**: `2q ≤ p(1+w)/(1+w/4)` < `p⁺⁺`).
+    - **L9** `n_p=2^(prec−1)`, `n_q=2^(prec−1)+1`: from `2n_p−n_q<2^(prec−1)` + `n_q=n_p+1` ⟹
+      `n_p−1<2^(prec−1)` ⟹ `n_p=2^(prec−1)`. So `p=2^(e_q+prec)`, `q=(2^(prec−1)+1)2^(e_q)`.
+    - Contradiction: `p+q=(3·2^(prec−1)+1)2^(e_q)`, `3(p−q)=(3·2^(prec−1)−3)2^(e_q)`, both odd
+      significands at ulp `2^(e_q+1)` ⟹ both at midpoints. **KEY INSIGHT (choice-robust):** the
+      rounded values are `◦(p+q) ≥ 3·2^(prec−1)·2^(e_q)` and `◦(3(p−q)) ≤ (3·2^(prec−1)−2)·2^(e_q)`
+      — a ≥2-ulp gap that dominates *any* tie-break, so `◦(p+q) > ◦(3(p−q))` for **arbitrary
+      `Znearest choice`** (not just round-to-even as Boldo assumes), contradicting FP benign
+      `◦(p+q)≤◦(3(p−q))`. Prove the two bounds via `round_ge_generic`/`round_le_generic` with the
+      explicit floats `3·2^(prec−1)·2^(e_q) = (3·2^(prec−2))·2^(e_q+1) ∈ F` etc. Needs `prec≥3`
+      (so `3·2^(prec−1)±k` lands in `[2^prec,2^(prec+1))`). Mantissa-level, like `disc_gap_le_two_ulp`.
+  - Assembly: `cexp d≥cexp q`→L5; else `ulp p=ulp q`→L7, `ulp p>ulp q`→L8+L9 (impossible). `ulp p<ulp q`
+    can't happen (`p≥q`). Note L5 is needed (L9 requires `cexp d<cexp q`).
 - **§4.2 (real benign, program runs correction):** L10 `p−q ≤ ⅓(p+|q|)(1+t)²/(1−t)`,
   L11 `0<q`, L12 `◦(|dp−dq|) ≤ 3ulp(◦(p−q))`; then `δ ≤ ½(ulp d + ulp◦(p−q) + ulp◦|dp−dq|)`
   with `ulp d ≥ ½ulp◦(p−q)` ⟹ `δ ≤ ulp d(½+1+6·2^(1−prec)) ≤ 2ulp d`.
 - **§4 capstone** `disc_branch_fp_test`: same as `disc_branch_real_test` but with the FP test;
   in agreement → §3, in disagreement → §4.1/§4.2. WLOG `p≥q` (orientation) handled at assembly.
 
-**~35660 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
-(Newest: `Algorithms/Discriminant_FLX.lean`, ~2230 lines / 48 theorems — the
-Kahan discriminant port, **§3 complete + §4 started**; see the discriminant section above.)
+**~35790 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
+(Newest: `Algorithms/Discriminant_FLX.lean`, 2353 lines / 50 theorems — the
+Kahan discriminant port, **§3 complete + §4.1 analytic core (L5–L7)**; see the discriminant
+section above.)
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -620,7 +633,7 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Algorithms/ErrFMA.lean` | 251 | `Pff/Pff.v` `FmaErr` (23446–25161), `Pff2Flocq.v` `ErrFMA_correct` (1057) | **Exact error of the FMA (Boldo–Muller) — E0/E1 done, E2 L1 + β2=0 branch typed.** `a·b + c = r1 + r2 + r3` exactly. `twoproduct_eft`/`twosum_eft` (existential EFT interfaces), **`ErrFMA_chain`** (`a·b+c = β1+β2+α2`), **`errfma_gat_exact`** (L1 = Pff `gatCorrect`: `β1−r1 ∈ F` via the engine + `round_N_pt` closeness), **`ErrFMA_be2_zero`** (Pff `FmaErr_aux1`: `a·b+c = r1+γ+α2` when β2=0, via L1 + idempotency). |
 | `Algorithms/ErrFMA_L2.lean` | 776 | `Pff/Pff.v` `FmaErr_aux2`/`gaCorrect`/`Midpoint_aux` (24318–24786, 23856–24316) | **ErrFMA L2 (β2≠0) — COMPLETE.** The Flocq-native replacement for Pff's MSB/LSB. **`errfma_be2_mult_bpow`** (β2 a multiple of `β^min(cexp u1, cexp α1)` via `round_repr_same_exp`), **`errfma_al2_lt_bpow`** (`|α2| < β^min(...)`), **`nonneg_bpow_mult_lt_eq_zero`**/**`neg_bpow_squeeze`** (divisibility squeeze), **`errfma_be2_eq_bpow_upper`**/**`errfma_be2_eq_bpow_lower`** (upper/lower midpoint cores via `round_N_{le,ge}_midp` + squeeze; lower has the `pred_pos` power-of-β branch), **`errfma_be2_div_dichotomy`** (`β1=r1 ∨ β2` a `β^(cexp β1−2)`-multiple; `be1<0` sign-reduces via `round_N_opp`), **`format_mult_bpow_of_cexp_ge`**, **`errfma_ga_exact`** (`(β1−r1)+β2 ∈ F`), **`ErrFMA_be2_nonzero`** (`FmaErr_aux2`), **`ErrFMA_correct`** (the full `FmaErr`: `a·b+c = r1+γ+α2`, both branches + edge cases), **`ErrFMA_threefloat`** (`Fma_FTS`: `a·b+c = r1+r2+r3` via precondition-free `TwoSum(γ,α2)`; `α2∈F` via `plus_error`, `u2∈F` via `mult_error_FLX`). |
 
-| `Algorithms/Discriminant_FLX.lean` | 2166 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — Boldo §3 COMPLETE.** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Opposite-sign `2u`**: `disc_kahan_error_decomp` + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ ≤2·u_ro·\|b·b−a·c\|`). **Boldo branch `2·ulp(d)` (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit; **§3.1 benign** (`disc_branch_benign`); **§3.2 analytic** (`disc_corr_err_decomp`, `disc_corr_exact`=L3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`); **§3.2 Lemma 4** (`disc_corr_lemma4`, via `disc_diff_on_grid_exact`/`disc_prod_err_mult_bpow`/`disc_inner_exact`). **§3.2.2 BOTH orientations**: geometry `disc_straddle`/`disc_particular_p_pow2` (polymorphic in `{p q}`), exact core `disc_inner_exact`; case A (`q<p`) `disc_corr_particular` + subcases `_same_sign`/`_opp_neg`/`_opp_pos`; **genuine mirror** case B (`p<q`) `disc_corr_particular_lo` + `_same_sign_lo`/`_opp_pos_lo`/`_opp_neg_lo` (Boldo's relational WLOG does NOT collapse in the functional setting). **Grid discharge UNCONDITIONAL** via **`disc_mag_prod_no_bump`** (`mag(RN(x·y)) ≤ mag x+mag y` — products never bump magnitude, resolving the equal-ulp boundary, killing `prec≥3`); tight gap `disc_gap_le_two_ulp`. **Full §3**: **`disc_correction`** (correction branch, both orientations) + capstone **`disc_branch_real_test`** (Kahan branch algorithm `≤2·ulp d` under the real test, both branches, 0 sorries). Remaining: §4 (rounded vs real test, Lemmas 5–12). |
+| `Algorithms/Discriminant_FLX.lean` | 2353 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — Boldo §3 COMPLETE + §4.1 analytic core.** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Opposite-sign `2u`**: `disc_kahan_error_decomp` + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ ≤2·u_ro·\|b·b−a·c\|`). **Boldo branch `2·ulp(d)` (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit; **§3.1 benign** (`disc_branch_benign`); **§3.2 analytic** (`disc_corr_err_decomp`, `disc_corr_exact`=L3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`); **§3.2 Lemma 4** (`disc_corr_lemma4`, via `disc_diff_on_grid_exact`/`disc_prod_err_mult_bpow`/`disc_inner_exact`). **§3.2.2 BOTH orientations**: geometry `disc_straddle`/`disc_particular_p_pow2` (polymorphic in `{p q}`), exact core `disc_inner_exact`; case A (`q<p`) `disc_corr_particular` + subcases `_same_sign`/`_opp_neg`/`_opp_pos`; **genuine mirror** case B (`p<q`) `disc_corr_particular_lo` + `_same_sign_lo`/`_opp_pos_lo`/`_opp_neg_lo` (Boldo's relational WLOG does NOT collapse in the functional setting). **Grid discharge UNCONDITIONAL** via **`disc_mag_prod_no_bump`** (`mag(RN(x·y)) ≤ mag x+mag y` — products never bump magnitude, resolving the equal-ulp boundary, killing `prec≥3`); tight gap `disc_gap_le_two_ulp`. **Full §3**: **`disc_correction`** (correction branch, both orientations) + capstone **`disc_branch_real_test`** (Kahan branch algorithm `≤2·ulp d` under the real test, both branches, 0 sorries). **§4 (FP-test reconciliation): §4.1 analytic core DONE** — `disc_fp_lemma5` (cexp q≤cexp d), `disc_fp_lemma6` (`3q≤2p`, the `p≈2q` relative-error bound), `disc_fp_lemma7` (ulp p=ulp q). Remaining: number-theoretic L8+L9 (`ulp p>ulp q` impossible — choice-robust gap argument), §4.2 (L10–12), FP-test capstone. |
 **Total: ~812 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
