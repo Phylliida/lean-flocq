@@ -14,8 +14,9 @@ session, possibly someone else.
 > (`disc_corr_particular_lo` — Boldo's relational WLOG does *not* collapse in the
 > functional-rounding setting), and the **unconditional grid discharge**
 > (`disc_mag_prod_no_bump`: products never bump magnitude, killing the `prec≥3` side
-> condition and the equal-ulp boundary Boldo glosses). Remaining: only §4 (rounded
-> vs real test). See the discriminant section below.
+> condition and the equal-ulp boundary Boldo glosses). **§4 started** (`disc_fp_lemma5`);
+> the remaining §4 derivations (Lemmas 6–12, incl. the number-theoretic Lemma 9) are
+> worked out in the discriminant section for transcription next session.
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -544,13 +545,37 @@ Capstone `disc_branch_real_test`: Kahan's branch algorithm `d = if p+q≤3|p−q
 else ◦((p−q)+◦(dp−dq))` satisfies `|d−(b·b−a·c)| ≤ 2·ulp d` under the *real* test — the full
 result of Boldo (2009) §3, both branches, **0 `sorry`s**.
 
-**Remaining:** only **§4** — reconcile the real test with the *rounded* floating-point test
-`3·◦|p−q| ≥ ◦(p+q)` (Lemmas 5–12, incl. number-theoretic Lemma 9; the two tests can
-disagree, e.g. Boldo's `p=27,q=14` 5-digit example).
+**§4 — STARTED (Lemma 5 done).** Reconciling the real test with the *floating-point*
+test `◦(p+q) ≤ ◦(3·|p−q|)` (with `◦(p−q)=p−q` exact in Sterbenz range). The two tests
+disagree only in a thin sliver (Boldo's `p=27,q=14` 5-digit example). **`disc_fp_lemma5`
+DONE** (§4.1, the easy `cexp q ≤ cexp d` case: `d=p−q` exact ⟹ `δ=|dp−dq| ≤ 3/2·ulp q ≤
+3/2·ulp d`). The rest, with the derivations worked out so next session can transcribe:
 
-**~35600 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
-(Newest: `Algorithms/Discriminant_FLX.lean`, 2166 lines / 47 theorems — the
-Kahan discriminant port, **§3 complete**; see the discriminant section above.)
+- **§4.1 (real corr, program runs benign `d=◦(p−q)=p−q`):**
+  - **L6** `q ≤ p(1+2t)/(2+t)` i.e. **`3q ≤ 2p`** (so `d=p−q ≥ q/2`), `t:=β^(−prec)`, needs `prec≥2`.
+    *Chain (worked out):* `S:=◦(p+q)`, `T:=◦(3(p−q))`, `w:=β^(1−prec)`. From `(p+q)−S ≤ ½ulp S`
+    [`error_le_half_ulp_round`], `S ≤ T` [FP benign], `T−R ≤ ½ulp T` [R:=3(p−q)], `ulp S ≤ ulp T`
+    [`ulp_le`, both >0] get `(p+q)−R ≤ ulp T`. Then `ulp T ≤ T·w` [**`ulp_FLX_le`**] and
+    `T−R ≤ ½ulp T ≤ ½Tw` ⟹ `T(1−w/2) ≤ R`. Combine (mult, avoid division):
+    `((p+q)−R)(1−w/2) ≤ Tw(1−w/2) ≤ Rw` ⟹ (sub `R=3(p−q)`, `(p+q)−R=4q−2p`) `4q−2p ≤ w(2p−q)`;
+    with `w≤½` and `2p−q>0` ⟹ `4q−2p ≤ ½(2p−q)` ⟹ `9q/2 ≤ 3p` ⟹ `3q ≤ 2p`. ✓
+  - **L7** `ulp p=ulp q ⟹ δ≤2ulp d`: `δ=|dp−dq| ≤ ulp q` (equal ulps), and `d≥q/2` (L6) ⟹
+    `ulp q ≤ 2·ulp d` (`ulp_le` + `ulp_half_r2`). Easy given L6.
+  - **L8** `ulp p>ulp q ⟹ 2q=p⁺` (successor; `p<2q` and `p⁺≤2q`, then `p⁺⁺≥p+2ulp p > 2q`).
+  - **L9** `ulp p>ulp q` is **IMPOSSIBLE** — the **number-theoretic crux**. Disprove `2q=p⁺`
+    by significand case analysis on `n_q`: if `q` a power of 2, `p=(2q)⁻` gives `ulp p=ulp q`
+    (contra); else `n_q=2^(prec−1)+1`, `p=2^(prec+e_q)`, and `◦(3|p−q|)≠◦(p+q)` by explicit
+    integer arithmetic. (Mantissa-level, like `disc_gap_le_two_ulp`/`disc_mag_prod_no_bump`.)
+  - Assembly: L5/L7/L8/L9 ⟹ first-disagreement bound.
+- **§4.2 (real benign, program runs correction):** L10 `p−q ≤ ⅓(p+|q|)(1+t)²/(1−t)`,
+  L11 `0<q`, L12 `◦(|dp−dq|) ≤ 3ulp(◦(p−q))`; then `δ ≤ ½(ulp d + ulp◦(p−q) + ulp◦|dp−dq|)`
+  with `ulp d ≥ ½ulp◦(p−q)` ⟹ `δ ≤ ulp d(½+1+6·2^(1−prec)) ≤ 2ulp d`.
+- **§4 capstone** `disc_branch_fp_test`: same as `disc_branch_real_test` but with the FP test;
+  in agreement → §3, in disagreement → §4.1/§4.2. WLOG `p≥q` (orientation) handled at assembly.
+
+**~35660 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
+(Newest: `Algorithms/Discriminant_FLX.lean`, ~2230 lines / 48 theorems — the
+Kahan discriminant port, **§3 complete + §4 started**; see the discriminant section above.)
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
