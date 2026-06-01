@@ -672,6 +672,75 @@ theorem disc_prod_grid_or_pow2 (beta : radix) (prec : ℤ) (hp : 0 < prec)
     · -- on the binade `mag(b·b) = 2·mag b`: `p = β^(2·mag b)`, the boundary power.
       right; rw [hmr2, heq]; congr 1; unfold cexp FLX_exp; omega
 
+/-! ### Boldo §3.2.2: the particular power-of-two cases — geometric setup
+
+When `ulp p ≠ ulp q` (so Lemma 4 does not apply) and the products nearly cancel
+(`|p − q| ≤ 2·min(ulp p, ulp q)`), `p` and `q` straddle a power of `β`: with
+`q < p` (WLOG), `mag p = mag q + 1` and `q < β^(mag q) ≤ p`. This is the
+"`p, q` very near a power of 2" structure Boldo normalizes to `p ≈ 1`; we keep it
+at general exponent. The geometric core is general radix. -/
+
+/-- **Straddle lemma** (general radix). In the near-cancellation regime with
+distinct ulps, `q < p` straddle a power of `β`: `mag p = mag q + 1` and
+`q < β^(mag q) ≤ p`. If `mag p ≥ mag q + 2`, then `p − q > β^(mag q) ≥ 2·ulp q`,
+contradicting `|p − q| ≤ 2·ulp q`; distinct ulps rule out `mag p = mag q`. -/
+theorem disc_straddle (beta : radix) (prec : ℤ) (hp : 0 < prec) {p q : ℝ}
+    (hq_pos : 0 < q) (hqp : q < p)
+    (hulp_ne : ulp beta (FLX_exp prec) p ≠ ulp beta (FLX_exp prec) q)
+    (hclose : |p - q| ≤ 2 * ulp beta (FLX_exp prec) q) :
+    mag beta p = mag beta q + 1
+      ∧ q < bpow beta (mag beta q) ∧ bpow beta (mag beta q) ≤ p := by
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have hp_ne : p ≠ 0 := ne_of_gt hp_pos
+  have hq_ne : q ≠ 0 := ne_of_gt hq_pos
+  set mp := mag beta p with hmp
+  set mq := mag beta q with hmq
+  have hcexp_p : cexp beta (FLX_exp prec) p = mp - prec := by unfold cexp FLX_exp; rw [← hmp]
+  have hcexp_q : cexp beta (FLX_exp prec) q = mq - prec := by unfold cexp FLX_exp; rw [← hmq]
+  have hulp_p : ulp beta (FLX_exp prec) p = bpow beta (mp - prec) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hp_ne, hcexp_p]
+  have hulp_q : ulp beta (FLX_exp prec) q = bpow beta (mq - prec) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hq_ne, hcexp_q]
+  have hq_ub : q < bpow beta mq := by
+    have := bpow_mag_gt beta q; rwa [abs_of_pos hq_pos, ← hmq] at this
+  have hp_lb : bpow beta (mp - 1) ≤ p := by
+    have := bpow_mag_le beta hp_ne; rwa [abs_of_pos hp_pos, ← hmp] at this
+  -- `mag` is monotone, so `mq ≤ mp`; distinct ulps force the inequality strict.
+  have hmag_le : mq ≤ mp := by
+    have := mag_le_abs beta hq_ne (y := p)
+      (by rw [abs_of_pos hq_pos, abs_of_pos hp_pos]; linarith)
+    rwa [← hmp, ← hmq] at this
+  have hmag_lt : mq < mp := by
+    rcases lt_or_eq_of_le hmag_le with h | h
+    · exact h
+    · exact absurd (by rw [hulp_p, hulp_q, h]) hulp_ne
+  -- `2·ulp q ≤ β^(mq)`, since `β^prec ≥ 2`.
+  have hβp : (2 : ℝ) ≤ bpow beta prec := by
+    calc (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+      _ = bpow beta 1 := (bpow_one beta).symm
+      _ ≤ bpow beta prec := bpow_le beta hp
+  have hβ2 : (2 : ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+  have h2ulp : 2 * ulp beta (FLX_exp prec) q ≤ bpow beta mq := by
+    rw [hulp_q]
+    have hsplit : bpow beta mq = bpow beta (mq - prec) * bpow beta prec := by
+      rw [← bpow_plus]; congr 1; omega
+    have h0 : 0 < bpow beta (mq - prec) := bpow_gt_0 _ _
+    calc 2 * bpow beta (mq - prec)
+        ≤ bpow beta prec * bpow beta (mq - prec) := mul_le_mul_of_nonneg_right hβp (le_of_lt h0)
+      _ = bpow beta mq := by rw [hsplit]; ring
+  -- `mp ≤ mq + 1`: else `p − q > β^(mq) ≥ 2·ulp q ≥ |p − q|`.
+  have hmag_ub : mp ≤ mq + 1 := by
+    by_contra hcon
+    push_neg at hcon
+    have hp_ge : bpow beta (mq + 1) ≤ p := le_trans (bpow_le beta (by omega)) hp_lb
+    have hbig : bpow beta (mq + 1) = bpow beta mq * (beta.val : ℝ) := by rw [bpow_plus, bpow_one]
+    have h0 : 0 < bpow beta mq := bpow_gt_0 _ _
+    have hdouble : bpow beta mq * 2 ≤ bpow beta (mq + 1) := by rw [hbig]; nlinarith
+    have hpq_gt : bpow beta mq < p - q := by linarith [hp_ge, hq_ub, hdouble]
+    rw [abs_of_pos (by linarith : (0 : ℝ) < p - q)] at hclose
+    linarith [h2ulp, hpq_gt, hclose]
+  exact ⟨by omega, hq_ub, le_trans (bpow_le beta (by omega)) hp_lb⟩
+
 /-! ## D2: the master error decomposition (general radix) -/
 
 /-- **Error decomposition of the naive result.**
