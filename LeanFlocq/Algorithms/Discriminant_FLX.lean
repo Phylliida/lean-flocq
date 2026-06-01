@@ -364,6 +364,49 @@ theorem disc_corr_exact (beta : radix) (prec : ℤ) (hp : 0 < prec)
   rw [hd, hs]
   exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (b * b - a * c)
 
+/-- **Boldo §3.2.1 general case: small correction ⟹ within `2·ulp d`** (radix 2).
+
+When `|dp − dq| ≤ ½|p − q|` (the regime `|p − q| ≥ 3·min(ulp p, ulp q)`), the
+inner correction `g = RN(dp − dq)` has `|g| ≤ ½|p − q| ≤ |(p − q) + g|`, so
+`ulp g ≤ ulp d`, and the decomposition gives `δ ≤ ½ulp d + ½ulp g ≤ ulp d`. -/
+theorem disc_corr_general (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) (a b c : ℝ)
+    {p q dp dq g d : ℝ}
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hg : g = round beta (FLX_exp prec) (Znearest choice) (dp - dq))
+    (hd : d = round beta (FLX_exp prec) (Znearest choice) ((p - q) + g))
+    (hpqF : generic_format beta (FLX_exp prec) (p - q))
+    (hsmall : |dp - dq| ≤ |p - q| / 2) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  -- ½|p − q| is representable (halving a float at radix 2).
+  have hpq2_F : generic_format beta (FLX_exp prec) ((p - q) / 2) := by
+    have h := mult_bpow_exact_FLX beta prec (-1) hpqF
+    rwa [show bpow beta (-1) = (1 : ℝ) / 2 by unfold bpow; rw [hbeta]; norm_num,
+      show (p - q) * ((1 : ℝ) / 2) = (p - q) / 2 from by ring] at h
+  have hhalf_F : generic_format beta (FLX_exp prec) (|p - q| / 2) := by
+    rcases abs_cases (p - q) with ⟨he, _⟩ | ⟨he, _⟩
+    · rw [he]; exact hpq2_F
+    · rw [he, show -(p - q) / 2 = -((p - q) / 2) from by ring]
+      exact generic_format_opp beta (FLX_exp prec) hpq2_F
+  -- |g| ≤ ½|p − q|.
+  have hg_bd : |g| ≤ |p - q| / 2 := by
+    rw [hg]; exact abs_round_le_generic beta (FLX_exp prec) hValid (Znearest choice) hhalf_F hsmall
+  -- |(p − q) + g| ≥ ½|p − q|, hence |g| ≤ |(p − q) + g|.
+  have htri : |p - q| ≤ |(p - q) + g| + |g| := by
+    have h := abs_add_le ((p - q) + g) (-g)
+    rw [show (p - q) + g + -g = p - q from by ring, abs_neg] at h
+    exact h
+  have hg_le_s : |g| ≤ |(p - q) + g| := by linarith
+  have hulp_g : ulp beta (FLX_exp prec) g ≤ ulp beta (FLX_exp prec) ((p - q) + g) :=
+    ulp_le beta (FLX_exp prec) hValid hMon hg_le_s
+  have hulp_gd : ulp beta (FLX_exp prec) g ≤ ulp beta (FLX_exp prec) d := by
+    rw [hd]; exact le_trans hulp_g (ulp_le_ulp_round_FLX beta prec hp choice ((p - q) + g))
+  have hdecomp := disc_corr_err_decomp beta prec hp choice a b c hdp hdq hg hd
+  linarith [hdecomp, hulp_gd, ulp_ge_0 beta (FLX_exp prec) d]
+
 /-! ## D2: the master error decomposition (general radix) -/
 
 /-- **Error decomposition of the naive result.**
