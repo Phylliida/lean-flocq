@@ -14,10 +14,11 @@ session, possibly someone else.
 > L11 `0<q` + `p≤3q` (`disc_fp_lemma11`, `disc_fp_p_le_3q`), L12 `|◦(dp−dq)|≤3ulp(◦(p−q))`
 > (`disc_fp_lemma12` + helper `disc_three_bpow_format`), and a clean assembly that gets
 > `ulp m ≤ 2ulp d` from `d ≥ m/2` (`m/2∈F`, radix 2) — sidestepping Boldo's `f−3ulp f∈F`.
-> **Remaining on the discriminant:** *only* the FP-test capstone `disc_branch_fp_test`, and
-> within it *only* the `p<q` orientation (the `q<p` disagreements + both-orientation
-> agreements are done). Linchpin for the reduction — `round_N_opp` (RN negates by reflecting
-> the tie-break) — is located; see the §4 capstone roadmap below for routes (A)/(B).
+> The FP-test capstone `disc_branch_fp_test` is **DONE for the WLOG orientation `q<p`** — the
+> *actual* rounded test `◦(p+q) ≤ ◦(3·◦(|p−q|))`, all four (FP-test × real-test) cases wired,
+> **exactly as far as Boldo's paper proves it**. **Remaining on the discriminant:** *only* the
+> `p<q` orientation of the capstone — a genuine hand-built mirror (the `round_N_opp` reflection
+> reduction does NOT work: product-rounding ties break it; see the §4 capstone roadmap below).
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -580,21 +581,27 @@ two tests disagree only in a thin sliver (Boldo's `p=27,q=14` 5-digit example).
     `g=◦(dp−dq)`, outer]; `ulp m ≤ 2ulp d` [`m+g ≥ m−3ulp m ≥ m/2` (3ulp m ≤ m/2, prec≥4) + `m/2∈F`
     ⟹ `d=◦(m+g) ≥ m/2`]; `ulp g ≤ 6w·ulp d` [`ulp_FLX_le` + L12]; ⟹ `δ ≤ (3/2 + 3w)·ulp d ≤ 2ulp d`
     for `prec≥4` (`w≤1/8 < 1/6`). **The `m/2≥` route avoids needing `f−3ulp f∈F`** (Boldo's appeal).
-- **§4 capstone** `disc_branch_fp_test` — **REMAINING (orientation fork).** Like `disc_branch_real_test`
-  but with the FP test; agreement → §3 (`disc_branch_benign`/`disc_correction`, both orientations
-  already), disagreements → §4.1/§4.2. **The open piece:** my §4.1/§4.2 disagreement lemmas assume
-  `q<p`; the capstone must also cover `p<q` (and `p=q`, which is always an agreement so trivial).
-  `p<q` is a genuine mirror (functional rounding — §3 needed `disc_corr_particular_lo` by hand).
-  **Linchpin found:** `round_N_opp` (`Core/Generic_fmt.lean:1920`): `◦(Znearest choice)(−x) =
-  −◦(Znearest (fun t=>!choice(−(t+1))))(x)` — RN negates by *reflecting the tie-break choice*. Two
-  routes: **(A)** generalize the §4 disagreement lemmas from `(b·b,a·c)` to symmetric `(x,y)` form,
-  then reduce `p<q` to `q<p` at a reflected choice via `round_N_opp` (reuses the crux — preferred);
-  **(B)** hand-build full `p<q` mirrors incl. a mirror of the crux (large). Recommend (A).
+- **§4 capstone `disc_branch_fp_test` — DONE for WLOG `q<p`** (radix 2, `prec≥4`). For the *actual*
+  rounded test `◦(p+q) ≤ ◦(3·◦(|p−q|))`, dispatches (FP test)×(real test): agreement-benign →
+  `disc_branch_benign`, agreement-correction → `disc_correction` (both orientation-agnostic already),
+  disagreements → §4.1/§4.2. Test-form bridging: `|p−q|=p−q` (`q<p`) + Sterbenz `◦(p−q)=p−q` in the
+  real-correction cases. **This is exactly as far as Boldo's paper proves it** (he says "WLOG p≥q").
+- **§4 capstone — `p<q` orientation REMAINING** (the *only* discriminant gap). `p<q` is a genuine
+  mirror under functional rounding — §3 needed `disc_corr_particular_lo` by hand. **Route A (reflection
+  via `round_N_opp`) does NOT work** — I checked: to carry the product errors `dp−dq` (which the
+  discriminant bound needs) the reflected problem must use `x̃=a·c`, giving `p̃=◦(Znearest cr)(a·c)`,
+  and `◦_cr(a·c) ≠ ◦_c(a·c)=q` **at a rounding tie**, so the reflected output `≠ −(my d)`. (Negating
+  instead, `x̃=−(b·b)`, makes `p̃=−p<0` — needs a negative-products mirror. Either way no free lunch;
+  this is the same tie subtlety past-me flagged for §3.) **Remaining route: hand-build the `p<q`
+  mirrors incl. a mirror of the §4.1 crux (`ulp q>ulp p` impossible)** — substantial (the crux is the
+  hardest lemma in the paper). Also `p=q` (always an agreement; benign iff `p≤0` ⟹ `p=q=0` trivial,
+  correction iff `p>0` ⟹ `d=◦(dp−dq)`, easy) if going for a fully unconditional capstone.
 
-**~37000 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
-(Newest: `Algorithms/Discriminant_FLX.lean`, 2924 lines / 59 theorems — the
-Kahan discriminant port, **§3 complete + §4 complete (both disagreements, `q<p`)**; only the
-FP-test capstone's `p<q` orientation remains. See the discriminant section above.)
+**~37090 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
+(Newest: `Algorithms/Discriminant_FLX.lean`, 3008 lines / 60 theorems — the
+Kahan discriminant port, **§3 complete + §4 complete for WLOG `q<p` incl. the FP-test
+capstone** (= Boldo's paper result); only the capstone's `p<q` mirror remains. See the
+discriminant section above.)
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
