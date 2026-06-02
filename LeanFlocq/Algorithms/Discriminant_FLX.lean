@@ -2504,4 +2504,55 @@ theorem disc_fp_ulp_gt_impossible (beta : radix) (hbeta : beta.val = 2) (prec : 
     exact absurd (bpow_le beta hcon) (not_le.mpr hcontra)
   omega
 
+/-- **Boldo §4.1: the first disagreement is within `2·ulp(d)`** (radix 2, `prec ≥ 3`,
+`q < p`). Real test says correction (`3|p−q| < p+q`) but the program runs benign
+(`◦(p+q) ≤ ◦(3(p−q))`), returning `d = ◦(p−q) = p − q`. The bound `|d − (b·b − a·c)| ≤
+2·ulp d` holds anyway: split on `cexp q ≤ cexp d` (Lemma 5) vs `cexp d < cexp q`, and in
+the latter on the ulps of `p` and `q` — equal → Lemma 7, `ulp q < ulp p` impossible
+(`disc_fp_ulp_gt_impossible`). `ulp p < ulp q` cannot occur since `q < p`. -/
+theorem disc_fp_first_disagreement (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp3 : 3 ≤ prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hde : d = round beta (FLX_exp prec) (Znearest choice) (p - q))
+    (hq_pos : 0 < q) (hqp : q < p)
+    (hbranch : 3 * |p - q| < p + q)
+    (hfp_benign : round beta (FLX_exp prec) (Znearest choice) (p + q)
+                ≤ round beta (FLX_exp prec) (Znearest choice) (3 * (p - q))) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hp : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have Fp : generic_format beta (FLX_exp prec) p := by
+    rw [hpe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have Fq : generic_format beta (FLX_exp prec) q := by
+    rw [hqe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have hulp_le : ulp beta (FLX_exp prec) q ≤ ulp beta (FLX_exp prec) p := by
+    apply ulp_le beta (FLX_exp prec) hValid hMon
+    rw [abs_of_pos hq_pos, abs_of_pos hp_pos]; linarith
+  rcases le_or_lt (cexp beta (FLX_exp prec) q) (cexp beta (FLX_exp prec) d) with hcase | hcase
+  · exact disc_fp_lemma5 beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq hde
+      hq_pos hqp hbranch hcase
+  · rcases eq_or_lt_of_le hulp_le with hulp_eq | hulp_lt
+    · exact disc_fp_lemma7 beta hbeta prec (by omega) choice Fa Fb Fc hpe hqe hdp hdq hde
+        hq_pos hqp hbranch hfp_benign hulp_eq.symm
+    · exfalso
+      have hpqF : generic_format beta (FLX_exp prec) (p - q) :=
+        disc_branch_subtract_exact beta prec hp Fp Fq (le_of_lt hp_pos) hbranch
+      have hd_eq : d = p - q := by
+        rw [hde]; exact round_generic beta (FLX_exp prec) (Znearest choice) hpqF
+      have hbranch' : 3 * (p - q) < p + q := by
+        rwa [abs_of_pos (by linarith : (0:ℝ) < p - q)] at hbranch
+      have hed' : cexp beta (FLX_exp prec) (p - q) < cexp beta (FLX_exp prec) q := by
+        rw [← hd_eq]; exact hcase
+      exact disc_fp_ulp_gt_impossible beta hbeta prec hp3 choice Fp Fq hq_pos hqp
+        hbranch' hfp_benign hulp_lt hed'
+
 end LeanFlocq
