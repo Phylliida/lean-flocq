@@ -6,21 +6,18 @@ session, possibly someone else.
 
 ## Status (as of commit `e4fd9c0`+)
 
-> **Latest session (2026-06-01 → 06-02):** the Kahan compensated discriminant
-> `b·b − a·c` went from "§3.2.2 assembled" to **Boldo §3 COMPLETE + §4.1 COMPLETE**
-> (17 commits, 0 sorries throughout). §3: full correction-branch dispatch
-> (`disc_correction`) + capstone (`disc_branch_real_test`) — Kahan's branch algorithm
-> within `2·ulp(d)` under the *real* test, both branches, **both orientations**. Headline
-> §3 pieces: the genuine `p<q` **mirror** (`disc_corr_particular_lo` — Boldo's relational
-> WLOG does *not* collapse with functional rounding), and the **unconditional grid
-> discharge** (`disc_mag_prod_no_bump`: products never bump magnitude, killing `prec≥3`
-> and the equal-ulp boundary Boldo glosses). §4.1: the first FP-test disagreement
-> (`disc_fp_first_disagreement`), **including the number-theoretic crux** L8+L9
-> (`disc_fp_ulp_gt_impossible`, `ulp p>ulp q` impossible) — proven by a clean,
-> **choice-robust** rounding argument *shorter than Boldo's* significand case analysis
-> (no pinning; holds for arbitrary tie-break). **Remaining on the discriminant:** §4.2
-> (second disagreement — analytic, `prec≥4`) + the FP-test capstone. Full §4.2 roadmap
-> in the discriminant section below.
+> **Latest session (2026-06-02):** the Kahan compensated discriminant `b·b − a·c` went
+> from "§3 + §4.1 complete" to **Boldo §3 COMPLETE + §4 COMPLETE (both disagreements, `q<p`)**.
+> §4.2 — the second FP-test disagreement (real benign, program runs correction,
+> `d=◦(◦(p−q)+◦(dp−dq))`) — is now proven within `2·ulp(d)` (`disc_fp_second_disagreement`,
+> `prec≥4`): the relative-error chain L10 (`disc_fp_lemma10`, multiplicative, choice-robust),
+> L11 `0<q` + `p≤3q` (`disc_fp_lemma11`, `disc_fp_p_le_3q`), L12 `|◦(dp−dq)|≤3ulp(◦(p−q))`
+> (`disc_fp_lemma12` + helper `disc_three_bpow_format`), and a clean assembly that gets
+> `ulp m ≤ 2ulp d` from `d ≥ m/2` (`m/2∈F`, radix 2) — sidestepping Boldo's `f−3ulp f∈F`.
+> **Remaining on the discriminant:** *only* the FP-test capstone `disc_branch_fp_test`, and
+> within it *only* the `p<q` orientation (the `q<p` disagreements + both-orientation
+> agreements are done). Linchpin for the reduction — `round_N_opp` (RN negates by reflecting
+> the tie-break) — is located; see the §4 capstone roadmap below for routes (A)/(B).
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -567,27 +564,37 @@ two tests disagree only in a thin sliver (Boldo's `p=27,q=14` 5-digit example).
     unlike Boldo's round-to-even argument.
   - Assembly (`disc_fp_first_disagreement`): `cexp q≤cexp d`→L5; else `ulp p=ulp q`→L7, `ulp q<ulp p`→
     impossible. `ulp p<ulp q` can't happen (`q<p`).
-- **§4.2 (real benign, program runs correction) — REMAINING.** Now `d=◦(◦(p−q)+◦(dp−dq))` (the
-  benign `◦(p−q)` is *not* exact since real benign ⟹ no Sterbenz). Needs `prec≥4`.
-  - **L10**: relative-error chain (like L6) from FP-correction `◦(3◦|p−q|)<◦(p+q)`:
-    `p−q ≤ ◦(p−q)(1+t) ≤ ⅓◦(3◦(p−q))(1+t)² ≤ ⅓◦(p+q)(1+t)² ≤ ⅓(p+q)(1+t)²/(1−t)` (`t=β^(−prec)`),
-    whence **`p ≤ 3q`** (for `prec≥4`: `(1+t)²/(1−t) ≤ 3/2`).
-  - **L11** `0<q`: if `q≤0`, L10 gives `p−q ≤ ⅓(p−q)(1+t)²/(1−t)` ⟹ `1 ≤ ⅓(1+ε)`, absurd.
-  - **L12** `|◦(dp−dq)| ≤ 3·ulp(◦(p−q))`: `|dp−dq| ≤ ½(ulp p+ulp q) ≤ 3ulp q ≤ 3ulp(◦(p−q))` (uses
-    `p≤3q` ⟹ `ulp p≤4ulp q`), then `abs_round_le_generic` (`3ulp(◦(p−q))=3·2^k ∈ F`).
-  - Assembly: `δ ≤ ½(ulp d + ulp(◦(p−q)) + ulp(◦(dp−dq)))` [3 roundings: outer, `◦(p−q)`, `◦(dp−dq)`];
-    `ulp(◦(p−q)) ≤ 2ulp d` [`d≥◦(p−q)−3ulp(◦(p−q))` via L12 + `f−3ulp f∈F` ⟹ `ulp d≥½ulp(◦(p−q))`];
-    `ulp(◦(dp−dq)) ≤ |◦(dp−dq)|·β^(1−prec) ≤ 3ulp(◦(p−q))·β^(1−prec) ≤ 6·β^(1−prec)·ulp d` [`ulp_FLX_le`];
-    ⟹ `δ ≤ ulp d(3/2 + 3·β^(1−prec)) ≤ 2ulp d` for `prec≥4` (`β^(1−prec)≤1/6`).
-- **§4 capstone** `disc_branch_fp_test`: like `disc_branch_real_test` but with the FP test;
-  agreement → §3 (`disc_branch_real_test`), disagreements → §4.1/§4.2. Orientation WLOG `q<p`: same
-  functional-rounding subtlety as §3 (handle `p<q` by the benign/correction symmetry of `d=◦(p−q)`
-  under `d↔−d`, or a mirror of `disc_fp_first_disagreement` — TBD which is cleaner).
+- **§4.2 (real benign, program runs correction) — DONE** (`disc_fp_second_disagreement`,
+  radix 2, `prec≥4`, `q<p`). Now `d=◦(◦(p−q)+◦(dp−dq))` (the benign `◦(p−q)` is *not* exact since
+  real benign ⟹ no Sterbenz). With `w=β^(1−prec)` (so `w/2=β^(−prec)`); the four-step relative
+  chain is choice-robust (uses only `|◦x−x| ≤ ◦x·(w/2)` from `error≤½ulp` + `ulp_FLX_le`).
+  - **L10** (`disc_fp_lemma10`): relative-error chain (like L6) from FP-correction `◦(3◦(p−q))<◦(p+q)`:
+    `(p−q)(1−w/2) ≤ ⅓(p+q)(1+w/2)²` — multiplicative (no division). `prec≥1`.
+  - **L11** (`disc_fp_lemma11`) `0<q`: if `q≤0`, `p+q ≤ p−q` collapses L10 to `1−w/2 ≤ ⅓(1+w/2)²`,
+    scalar-false for `prec≥2`. **`p≤3q`** (`disc_fp_p_le_3q`): from L10 with `q>0`, rearrange to
+    `(p−q)·C ≤ 2q·C` with `C=3(1−w/2)−(1+w/2)² > 0` and `(1+w/2)² ≤ C` (`prec≥4`), then cancel `C`.
+  - **L12** (`disc_fp_lemma12`) `|◦(dp−dq)| ≤ 3·ulp(◦(p−q))`: `|dp−dq| ≤ ½(ulp p+ulp q) ≤ 3ulp q ≤
+    3ulp(◦(p−q))` (uses `q≤◦(p−q)` from real-benign + `p≤3q ⟹ ulp p≤4ulp q` via `ulp_two_mul_r2`),
+    then `abs_round_le_generic` (`3ulp(◦(p−q))=3·β^k ∈ F` — new helper `disc_three_bpow_format`).
+  - Assembly (`disc_fp_second_disagreement`): `δ ≤ ½(ulp d + ulp m + ulp g)` [3 roundings: `m=◦(p−q)`,
+    `g=◦(dp−dq)`, outer]; `ulp m ≤ 2ulp d` [`m+g ≥ m−3ulp m ≥ m/2` (3ulp m ≤ m/2, prec≥4) + `m/2∈F`
+    ⟹ `d=◦(m+g) ≥ m/2`]; `ulp g ≤ 6w·ulp d` [`ulp_FLX_le` + L12]; ⟹ `δ ≤ (3/2 + 3w)·ulp d ≤ 2ulp d`
+    for `prec≥4` (`w≤1/8 < 1/6`). **The `m/2≥` route avoids needing `f−3ulp f∈F`** (Boldo's appeal).
+- **§4 capstone** `disc_branch_fp_test` — **REMAINING (orientation fork).** Like `disc_branch_real_test`
+  but with the FP test; agreement → §3 (`disc_branch_benign`/`disc_correction`, both orientations
+  already), disagreements → §4.1/§4.2. **The open piece:** my §4.1/§4.2 disagreement lemmas assume
+  `q<p`; the capstone must also cover `p<q` (and `p=q`, which is always an agreement so trivial).
+  `p<q` is a genuine mirror (functional rounding — §3 needed `disc_corr_particular_lo` by hand).
+  **Linchpin found:** `round_N_opp` (`Core/Generic_fmt.lean:1920`): `◦(Znearest choice)(−x) =
+  −◦(Znearest (fun t=>!choice(−(t+1))))(x)` — RN negates by *reflecting the tie-break choice*. Two
+  routes: **(A)** generalize the §4 disagreement lemmas from `(b·b,a·c)` to symmetric `(x,y)` form,
+  then reduce `p<q` to `q<p` at a reflected choice via `round_N_opp` (reuses the crux — preferred);
+  **(B)** hand-build full `p<q` mirrors incl. a mirror of the crux (large). Recommend (A).
 
-**~35990 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
-(Newest: `Algorithms/Discriminant_FLX.lean`, 2558 lines / 52 theorems — the
-Kahan discriminant port, **§3 complete + §4.1 complete (incl. the crux)**; see the discriminant
-section above.)
+**~37000 lines of Lean across 36 files. 0 `sorry`s. All files build clean.**
+(Newest: `Algorithms/Discriminant_FLX.lean`, 2924 lines / 59 theorems — the
+Kahan discriminant port, **§3 complete + §4 complete (both disagreements, `q<p`)**; only the
+FP-test capstone's `p<q` orientation remains. See the discriminant section above.)
 
 **Flocq's main-line is complete in Lean.** A comprehensive name-by-name
 sweep (2026-05-17) confirms every Coq theorem from `Core/`, `Calc/`,
@@ -632,7 +639,7 @@ Only `Pff/` remains un-ported — see [§ What's left](#whats-left).
 | `Algorithms/ErrFMA.lean` | 251 | `Pff/Pff.v` `FmaErr` (23446–25161), `Pff2Flocq.v` `ErrFMA_correct` (1057) | **Exact error of the FMA (Boldo–Muller) — E0/E1 done, E2 L1 + β2=0 branch typed.** `a·b + c = r1 + r2 + r3` exactly. `twoproduct_eft`/`twosum_eft` (existential EFT interfaces), **`ErrFMA_chain`** (`a·b+c = β1+β2+α2`), **`errfma_gat_exact`** (L1 = Pff `gatCorrect`: `β1−r1 ∈ F` via the engine + `round_N_pt` closeness), **`ErrFMA_be2_zero`** (Pff `FmaErr_aux1`: `a·b+c = r1+γ+α2` when β2=0, via L1 + idempotency). |
 | `Algorithms/ErrFMA_L2.lean` | 776 | `Pff/Pff.v` `FmaErr_aux2`/`gaCorrect`/`Midpoint_aux` (24318–24786, 23856–24316) | **ErrFMA L2 (β2≠0) — COMPLETE.** The Flocq-native replacement for Pff's MSB/LSB. **`errfma_be2_mult_bpow`** (β2 a multiple of `β^min(cexp u1, cexp α1)` via `round_repr_same_exp`), **`errfma_al2_lt_bpow`** (`|α2| < β^min(...)`), **`nonneg_bpow_mult_lt_eq_zero`**/**`neg_bpow_squeeze`** (divisibility squeeze), **`errfma_be2_eq_bpow_upper`**/**`errfma_be2_eq_bpow_lower`** (upper/lower midpoint cores via `round_N_{le,ge}_midp` + squeeze; lower has the `pred_pos` power-of-β branch), **`errfma_be2_div_dichotomy`** (`β1=r1 ∨ β2` a `β^(cexp β1−2)`-multiple; `be1<0` sign-reduces via `round_N_opp`), **`format_mult_bpow_of_cexp_ge`**, **`errfma_ga_exact`** (`(β1−r1)+β2 ∈ F`), **`ErrFMA_be2_nonzero`** (`FmaErr_aux2`), **`ErrFMA_correct`** (the full `FmaErr`: `a·b+c = r1+γ+α2`, both branches + edge cases), **`ErrFMA_threefloat`** (`Fma_FTS`: `a·b+c = r1+r2+r3` via precondition-free `TwoSum(γ,α2)`; `α2∈F` via `plus_error`, `u2∈F` via `mult_error_FLX`). |
 
-| `Algorithms/Discriminant_FLX.lean` | 2353 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — Boldo §3 COMPLETE + §4.1 COMPLETE (incl. crux).** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Opposite-sign `2u`**: `disc_kahan_error_decomp` + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ ≤2·u_ro·\|b·b−a·c\|`). **Boldo branch `2·ulp(d)` (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit; **§3.1 benign** (`disc_branch_benign`); **§3.2 analytic** (`disc_corr_err_decomp`, `disc_corr_exact`=L3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`); **§3.2 Lemma 4** (`disc_corr_lemma4`, via `disc_diff_on_grid_exact`/`disc_prod_err_mult_bpow`/`disc_inner_exact`). **§3.2.2 BOTH orientations**: geometry `disc_straddle`/`disc_particular_p_pow2` (polymorphic in `{p q}`), exact core `disc_inner_exact`; case A (`q<p`) `disc_corr_particular` + subcases `_same_sign`/`_opp_neg`/`_opp_pos`; **genuine mirror** case B (`p<q`) `disc_corr_particular_lo` + `_same_sign_lo`/`_opp_pos_lo`/`_opp_neg_lo` (Boldo's relational WLOG does NOT collapse in the functional setting). **Grid discharge UNCONDITIONAL** via **`disc_mag_prod_no_bump`** (`mag(RN(x·y)) ≤ mag x+mag y` — products never bump magnitude, resolving the equal-ulp boundary, killing `prec≥3`); tight gap `disc_gap_le_two_ulp`. **Full §3**: **`disc_correction`** (correction branch, both orientations) + capstone **`disc_branch_real_test`** (Kahan branch algorithm `≤2·ulp d` under the real test, both branches, 0 sorries). **§4 (FP-test reconciliation): §4.1 COMPLETE** (`disc_fp_first_disagreement`) incl. the number-theoretic crux `disc_fp_ulp_gt_impossible` (`ulp p>ulp q` impossible — clean choice-robust rounding argument, no significand pinning) + `disc_fp_lemma5/6/7`. Remaining: §4.2 (L10–12, `prec≥4`) + FP-test capstone. |
+| `Algorithms/Discriminant_FLX.lean` | 2924 | *not in Coq Flocq* (Boldo 2009 `boldo.pdf`; modern Flocq-native) | **Kahan discriminant `b·b − a·c` — Boldo §3 COMPLETE + §4 COMPLETE (both disagreements, `q<p`); only the FP-test capstone's `p<q` orientation remains.** Structural core (general radix): `disc_fma_error_exact`/`disc_prod_error_format` (D0), `disc_corrected_value`/`disc_sterbenz_exact`/`disc_p_nonneg` (D1), `disc_naive_error_bound` (D2). Relative-error calculus from `Triangle.v`: `rel_err`/`rel_err_{aux,0,opp,init}`. **Opposite-sign `2u`**: `disc_kahan_error_decomp` + **`disc_kahan_opp_sign_2u`** (`a·c≤0 ⟹ ≤2·u_ro·\|b·b−a·c\|`). **Boldo branch `2·ulp(d)` (radix 2):** Lemma 1 `disc_branch_subtract_exact`; ulp toolkit; **§3.1 benign** (`disc_branch_benign`); **§3.2 analytic** (`disc_corr_err_decomp`, `disc_corr_exact`=L3, `disc_corr_dpdq_bound`, `disc_corr_general`, `disc_corr_far`, `disc_corr_pq_eq`); **§3.2 Lemma 4** (`disc_corr_lemma4`, via `disc_diff_on_grid_exact`/`disc_prod_err_mult_bpow`/`disc_inner_exact`). **§3.2.2 BOTH orientations**: geometry `disc_straddle`/`disc_particular_p_pow2` (polymorphic in `{p q}`), exact core `disc_inner_exact`; case A (`q<p`) `disc_corr_particular` + subcases `_same_sign`/`_opp_neg`/`_opp_pos`; **genuine mirror** case B (`p<q`) `disc_corr_particular_lo` + `_same_sign_lo`/`_opp_pos_lo`/`_opp_neg_lo` (Boldo's relational WLOG does NOT collapse in the functional setting). **Grid discharge UNCONDITIONAL** via **`disc_mag_prod_no_bump`** (`mag(RN(x·y)) ≤ mag x+mag y` — products never bump magnitude, resolving the equal-ulp boundary, killing `prec≥3`); tight gap `disc_gap_le_two_ulp`. **Full §3**: **`disc_correction`** (correction branch, both orientations) + capstone **`disc_branch_real_test`** (Kahan branch algorithm `≤2·ulp d` under the real test, both branches, 0 sorries). **§4 (FP-test reconciliation): §4.1 + §4.2 COMPLETE** (`q<p`). §4.1 `disc_fp_first_disagreement` (real corr, program runs benign) incl. the number-theoretic crux `disc_fp_ulp_gt_impossible` (`ulp p>ulp q` impossible — clean choice-robust rounding argument, no significand pinning) + `disc_fp_lemma5/6/7`. §4.2 `disc_fp_second_disagreement` (real benign, program runs correction, `prec≥4`): chain `disc_fp_lemma10`, `disc_fp_lemma11` (`0<q`) + `disc_fp_p_le_3q`, `disc_fp_lemma12` (+ helper `disc_three_bpow_format`), assembly via `d≥m/2` (`m/2∈F`). Remaining: **only the FP-test capstone `disc_branch_fp_test` and within it only the `p<q` orientation** — linchpin `round_N_opp` located (routes A/B in the §4 capstone roadmap above). |
 **Total: ~812 Lean theorems vs ~480 substantive Coq theorems** (we have extras
 from helpers, private lemmas, and instance declarations).
 
