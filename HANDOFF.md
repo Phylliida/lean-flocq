@@ -4,27 +4,28 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `e4fd9c0`+)
+## Status (as of commit `0bb76f1`+)
 
-> **Latest session (2026-06-02):** the Kahan compensated discriminant `b·b − a·c` is now
-> **COMPLETE end-to-end** — Boldo §3 + §4, the real *and* floating-point tests, **all
-> orientations, unconditional** (`disc_branch_fp_test_full`), going beyond the paper.
-> §4.2 — the second FP-test disagreement (real benign, program runs correction,
-> `d=◦(◦(p−q)+◦(dp−dq))`) — is now proven within `2·ulp(d)` (`disc_fp_second_disagreement`,
-> `prec≥4`): the relative-error chain L10 (`disc_fp_lemma10`, multiplicative, choice-robust),
-> L11 `0<q` + `p≤3q` (`disc_fp_lemma11`, `disc_fp_p_le_3q`), L12 `|◦(dp−dq)|≤3ulp(◦(p−q))`
-> (`disc_fp_lemma12` + helper `disc_three_bpow_format`), and a clean assembly that gets
-> `ulp m ≤ 2ulp d` from `d ≥ m/2` (`m/2∈F`, radix 2) — sidestepping Boldo's `f−3ulp f∈F`.
-> **THE DISCRIMINANT IS COMPLETE.** The FP-test capstone is now **UNCONDITIONAL**
-> (`disc_branch_fp_test_full`): Kahan's algorithm under the *actual* rounded test
-> `◦(p+q) ≤ ◦(3·◦(|p−q|))` within `2·ulp(d)` for **all orientations** (`q<p`, `p<q`, `p=q`),
-> no WLOG — **beyond Boldo's paper**, which proves only the WLOG case. The `p<q` orientation
-> was a genuine hand-built mirror (the `round_N_opp` reflection fails at product-rounding ties):
-> the *pure-`(p,q)`* sub-lemmas (L6, crux, L10/L11/p≤3q) were reused by swapping arguments, and
-> only the sign-sensitive assemblies got `_lo` mirrors (`disc_fp_lemma5/7/12_lo`,
-> `disc_fp_first/second_disagreement_lo`, with `d=◦(p−q)<0`, `|d|=q−p`). The sign-agnostic
-> δ-decomposition was factored into `disc_fp_second_core`. `p=q` is degenerate (benign ⟹
-> `p=q=0`; correction ⟹ `d=◦(dp−dq)`).
+> **Latest session (2026-06-02): the Kahan compensated discriminant `b·b − a·c` is COMPLETE
+> end-to-end** — Boldo §3 + §4, the real *and* floating-point tests, **all orientations,
+> unconditional** (`disc_branch_fp_test_full`), going *beyond* the paper (which proves only the
+> WLOG case). The FP-test capstone covers `q<p`, `p<q`, and `p=q` for the *actual* rounded test
+> `◦(p+q) ≤ ◦(3·◦(|p−q|))`, within `2·ulp(d)`, no WLOG.
+>
+> Two things worth carrying forward from how the `p<q` orientation got done:
+> 1. **The `round_N_opp` reflection does NOT reduce `p<q`→`q<p`** — product-rounding ties make
+>    `◦_cr(a·c) ≠ ◦_c(a·c)`, so the reflected output `≠ −d`. (I'd over-claimed it was clean; the
+>    walk-back is what surfaced the cheaper route.) It's a genuine hand mirror — the same tie
+>    subtlety §3 hit with `disc_corr_particular_lo`.
+> 2. **But the mirror was cheap: the *pure-`(p,q)`* sub-lemmas — `disc_fp_lemma6`, the crux
+>    `disc_fp_ulp_gt_impossible`, `disc_fp_lemma10/11`, `disc_fp_p_le_3q` — are reused by *swapping
+>    their `p`/`q` arguments*, so the crux (hardest lemma in the paper) was never re-derived.** Only
+>    the sign-sensitive assemblies got `_lo` mirrors (`disc_fp_lemma5/7/12_lo`,
+>    `disc_fp_first/second_disagreement_lo`; `d=◦(p−q)<0`, `|d|=q−p`, `|m|`-handling via
+>    `ulp_opp`/`abs_round_ge_generic`). Sign-agnostic δ-decomposition factored into
+>    `disc_fp_second_core` (this also fixed a heartbeat timeout from the bigger `p<q` context).
+>    `p=q` is degenerate (benign ⟹ `p=q=0` via `eq_0_round_0_FLX`+`ulp_FLX_0`; correction ⟹
+>    `d=◦(dp−dq)`). Full mechanics in the discriminant section below.
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -437,9 +438,10 @@ with NO MSB/LSB.** Built in stages:
 **ErrFMA is FULLY COMPLETE** — the verified error-free transformation for the FMA,
 `a·b + c = r1 + r2 + r3`, all Flocq-native.
 
-**Compensated discriminant `b·b − a·c` (sixth algorithm) — STRUCTURAL CORE +
-OPPOSITE-SIGN 2u DONE; general cancelling case is the remaining work
-(2026-06-01).** `Algorithms/Discriminant_FLX.lean`. Kahan's discriminant computes
+**Compensated discriminant `b·b − a·c` (sixth algorithm) — COMPLETE
+(2026-06-02): Boldo §3 + §4, real & floating-point tests, all orientations,
+unconditional (`disc_branch_fp_test_full`), beyond the paper.**
+`Algorithms/Discriminant_FLX.lean`. Kahan's discriminant computes
 `b·b − a·c` to relative error `≤ 2u` (and absolute `≤ (β+1)/2` ulps), even under
 catastrophic cancellation — the keystone for verified quadratic intersections and
 Shewchuk-style adaptive predicates. The published proof (Jeannerod–Louvet–Muller,
@@ -553,9 +555,11 @@ Capstone `disc_branch_real_test`: Kahan's branch algorithm `d = if p+q≤3|p−q
 else ◦((p−q)+◦(dp−dq))` satisfies `|d−(b·b−a·c)| ≤ 2·ulp d` under the *real* test — the full
 result of Boldo (2009) §3, both branches, **0 `sorry`s**.
 
-**§4 — §4.1 COMPLETE (incl. the number-theoretic crux).** Reconciling the real test with the
-*floating-point* test `◦(p+q) ≤ ◦(3·|p−q|)` (with `◦(p−q)=p−q` exact in Sterbenz range). The
-two tests disagree only in a thin sliver (Boldo's `p=27,q=14` 5-digit example).
+**§4 — COMPLETE (both disagreements, both orientations, both capstones).** Reconciling the real
+test with the *actual floating-point* test `◦(p+q) ≤ ◦(3·◦(|p−q|))`. The two tests disagree only
+in a thin sliver (Boldo's `p=27,q=14` 5-digit example). The WLOG (`q<p`) lemmas below are joined
+by `p<q` mirrors (`_lo`, reusing the pure sub-lemmas by arg-swap) and unconditional capstone
+`disc_branch_fp_test_full` — see the §4.2 / capstone entries at the end of this section.
 
 - **§4.1 (real corr, program runs benign `d=◦(p−q)=p−q`) — DONE** (`disc_fp_first_disagreement`,
   radix 2, `prec≥3`, `q<p`):
@@ -899,7 +903,7 @@ The relevant algorithms, sized roughly:
 | ~~`Veltkamp` splitting~~ ✓ **DONE at FLX 2026-05-31** (full Veltkamp_Even arc complete, both odd and even radix; `Algorithms/Veltkamp.lean`) | split `x` into hi/lo parts of `prec/2` bits | ~~~400~~ 4161 |
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
 | ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
-| Compensated discriminant (`b² − ac`) — **Boldo §3 COMPLETE + §4.1 COMPLETE** (`Algorithms/Discriminant_FLX.lean`): opposite-sign `2u` + full §3 branch `2·ulp(d)` port (both orientations, capstone `disc_branch_real_test`) + §4.1 first FP-test disagreement incl. the number-theoretic crux (`disc_fp_ulp_gt_impossible`); §4.2 + FP-test capstone remain | sharp error bound for the quadratic discriminant | ~600 |
+| Compensated discriminant (`b² − ac`) — **COMPLETE** (`Algorithms/Discriminant_FLX.lean`): Boldo §3 + §4, real & floating-point tests, all orientations, unconditional (`disc_branch_fp_test_full`) — beyond the paper. Incl. opposite-sign `2u`, full §3 branch `2·ulp(d)` (both orientations, `disc_branch_real_test`), §4.1/§4.2 disagreements + the number-theoretic crux (`disc_fp_ulp_gt_impossible`), and the `p<q` mirror | sharp error bound for the quadratic discriminant | ~600 |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
 (roughly 10× ratio).
@@ -1064,18 +1068,18 @@ to BigInt rationals.
    (`RoundMinusRound_FLX.lean`), L1, β2=0, and the entire L2/β2≠0 midpoint-
    dichotomy arc (`ErrFMA_L2.lean`) are done — **Pff's ~1700-line MSB/LSB `FmaErr`
    replaced by ~700 lines, no MSB/LSB.**
-7. Compensated discriminant `b·b − a·c` — **Boldo §3 COMPLETE + §4.1 COMPLETE**
-   (`Algorithms/Discriminant_FLX.lean`, Boldo 2009 `boldo.pdf`). DONE: structural core
-   (D0–D2), opposite-sign `2u` (sharper than Boldo), the **entire** §3 branch `2·ulp(d)`
-   arc (§3.1 benign, §3.2 analytic, Lemma 4, **both orientations of §3.2.2** — the `p<q`
-   case is a genuine mirror, Boldo's relational WLOG not collapsing with functional
-   rounding; unconditional grid discharge `disc_mag_prod_no_bump`; full dispatch
-   `disc_correction`; capstone `disc_branch_real_test`), **and §4.1** — the first FP-test
-   disagreement (`disc_fp_first_disagreement`), including Boldo's **number-theoretic crux**
-   L8+L9 (`disc_fp_ulp_gt_impossible`) by a clean choice-robust rounding argument shorter
-   than the paper's. REMAINING: §4.2 (second disagreement, analytic, `prec≥4`) + the
-   FP-test capstone. A multi-session climb, now deep into §4. See
-   [[feedback_push_through_when_user_encourages]].
+7. Compensated discriminant `b·b − a·c` — **COMPLETE** (`Algorithms/Discriminant_FLX.lean`,
+   Boldo 2009 `boldo.pdf`). The **entire** Boldo paper plus the rigor it skips: structural core
+   (D0–D2), opposite-sign `2u` (sharper than Boldo), the full §3 branch `2·ulp(d)` arc (both
+   orientations of §3.2.2 — `p<q` a genuine mirror; unconditional grid discharge
+   `disc_mag_prod_no_bump`; dispatch `disc_correction`; capstone `disc_branch_real_test`), all
+   of §4 (the two FP-test disagreements incl. the **number-theoretic crux** L8+L9
+   `disc_fp_ulp_gt_impossible` by a clean choice-robust argument shorter than the paper's), the
+   `p<q` mirrors (pure sub-lemmas reused by arg-swap — *crux not re-derived*; only sign-sensitive
+   `_lo` assemblies rewritten), and **both capstones**: `disc_branch_fp_test` (WLOG `q<p`) and
+   the **UNCONDITIONAL `disc_branch_fp_test_full`** (all orientations + `p=q`, under the actual
+   rounded test `◦(p+q) ≤ ◦(3·◦(|p−q|))`) — *beyond Boldo's paper*. A multi-session climb, now
+   landed. See [[feedback_push_through_when_user_encourages]], [[feedback_honesty_and_judgment]].
 
 #### Veltkamp_Even scope
 
