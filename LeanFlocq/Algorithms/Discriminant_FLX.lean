@@ -2638,4 +2638,80 @@ theorem disc_fp_lemma10 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp :
       (show (0:ℝ) ≤ (1/3) * (1 + w/2)^2 by positivity)]
   linarith [le_trans S4 S5]
 
+/-- **Boldo §4.2 Lemma 11** (radix 2, `prec ≥ 2`): `0 < q`. If `q ≤ 0`, then `p + q ≤
+p − q`, so Lemma 10 gives `(p−q)(1−w/2) ≤ ⅓(p−q)(1+w/2)²`; dividing by `p − q > 0`
+yields `1 − w/2 ≤ ⅓(1+w/2)²`, which is false for `prec ≥ 2` (`w ≤ 1/2` makes
+`⅓(1+w/2)² < 1 − w/2`). -/
+theorem disc_fp_lemma11 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp2 : 2 ≤ prec)
+    (choice : ℤ → Bool) {p q : ℝ}
+    (hqp : q < p)
+    (hfp_corr : round beta (FLX_exp prec) (Znearest choice)
+                  (3 * round beta (FLX_exp prec) (Znearest choice) (p - q))
+                < round beta (FLX_exp prec) (Znearest choice) (p + q)) :
+    0 < q := by
+  have hp : 0 < prec := by omega
+  have hL10 := disc_fp_lemma10 beta hbeta prec hp choice hqp hfp_corr
+  set w := bpow beta (1 - prec) with hw_def
+  have hw_pos : (0:ℝ) < w := bpow_gt_0 _ _
+  have hw_le : w ≤ 1/2 := by
+    rw [hw_def]
+    have h1 : bpow beta (1 - prec) * bpow beta (prec - 1) = 1 := by
+      rw [← bpow_plus, show (1 - prec) + (prec - 1) = 0 from by ring, bpow_zero]
+    have h2 : (2:ℝ) ≤ bpow beta (prec - 1) := by
+      calc (2:ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+        _ = bpow beta 1 := (bpow_one beta).symm
+        _ ≤ bpow beta (prec - 1) := bpow_le beta (by omega)
+    nlinarith [h1, h2, bpow_gt_0 beta (1 - prec), bpow_gt_0 beta (prec - 1)]
+  have hA_pos : (0:ℝ) < p - q := by linarith
+  by_contra hq
+  push_neg at hq
+  -- `p + q ≤ p − q`, hence `(p−q)(1−w/2) ≤ ⅓(p−q)(1+w/2)²`.
+  have hstep : (p - q) * (1 - w/2) ≤ (1/3) * (p - q) * (1 + w/2)^2 := by
+    have h1 : (1/3) * (p + q) * (1 + w/2)^2 ≤ (1/3) * (p - q) * (1 + w/2)^2 := by
+      apply mul_le_mul_of_nonneg_right _ (by positivity)
+      linarith [hq]
+    linarith [hL10, h1]
+  -- but the scalar inequality `⅓(1+w/2)² < 1 − w/2` holds for `prec ≥ 2`.
+  have hbr : (1/3) * (1 + w/2)^2 < 1 - w/2 := by
+    nlinarith [hw_le, hw_pos, mul_nonneg hw_pos.le (show (0:ℝ) ≤ 1/2 - w from by linarith)]
+  nlinarith [hstep, mul_lt_mul_of_pos_left hbr hA_pos]
+
+/-- From Lemma 10 (with `0 < q`), `p ≤ 3q` for `prec ≥ 4`. Writing `p + q = (p−q) + 2q`,
+Lemma 10 rearranges to `(p−q)·C ≤ 2q·(1+w/2)²` with `C = 2 − 5w/2 − w²/4 = 3(1−w/2) −
+(1+w/2)²`. For `prec ≥ 4` (`w ≤ 1/8`) both `C > 0` and `(1+w/2)² ≤ C`, so `(p−q)·C ≤
+2q·C`, and cancelling the positive `C` gives `p − q ≤ 2q`. -/
+theorem disc_fp_p_le_3q (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp4 : 4 ≤ prec)
+    (choice : ℤ → Bool) {p q : ℝ}
+    (hqp : q < p) (hq_pos : 0 < q)
+    (hfp_corr : round beta (FLX_exp prec) (Znearest choice)
+                  (3 * round beta (FLX_exp prec) (Znearest choice) (p - q))
+                < round beta (FLX_exp prec) (Znearest choice) (p + q)) :
+    p ≤ 3 * q := by
+  have hp : 0 < prec := by omega
+  have hL10 := disc_fp_lemma10 beta hbeta prec hp choice hqp hfp_corr
+  set w := bpow beta (1 - prec) with hw_def
+  have hw_pos : (0:ℝ) < w := bpow_gt_0 _ _
+  have hw_ub : w ≤ 1/8 := by
+    rw [hw_def]
+    have h1 : bpow beta (1 - prec) * bpow beta (prec - 1) = 1 := by
+      rw [← bpow_plus, show (1 - prec) + (prec - 1) = 0 from by ring, bpow_zero]
+    have h2 : (8:ℝ) ≤ bpow beta (prec - 1) := by
+      have hb3 : bpow beta 3 = 8 := by
+        rw [show (3:ℤ) = 1 + (1 + 1) from by ring, bpow_plus, bpow_plus, bpow_one, hbeta]
+        norm_num
+      calc (8:ℝ) = bpow beta 3 := hb3.symm
+        _ ≤ bpow beta (prec - 1) := bpow_le beta (by omega)
+    nlinarith [h1, h2, bpow_gt_0 beta (1 - prec), bpow_gt_0 beta (prec - 1)]
+  have hC_pos : (0:ℝ) < 2 - 5*w/2 - w^2/4 := by
+    nlinarith [hw_ub, hw_pos, mul_nonneg hw_pos.le (show (0:ℝ) ≤ 1/8 - w from by linarith)]
+  have hKC : (1 + w/2)^2 ≤ 2 - 5*w/2 - w^2/4 := by
+    nlinarith [hw_ub, hw_pos, mul_nonneg hw_pos.le (show (0:ℝ) ≤ 1/8 - w from by linarith)]
+  have hAC : (p - q) * (2 - 5*w/2 - w^2/4) ≤ 2*q*(1+w/2)^2 := by nlinarith [hL10]
+  have h2q : (p - q) * (2 - 5*w/2 - w^2/4) ≤ 2*q*(2 - 5*w/2 - w^2/4) := by
+    calc (p - q) * (2 - 5*w/2 - w^2/4) ≤ 2*q*(1+w/2)^2 := hAC
+      _ ≤ 2*q*(2 - 5*w/2 - w^2/4) :=
+          mul_le_mul_of_nonneg_left hKC (by linarith : (0:ℝ) ≤ 2*q)
+  have hfin : p - q ≤ 2*q := le_of_mul_le_mul_right h2q hC_pos
+  linarith
+
 end LeanFlocq
