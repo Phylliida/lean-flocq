@@ -4,8 +4,27 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `0bb76f1`+)
+## Status (as of commit `e138e5c`+)
 
+> **Latest session (2026-06-02, later): started the *predicate* layer that consumes
+> all six EFTs — Shewchuk floating-point expansion arithmetic.**
+> `Algorithms/Expansion_FLX.lean` builds the **exactness layer** (Stage 1), 0 sorries,
+> **general radix**: an expansion is a `List ℝ` of FLX floats whose exact `List.sum` is
+> the value, and `growExpansion` (Shewchuk's O(m) sweep), `expansionSum` (O(m·n)
+> grow-fold), `scaleExpansion` (per-component split) are each proved **sum-exact**
+> (`Σ grow(e,b)=b+Σe`, `Σ(e⊕f)=Σe+Σf`, `Σ scale(e,b)=b·Σe`) and **`Expansion`-preserving**.
+> Capstone `det2`: `Σ det2(a,b,c,d) = a·d − b·c` *exactly* — the `orient2d` kernel.
+> Two things worth carrying forward:
+> 1. **The exactness theory needs no operational Dekker kernel — only the *residual-in-format*
+>    facts `plus_error` / `mult_error_FLX`** (the `hi+lo` split with `lo := (a∘b) − ◦(a∘b)`
+>    makes sum-preservation *definitional*; the EFT content is purely the invariant
+>    maintenance). Hence **no radix-2 restriction** on the value theory — it's general radix.
+> 2. **Stage 2 (the nonoverlapping/nonadjacent invariants, `fast_expansion_sum`, sign-reading,
+>    `compress`) is deliberately deferred** — that structural theory is what makes the predicates
+>    *adaptive/fast*, not what makes them *correct*. Stage 1 already gives exact determinants.
+>    (Lean-4.25 gotcha banked: section variables used *only in proof bodies* are **not**
+>    auto-included; use `include hp in` — matches the codebase's explicit-arg convention.)
+>
 > **Latest session (2026-06-02): the Kahan compensated discriminant `b·b − a·c` is COMPLETE
 > end-to-end** — Boldo §3 + §4, the real *and* floating-point tests, **all orientations,
 > unconditional** (`disc_branch_fp_test_full`), going *beyond* the paper (which proves only the
@@ -904,9 +923,20 @@ The relevant algorithms, sized roughly:
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
 | ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
 | Compensated discriminant (`b² − ac`) — **COMPLETE** (`Algorithms/Discriminant_FLX.lean`): Boldo §3 + §4, real & floating-point tests, all orientations, unconditional (`disc_branch_fp_test_full`) — beyond the paper. Incl. opposite-sign `2u`, full §3 branch `2·ulp(d)` (both orientations, `disc_branch_real_test`), §4.1/§4.2 disagreements + the number-theoretic crux (`disc_fp_ulp_gt_impossible`), and the `p<q` mirror | sharp error bound for the quadratic discriminant | ~600 |
+| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** (`Algorithms/Expansion_FLX.lean`, general radix): `grow`/`expansionSum`/`scale`/`det2`, each sum-exact + `Expansion`-preserving; `det2` is the exact `orient2d` kernel. Stage 2 (nonoverlapping invariants, `fast_expansion_sum`, sign-reading, `compress`) is the next arc | exact multi-word arithmetic; foundation under all adaptive predicates | ~360 |
+| Adaptive predicates `orient2d`/`orient3d`/`incircle`/`insphere` — **NOT STARTED**: the fast-path error-bound filter + exact expansion fallback. `orient2d`'s exact kernel is already `det2` above | robust geometric sign decisions | ~? |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
 (roughly 10× ratio).
+
+> **Where we are now (2026-06-02):** all six EFT primitives (rows 1–6) are **done**, and
+> the *predicate* layer that consumes them is **underway** — `Expansion_FLX.lean` Stage 1
+> (exactness) lands `grow`/`sum`/`scale` + the exact `det2` kernel. **Immediate next two
+> moves**, in order: (1) **Stage 2 of expansion arithmetic** — the nonoverlapping/nonadjacent
+> invariants, `fast_expansion_sum`, sign-reading, `compress` (what makes the predicates
+> *adaptive*); (2) **`orient2d`** — its exact kernel is already `det2`, so it needs the
+> fast-path error-bound *filter* (`|det| > ε ⟹ sign correct`) plus the exact-fallback wiring.
+> Then `orient3d`/`incircle`/`insphere` reuse the same expansion base (3×3 / 4×4 determinants).
 
 **Why these specifically:** Shewchuk-style **adaptive geometric
 predicates** (`orient2d`, `orient3d`, `incircle`, `insphere`) are all
