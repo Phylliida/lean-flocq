@@ -3389,4 +3389,121 @@ theorem disc_branch_fp_test (beta : radix) (hbeta : beta.val = 2)
       rw [hpq_eq]
       exact disc_correction beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq rfl rfl hbranch
 
+/-- **Boldo §4 capstone, UNCONDITIONAL: Kahan's branch algorithm under the floating-point
+test is within `2·ulp(d)`** (radix 2, `prec ≥ 4`) — *both orientations and `p = q`*. For
+
+```
+  d = if ◦(p+q) ≤ ◦(3·◦(|p−q|)) then ◦(p−q) else ◦(◦(p−q) + ◦(dp−dq))
+```
+
+with `p = ◦(b·b)`, `q = ◦(a·c)`, `dp = b·b − p`, `dq = a·c − q`, the error
+`|d − (b·b − a·c)| ≤ 2·ulp(d)` holds with no WLOG assumption. Trichotomy: `q < p` →
+`disc_branch_fp_test`; `p < q` → the mirror dispatch (agreements are orientation-agnostic,
+disagreements via the `_lo` lemmas); `p = q` → degenerate (benign forces `p=q=0`, correction
+gives `d = ◦(dp−dq)`). This goes beyond Boldo (2009), which proves only the WLOG case. -/
+theorem disc_branch_fp_test_full (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp4 : 4 ≤ prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hd : d = if round beta (FLX_exp prec) (Znearest choice) (p + q)
+                ≤ round beta (FLX_exp prec) (Znearest choice)
+                    (3 * round beta (FLX_exp prec) (Znearest choice) |p - q|)
+              then round beta (FLX_exp prec) (Znearest choice) (p - q)
+              else round beta (FLX_exp prec) (Znearest choice)
+                    (round beta (FLX_exp prec) (Znearest choice) (p - q)
+                     + round beta (FLX_exp prec) (Znearest choice) (dp - dq))) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hp : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hp_nn : 0 ≤ p := by rw [hpe]; exact disc_p_nonneg beta prec hp choice b
+  have Fp : generic_format beta (FLX_exp prec) p := by
+    rw [hpe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have Fq : generic_format beta (FLX_exp prec) q := by
+    rw [hqe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  rcases lt_trichotomy p q with hlt | heq | hgt
+  · -- `p < q`: mirror dispatch.
+    have hpq_neg : p - q < 0 := by linarith
+    have habs : |p - q| = q - p := by rw [abs_of_neg hpq_neg]; ring
+    rw [habs] at hd
+    by_cases hfp : round beta (FLX_exp prec) (Znearest choice) (p + q)
+        ≤ round beta (FLX_exp prec) (Znearest choice)
+            (3 * round beta (FLX_exp prec) (Znearest choice) (q - p))
+    · rw [hd, if_pos hfp]
+      by_cases hreal : p + q ≤ 3 * (q - p)
+      · apply disc_branch_benign beta hbeta prec hp choice a b c hpe hqe rfl
+        rw [habs]; exact hreal
+      · push_neg at hreal
+        have hbranch : 3 * |p - q| < p + q := by rw [habs]; exact hreal
+        have hp_pos : 0 < p := by linarith [hreal, hlt]
+        have hqpF : generic_format beta (FLX_exp prec) (q - p) :=
+          disc_sterbenz_exact beta prec hp Fq Fp (by linarith) (by linarith)
+        have hqp_eq : round beta (FLX_exp prec) (Znearest choice) (q - p) = q - p :=
+          round_generic beta (FLX_exp prec) (Znearest choice) hqpF
+        have hfp' : round beta (FLX_exp prec) (Znearest choice) (p + q)
+            ≤ round beta (FLX_exp prec) (Znearest choice) (3 * (q - p)) := by
+          rw [← hqp_eq]; exact hfp
+        exact disc_fp_first_disagreement_lo beta hbeta prec (by omega) choice
+          hpe hqe hdp hdq rfl hp_pos hlt hbranch hfp'
+    · rw [hd, if_neg hfp]
+      push_neg at hfp
+      by_cases hreal : p + q ≤ 3 * (q - p)
+      · exact disc_fp_second_disagreement_lo beta hbeta prec hp4 choice
+          hpe hqe hdp hdq rfl hlt hreal hfp
+      · push_neg at hreal
+        have hbranch : 3 * |p - q| < p + q := by rw [habs]; exact hreal
+        have hpqF : generic_format beta (FLX_exp prec) (p - q) :=
+          disc_branch_subtract_exact beta prec hp Fp Fq hp_nn hbranch
+        have hpq_eq : round beta (FLX_exp prec) (Znearest choice) (p - q) = p - q :=
+          round_generic beta (FLX_exp prec) (Znearest choice) hpqF
+        rw [hpq_eq]
+        exact disc_correction beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq rfl rfl hbranch
+  · -- `p = q`: degenerate (always an agreement).
+    have hpq0 : p - q = 0 := by rw [heq]; ring
+    have h1 : round beta (FLX_exp prec) (Znearest choice) |p - q| = 0 := by
+      rw [hpq0, abs_zero]; exact round_0 beta (FLX_exp prec) (Znearest choice)
+    have h2 : round beta (FLX_exp prec) (Znearest choice)
+        (3 * round beta (FLX_exp prec) (Znearest choice) |p - q|) = 0 := by
+      rw [h1, mul_zero]; exact round_0 beta (FLX_exp prec) (Znearest choice)
+    have h3 : round beta (FLX_exp prec) (Znearest choice) (p - q) = 0 := by
+      rw [hpq0]; exact round_0 beta (FLX_exp prec) (Znearest choice)
+    rw [h2] at hd
+    by_cases htest : round beta (FLX_exp prec) (Znearest choice) (p + q) ≤ 0
+    · -- benign: `p = q = 0`, so `b·b = a·c = 0` and `d = 0`.
+      rw [hd, if_pos htest, h3]
+      have hsum : p + q = 2 * p := by rw [← heq]; ring
+      have hp0 : p = 0 := by
+        by_contra h
+        have hp_pos : 0 < p := lt_of_le_of_ne hp_nn (Ne.symm h)
+        have : 0 < round beta (FLX_exp prec) (Znearest choice) (p + q) := by
+          rw [hsum]; exact gt_0_round_gt_0_FLX beta prec hp (Znearest choice) (by linarith)
+        linarith [htest]
+      have hbb0 : b * b = 0 := eq_0_round_0_FLX beta prec hp (Znearest choice)
+        (by rw [← hpe]; exact hp0)
+      have hac0 : a * c = 0 := eq_0_round_0_FLX beta prec hp (Znearest choice)
+        (by rw [← hqe, ← heq]; exact hp0)
+      rw [ulp_FLX_0 beta prec hp, hbb0, hac0]; norm_num
+    · -- correction: `d = ◦(dp − dq)`.
+      rw [hd, if_neg htest, h3, zero_add]
+      have hg_F : generic_format beta (FLX_exp prec)
+          (round beta (FLX_exp prec) (Znearest choice) (dp - dq)) :=
+        generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+      rw [round_generic beta (FLX_exp prec) (Znearest choice) hg_F]
+      have hexact : b * b - a * c = dp - dq := by
+        have h := disc_corrected_value (a := a) (b := b) (c := c) (p := p) (q := q) hdp hdq
+        rw [← h, heq]; ring
+      rw [hexact]
+      have herr := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (dp - dq)
+      linarith [herr, ulp_ge_0 beta (FLX_exp prec)
+        (round beta (FLX_exp prec) (Znearest choice) (dp - dq))]
+  · -- `q < p`: Boldo's WLOG case.
+    exact disc_branch_fp_test beta hbeta prec hp4 choice Fa Fb Fc hpe hqe hdp hdq hgt hd
+
 end LeanFlocq
