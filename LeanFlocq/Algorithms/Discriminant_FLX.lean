@@ -2921,4 +2921,88 @@ theorem disc_fp_second_disagreement (beta : radix) (hbeta : beta.val = 2)
       mul_nonneg (show (0:ℝ) ≤ 1/2 - 3*w from by linarith [hw_ub]) hud_pos.le]
   linarith [hdelta, hfinal]
 
+/-- **Boldo §4 capstone (WLOG orientation `q < p`): Kahan's branch algorithm under the
+*floating-point* test is within `2·ulp(d)`** (radix 2, `prec ≥ 4`). For the program result
+
+```
+  d = if ◦(p+q) ≤ ◦(3·◦(|p−q|)) then ◦(p−q) else ◦(◦(p−q) + ◦(dp−dq))
+```
+
+— Kahan's discriminant with the *actual* rounded test `◦(p+q) ≤ ◦(3·◦(|p−q|))` (Boldo's
+"real" test was `p+q ≤ 3|p−q|`) — the error `|d − (b·b − a·c)| ≤ 2·ulp(d)`.
+
+Dispatches on (FP test) × (real test): agreement-benign → `disc_branch_benign`,
+agreement-correction → `disc_correction` (both orientation-agnostic already), the two
+disagreements → §4.1 (`disc_fp_first_disagreement`) / §4.2 (`disc_fp_second_disagreement`).
+This is Boldo's WLOG case (`q < p`), which is exactly as far as the paper proves it; the
+`p < q` mirror is genuinely separate under functional rounding (the product-rounding ties
+break the negation-reflection reduction — cf. §3's hand-built `disc_corr_particular_lo`). -/
+theorem disc_branch_fp_test (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp4 : 4 ≤ prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hqp : q < p)
+    (hd : d = if round beta (FLX_exp prec) (Znearest choice) (p + q)
+                ≤ round beta (FLX_exp prec) (Znearest choice)
+                    (3 * round beta (FLX_exp prec) (Znearest choice) |p - q|)
+              then round beta (FLX_exp prec) (Znearest choice) (p - q)
+              else round beta (FLX_exp prec) (Znearest choice)
+                    (round beta (FLX_exp prec) (Znearest choice) (p - q)
+                     + round beta (FLX_exp prec) (Znearest choice) (dp - dq))) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hp : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp
+  have hpq_pos : (0:ℝ) < p - q := by linarith
+  have habs : |p - q| = p - q := abs_of_pos hpq_pos
+  rw [habs] at hd
+  have hp_nn : 0 ≤ p := by rw [hpe]; exact disc_p_nonneg beta prec hp choice b
+  have Fp : generic_format beta (FLX_exp prec) p := by
+    rw [hpe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  have Fq : generic_format beta (FLX_exp prec) q := by
+    rw [hqe]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  by_cases hfp : round beta (FLX_exp prec) (Znearest choice) (p + q)
+      ≤ round beta (FLX_exp prec) (Znearest choice)
+          (3 * round beta (FLX_exp prec) (Znearest choice) (p - q))
+  · -- program runs benign: `d = ◦(p − q)`.
+    rw [hd, if_pos hfp]
+    by_cases hreal : p + q ≤ 3 * (p - q)
+    · -- agreement (real benign).
+      apply disc_branch_benign beta hbeta prec hp choice a b c hpe hqe rfl
+      rw [habs]; exact hreal
+    · -- disagreement #1 (real correction).
+      push_neg at hreal
+      have hbranch : 3 * |p - q| < p + q := by rw [habs]; exact hreal
+      have hq_pos : 0 < q := by linarith [hreal, hp_nn]
+      have hpqF : generic_format beta (FLX_exp prec) (p - q) :=
+        disc_branch_subtract_exact beta prec hp Fp Fq hp_nn hbranch
+      have hpq_eq : round beta (FLX_exp prec) (Znearest choice) (p - q) = p - q :=
+        round_generic beta (FLX_exp prec) (Znearest choice) hpqF
+      have hfp' : round beta (FLX_exp prec) (Znearest choice) (p + q)
+          ≤ round beta (FLX_exp prec) (Znearest choice) (3 * (p - q)) := by
+        rw [← hpq_eq]; exact hfp
+      exact disc_fp_first_disagreement beta hbeta prec (by omega) choice Fa Fb Fc
+        hpe hqe hdp hdq rfl hq_pos hqp hbranch hfp'
+  · -- program runs correction: `d = ◦(◦(p − q) + ◦(dp − dq))`.
+    push_neg at hfp
+    rw [hd, if_neg (not_le.mpr hfp)]
+    by_cases hreal : p + q ≤ 3 * (p - q)
+    · -- disagreement #2 (real benign).
+      exact disc_fp_second_disagreement beta hbeta prec hp4 choice Fa Fb Fc
+        hpe hqe hdp hdq rfl hqp hreal hfp
+    · -- agreement (real correction).
+      push_neg at hreal
+      have hbranch : 3 * |p - q| < p + q := by rw [habs]; exact hreal
+      have hpqF : generic_format beta (FLX_exp prec) (p - q) :=
+        disc_branch_subtract_exact beta prec hp Fp Fq hp_nn hbranch
+      have hpq_eq : round beta (FLX_exp prec) (Znearest choice) (p - q) = p - q :=
+        round_generic beta (FLX_exp prec) (Znearest choice) hpqF
+      rw [hpq_eq]
+      exact disc_correction beta hbeta prec hp choice Fa Fb Fc hpe hqe hdp hdq rfl rfl hbranch
+
 end LeanFlocq
