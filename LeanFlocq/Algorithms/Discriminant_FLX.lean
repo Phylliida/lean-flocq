@@ -2363,4 +2363,145 @@ theorem disc_fp_lemma7 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp2 :
   rw [hdelta_abs]
   linarith [hbd, hulp_qd]
 
+/-- **Boldo §4 Lemmas 8 + 9: `ulp p > ulp q` is impossible** (radix 2, `prec ≥ 3`) — the
+number-theoretic crux of §4, here by a clean rounding argument instead of significand
+case analysis. In the first disagreement (`cexp(p−q) < cexp q`), suppose `ulp p > ulp q`.
+Then `mag p = mag q + 1` (straddle), and `2q − p ≥ ulp p` (since `succ p ≤ 2q`, both
+floats), so `4q − 2p ≥ 2·ulp p = β^(mag q − prec + 2)`. By monotonicity and the FP-benign
+test, `◦(p+q) = ◦(3(p−q)) =: r`, and both are within `½·ulp r` of `r`, so
+`4q − 2p = (p+q) − 3(p−q) ≤ ulp r`. Hence `ulp r ≥ β^(mag q − prec + 2)`, forcing
+`mag r ≥ mag q + 2`, so `r ≥ β^(mag q + 1)`. But `3(p−q) < β^(mag q + 1)` (as `p − q <
+β^(mag q − 1)` from `cexp(p−q) < cexp q`), so `r = ◦(3(p−q)) ≤ β^(mag q + 1)`; thus
+`r = β^(mag q + 1)`. Then `3(p−q) ≥ r − ½·ulp r = β^(mag q+1) − β^(mag q+1−prec)`, which
+combined with `3(p−q) < 3·β^(mag q−1)` and `β^(mag q+1) = 4·β^(mag q−1)` gives
+`β^(mag q−1) < β^(mag q+1−prec)`, i.e. `prec < 2` — contradiction.
+
+This is choice-robust: it never uses the tie-breaking, only the half-ulp error bound. -/
+theorem disc_fp_ulp_gt_impossible (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp3 : 3 ≤ prec)
+    (choice : ℤ → Bool) {p q : ℝ}
+    (Fp : generic_format beta (FLX_exp prec) p)
+    (Fq : generic_format beta (FLX_exp prec) q)
+    (hq_pos : 0 < q) (hqp : q < p)
+    (hreal_corr : 3 * (p - q) < p + q)
+    (hfp_benign : round beta (FLX_exp prec) (Znearest choice) (p + q)
+                ≤ round beta (FLX_exp prec) (Znearest choice) (3 * (p - q)))
+    (hulp_gt : ulp beta (FLX_exp prec) q < ulp beta (FLX_exp prec) p)
+    (hed : cexp beta (FLX_exp prec) (p - q) < cexp beta (FLX_exp prec) q) :
+    False := by
+  have hp : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have hq_ne : q ≠ 0 := ne_of_gt hq_pos
+  have hp_ne : p ≠ 0 := ne_of_gt hp_pos
+  set M := mag beta q with hM
+  have hp2q : p < 2 * q := by linarith [hreal_corr]
+  -- Straddle: `mag p = mag q + 1`.
+  have hcexp_lt : cexp beta (FLX_exp prec) q < cexp beta (FLX_exp prec) p := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hq_ne, ulp_neq_0 beta (FLX_exp prec) hp_ne] at hulp_gt
+    by_contra hcon; push_neg at hcon
+    exact absurd (bpow_le beta hcon) (not_le.mpr hulp_gt)
+  have hmagp_gt : M < mag beta p := by
+    have h := hcexp_lt; unfold cexp FLX_exp at h; rw [← hM] at h; omega
+  have hmagp_le : mag beta p ≤ M + 1 := by
+    apply mag_le_bpow beta hp_ne
+    rw [abs_of_pos hp_pos]
+    have hq_ub : q < bpow beta M := by
+      have := bpow_mag_gt beta q; rwa [abs_of_pos hq_pos, ← hM] at this
+    have hb : bpow beta (M + 1) = 2 * bpow beta M := by
+      rw [bpow_plus, bpow_one, hbeta]; push_cast; ring
+    rw [hb]; linarith [hp2q, hq_ub]
+  have hmagp : mag beta p = M + 1 := by omega
+  have hulp_p_eq : ulp beta (FLX_exp prec) p = bpow beta (M - prec + 1) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hp_ne]; congr 1
+    unfold cexp FLX_exp; rw [hmagp]; omega
+  -- `2q ∈ F`; `succ p ≤ 2q` ⟹ `4q − 2p ≥ 2·ulp p = β^(M − prec + 2)`.
+  have hF2q : generic_format beta (FLX_exp prec) (2 * q) := by
+    have h := mult_bpow_exact_FLX beta prec 1 Fq
+    rwa [show bpow beta 1 = 2 from by rw [bpow_one, hbeta]; norm_num,
+      show q * 2 = 2 * q from by ring] at h
+  have hsucc_le := succ_le_lt_aux beta (FLX_exp prec) hValid Fp hF2q (le_of_lt hp_pos) hp2q
+  rw [succ_eq_pos beta (FLX_exp prec) (le_of_lt hp_pos)] at hsucc_le
+  have h4q2p_ge : bpow beta (M - prec + 2) ≤ 4 * q - 2 * p := by
+    have hsp : p + bpow beta (M - prec + 1) ≤ 2 * q := by rwa [hulp_p_eq] at hsucc_le
+    have e2 : bpow beta (M - prec + 2) = 2 * bpow beta (M - prec + 1) := by
+      rw [show M - prec + 2 = (M - prec + 1) + 1 from by ring, bpow_plus, bpow_one, hbeta]
+      push_cast; ring
+    linarith [hsp, e2]
+  -- `p − q < β^(M − 1)`.
+  have hd_pos : 0 < p - q := by linarith
+  have hd_lt : p - q < bpow beta (M - 1) := by
+    have hmagd : mag beta (p - q) ≤ M - 1 := by
+      have := hed; unfold cexp FLX_exp at this; rw [← hM] at this; omega
+    have h1 : |p - q| < bpow beta (mag beta (p - q)) := bpow_mag_gt beta (p - q)
+    rw [abs_of_pos hd_pos] at h1
+    exact lt_of_lt_of_le h1 (bpow_le beta hmagd)
+  -- `◦(p+q) = ◦(3(p−q)) =: S`.
+  set S := round beta (FLX_exp prec) (Znearest choice) (p + q) with hSdef
+  set T := round beta (FLX_exp prec) (Znearest choice) (3 * (p - q)) with hTdef
+  have hST_le : T ≤ S := by
+    rw [hSdef, hTdef]
+    exact round_le beta (FLX_exp prec) hValid (Znearest choice) (by linarith [hreal_corr])
+  have hr_eq : S = T := le_antisymm hfp_benign hST_le
+  have hS_pos : 0 < S := by
+    rw [hSdef]; exact gt_0_round_gt_0_FLX beta prec hp (Znearest choice) (by linarith)
+  have hS_ne : S ≠ 0 := ne_of_gt hS_pos
+  -- `4q − 2p = (p+q) − 3(p−q) ≤ ulp S`.
+  have herr_S : |S - (p + q)| ≤ (1/2) * ulp beta (FLX_exp prec) S := by
+    rw [hSdef]; exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (p + q)
+  have herr_T : |S - 3 * (p - q)| ≤ (1/2) * ulp beta (FLX_exp prec) S := by
+    have h := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (3 * (p - q))
+    rw [← hTdef, ← hr_eq] at h; exact h
+  have h4q2p_le : 4 * q - 2 * p ≤ ulp beta (FLX_exp prec) S := by
+    have habs1 : (p + q) - S ≤ (1/2) * ulp beta (FLX_exp prec) S := by
+      linarith [neg_le_of_abs_le herr_S]
+    have habs2 : S - 3 * (p - q) ≤ (1/2) * ulp beta (FLX_exp prec) S := le_of_abs_le herr_T
+    linarith [habs1, habs2]
+  -- `mag S ≥ M + 2`, hence `S ≥ β^(M+1)`.
+  have hulp_S : ulp beta (FLX_exp prec) S = bpow beta (mag beta S - prec) := by
+    rw [ulp_neq_0 beta (FLX_exp prec) hS_ne]; unfold cexp FLX_exp; rfl
+  have hmagS_ge : M + 2 ≤ mag beta S := by
+    by_contra hcon; push_neg at hcon
+    have h2 : bpow beta (M - prec + 2) ≤ bpow beta (mag beta S - prec) := by
+      rw [← hulp_S]; exact le_trans h4q2p_ge h4q2p_le
+    have h1 : bpow beta (mag beta S - prec) < bpow beta (M - prec + 2) := bpow_lt beta (by omega)
+    linarith
+  have hS_ge : bpow beta (M + 1) ≤ S := by
+    have h := bpow_mag_le beta hS_ne
+    rw [abs_of_pos hS_pos] at h
+    exact le_trans (bpow_le beta (by omega : M + 1 ≤ mag beta S - 1)) h
+  -- `S ≤ β^(M+1)` (via `3(p−q) < β^(M+1)`), so `S = β^(M+1)`.
+  have hFbpow : generic_format beta (FLX_exp prec) (bpow beta (M + 1)) :=
+    generic_format_bpow beta (FLX_exp prec) (M + 1) (by unfold FLX_exp; omega)
+  have hb4 : bpow beta (M + 1) = 4 * bpow beta (M - 1) := by
+    have ha : bpow beta (M + 1) = 2 * bpow beta M := by
+      rw [bpow_plus, bpow_one, hbeta]; push_cast; ring
+    have hbb : bpow beta M = 2 * bpow beta (M - 1) := by
+      rw [show M = (M - 1) + 1 from by ring, bpow_plus, bpow_one, hbeta]; push_cast; ring
+    rw [ha, hbb]; ring
+  have h3pq_lt : 3 * (p - q) < bpow beta (M + 1) := by rw [hb4]; linarith [hd_lt]
+  have hS_le : S ≤ bpow beta (M + 1) := by
+    rw [hr_eq, hTdef]
+    exact round_le_generic beta (FLX_exp prec) hValid (Znearest choice) hFbpow (le_of_lt h3pq_lt)
+  have hS_val : S = bpow beta (M + 1) := le_antisymm hS_le hS_ge
+  -- `3(p−q) ≥ β^(M+1) − β^(M+1−prec)`.
+  have hulp_S_val : ulp beta (FLX_exp prec) S = bpow beta (M + 2 - prec) := by
+    rw [hS_val, ulp_bpow]; congr 1; unfold FLX_exp; ring
+  have h3pq_ge : bpow beta (M + 1) - bpow beta (M + 1 - prec) ≤ 3 * (p - q) := by
+    have hhalf : (1/2) * ulp beta (FLX_exp prec) S = bpow beta (M + 1 - prec) := by
+      rw [hulp_S_val, show M + 2 - prec = (M + 1 - prec) + 1 from by ring, bpow_plus, bpow_one, hbeta]
+      push_cast; ring
+    have h2 := le_of_abs_le herr_T
+    rw [hhalf, hS_val] at h2
+    linarith [h2]
+  -- Contradiction: `β^(M−1) < β^(M+1−prec)` ⟹ `prec < 2`.
+  have hcontra : bpow beta (M - 1) < bpow beta (M + 1 - prec) := by
+    have h3d : 3 * (p - q) < 3 * bpow beta (M - 1) := by linarith [hd_lt]
+    linarith [h3pq_ge, h3d, hb4]
+  have hlt : M - 1 < M + 1 - prec := by
+    by_contra hcon; push_neg at hcon
+    exact absurd (bpow_le beta hcon) (not_le.mpr hcontra)
+  omega
+
 end LeanFlocq
