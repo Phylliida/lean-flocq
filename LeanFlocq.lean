@@ -31,4 +31,5 @@ import LeanFlocq.Algorithms.RoundMinusRound_FLX
 import LeanFlocq.Algorithms.ErrFMA
 import LeanFlocq.Algorithms.ErrFMA_L2
 import LeanFlocq.Algorithms.Discriminant_FLX
+import LeanFlocq.Algorithms.Expansion_FLX
 
