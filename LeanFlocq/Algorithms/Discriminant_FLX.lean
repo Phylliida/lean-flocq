@@ -2228,18 +2228,19 @@ theorem disc_fp_lemma5 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 
   rw [hdelta_abs]
   linarith [hbd, hulp_p_le, hulp_qd, ulp_ge_0 beta (FLX_exp prec) q]
 
-/-- **Boldo §4 Lemma 6** (radix 2, `prec ≥ 2`). In the first disagreement, `p` and `q`
-are very near to half of each other: `3·q ≤ 2·p` (equivalently `q ≤ p(1+2t)/(2+t)`,
-`t = β^(−prec)`; equivalently `p − q ≥ q/2`). From the FP-benign test
+/-- **Boldo §4 Lemma 6** (radix 2, `prec ≥ 2`), sharp form. In the first disagreement,
+`p` and `q` are very near to half of each other: **`4q − 2p ≤ β^(1−prec)(2p − q)`**
+(equivalently `q ≤ p(1+2t)/(2+t)`, `t = β^(−prec)`). From the FP-benign test
 `◦(p+q) ≤ ◦(3(p−q))` and the half-ulp/relative-ulp bounds: `(p+q) − 3(p−q) ≤ ulp(◦(3(p−q)))
-≤ ◦(3(p−q))·β^(1−prec)`, and `◦(3(p−q))(1 − β^(1−prec)/2) ≤ 3(p−q)`; combining (without
-division) gives `4q − 2p ≤ β^(1−prec)(2p − q)`, and `β^(1−prec) ≤ ½` closes it. -/
+≤ ◦(3(p−q))·β^(1−prec)`, and `◦(3(p−q))(1 − β^(1−prec)/2) ≤ 3(p−q)`; combining without
+division gives the bound. Weakened (with `β^(1−prec) ≤ ½`) it yields `3q ≤ 2p`, i.e.
+`p − q ≥ q/2` (used by Lemma 7); the sharp form is needed by the Lemma 8/9 impossibility. -/
 theorem disc_fp_lemma6 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp2 : 2 ≤ prec)
     (choice : ℤ → Bool) {p q : ℝ}
     (hq_pos : 0 < q) (hqp : q < p)
     (hfp_benign : round beta (FLX_exp prec) (Znearest choice) (p + q)
                 ≤ round beta (FLX_exp prec) (Znearest choice) (3 * (p - q))) :
-    3 * q ≤ 2 * p := by
+    4 * q - 2 * p ≤ bpow beta (1 - prec) * (2 * p - q) := by
   have hp : 0 < prec := by omega
   have hValid := FLX_exp_valid prec hp
   have hMon := FLX_exp_monotone prec
@@ -2297,8 +2298,8 @@ theorem disc_fp_lemma6 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp2 :
       _ = w * (T * (1 - w/2)) := by ring
       _ ≤ w * (3 * (p - q)) := mul_le_mul_of_nonneg_left hTR (le_of_lt hw_pos)
       _ = 3 * (p - q) * w := by ring
-  nlinarith [hcombo, mul_nonneg (show (0:ℝ) ≤ 1/2 - w by linarith)
-    (show (0:ℝ) ≤ 2 * p - q by linarith)]
+  -- the sharp bound is `hcombo` rearranged (a ring identity in the `pw`, `qw` monomials).
+  nlinarith [hcombo]
 
 /-- **Boldo §4 Lemma 7** (radix 2, `prec ≥ 2`). First disagreement, `ulp p = ulp q`:
 `δ = |dp − dq| ≤ ½(ulp p + ulp q) = ulp q`, and `d = p − q ≥ q/2` (Lemma 6) gives
@@ -2335,8 +2336,20 @@ theorem disc_fp_lemma7 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp2 :
   have hdelta_abs : |d - (b * b - a * c)| = |dp - dq| := by
     have := disc_corrected_value (a := a) (b := b) (c := c) (p := p) (q := q) hdp hdq
     rw [hd_eq, show p - q - (b * b - a * c) = -(dp - dq) from by linarith [this], abs_neg]
-  -- `d = p − q ≥ q/2` (Lemma 6).
-  have h3q2p := disc_fp_lemma6 beta hbeta prec hp2 choice hq_pos hqp hfp_benign
+  -- `d = p − q ≥ q/2` (Lemma 6, sharp form weakened: `3q ≤ 2p`).
+  have hsharp := disc_fp_lemma6 beta hbeta prec hp2 choice hq_pos hqp hfp_benign
+  have hw_le : bpow beta (1 - prec) ≤ 1/2 := by
+    have h1 : bpow beta (1 - prec) * bpow beta (prec - 1) = 1 := by
+      rw [← bpow_plus, show (1 - prec) + (prec - 1) = 0 from by ring, bpow_zero]
+    have h2 : (2:ℝ) ≤ bpow beta (prec - 1) := by
+      calc (2:ℝ) ≤ (beta.val : ℝ) := by exact_mod_cast beta.prop
+        _ = bpow beta 1 := (bpow_one beta).symm
+        _ ≤ bpow beta (prec - 1) := bpow_le beta (by omega)
+    nlinarith [h1, h2, bpow_gt_0 beta (1 - prec), bpow_gt_0 beta (prec - 1)]
+  have h3q2p : 3 * q ≤ 2 * p := by
+    nlinarith [hsharp, hw_le, bpow_gt_0 beta (1 - prec),
+      mul_nonneg (show (0:ℝ) ≤ 1/2 - bpow beta (1 - prec) by linarith)
+        (show (0:ℝ) ≤ 2 * p - q by linarith)]
   have hd_ge : q / 2 ≤ d := by rw [hd_eq]; linarith
   -- `ulp q ≤ 2·ulp d`.
   have hulp_qd : ulp beta (FLX_exp prec) q ≤ 2 * ulp beta (FLX_exp prec) d := by
