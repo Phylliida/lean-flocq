@@ -4,21 +4,23 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `disc-§3-complete`+)
+## Status (as of commit `e4fd9c0`+)
 
-> **Latest session (2026-06-01, cont.):** **Boldo §3 is COMPLETE.** The Kahan
-> compensated discriminant `b·b − a·c` now has the full correction-branch dispatch
-> (`disc_correction`) and the §3 capstone (`disc_branch_real_test`): Kahan's branch
-> algorithm is within `2·ulp(d)` under the real test, both branches, **both
-> orientations**, 0 sorries. The headline pieces: the genuine `p<q` **mirror**
-> (`disc_corr_particular_lo` — Boldo's relational WLOG does *not* collapse in the
-> functional-rounding setting), and the **unconditional grid discharge**
-> (`disc_mag_prod_no_bump`: products never bump magnitude, killing the `prec≥3` side
-> condition and the equal-ulp boundary Boldo glosses). **§4.1 COMPLETE**
-> (`disc_fp_first_disagreement`), *including the number-theoretic crux* L8+L9
-> (`disc_fp_ulp_gt_impossible`) — proven by a clean, **choice-robust** rounding argument
-> instead of Boldo's significand case analysis. Remaining: §4.2 (second disagreement,
-> analytic, `prec≥4`) + the FP-test capstone. Roadmap in the discriminant section.
+> **Latest session (2026-06-01 → 06-02):** the Kahan compensated discriminant
+> `b·b − a·c` went from "§3.2.2 assembled" to **Boldo §3 COMPLETE + §4.1 COMPLETE**
+> (17 commits, 0 sorries throughout). §3: full correction-branch dispatch
+> (`disc_correction`) + capstone (`disc_branch_real_test`) — Kahan's branch algorithm
+> within `2·ulp(d)` under the *real* test, both branches, **both orientations**. Headline
+> §3 pieces: the genuine `p<q` **mirror** (`disc_corr_particular_lo` — Boldo's relational
+> WLOG does *not* collapse with functional rounding), and the **unconditional grid
+> discharge** (`disc_mag_prod_no_bump`: products never bump magnitude, killing `prec≥3`
+> and the equal-ulp boundary Boldo glosses). §4.1: the first FP-test disagreement
+> (`disc_fp_first_disagreement`), **including the number-theoretic crux** L8+L9
+> (`disc_fp_ulp_gt_impossible`, `ulp p>ulp q` impossible) — proven by a clean,
+> **choice-robust** rounding argument *shorter than Boldo's* significand case analysis
+> (no pinning; holds for arbitrary tie-break). **Remaining on the discriminant:** §4.2
+> (second disagreement — analytic, `prec≥4`) + the FP-test capstone. Full §4.2 roadmap
+> in the discriminant section below.
 
 **Coq's `Core/` is fully ported.** Plus the structural part of `IEEE754/Binary.v`
 (types, predicates, Bopp/Babs/Bcompare, boundedness, rounding modes,
@@ -877,7 +879,7 @@ The relevant algorithms, sized roughly:
 | ~~`Veltkamp` splitting~~ ✓ **DONE at FLX 2026-05-31** (full Veltkamp_Even arc complete, both odd and even radix; `Algorithms/Veltkamp.lean`) | split `x` into hi/lo parts of `prec/2` bits | ~~~400~~ 4161 |
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
 | ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
-| Compensated discriminant (`b² − ac`) — **Boldo §3 COMPLETE** (`Algorithms/Discriminant_FLX.lean`): opposite-sign `2u` + full branch `2·ulp(d)` port (§3.1 benign + §3.2 analytic + Lemma 4 + **both orientations of §3.2.2** + unconditional grid discharge), capstone `disc_branch_real_test`; only §4 (rounded test) remains | sharp error bound for the quadratic discriminant | ~600 |
+| Compensated discriminant (`b² − ac`) — **Boldo §3 COMPLETE + §4.1 COMPLETE** (`Algorithms/Discriminant_FLX.lean`): opposite-sign `2u` + full §3 branch `2·ulp(d)` port (both orientations, capstone `disc_branch_real_test`) + §4.1 first FP-test disagreement incl. the number-theoretic crux (`disc_fp_ulp_gt_impossible`); §4.2 + FP-test capstone remain | sharp error bound for the quadratic discriminant | ~600 |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
 (roughly 10× ratio).
@@ -1042,15 +1044,18 @@ to BigInt rationals.
    (`RoundMinusRound_FLX.lean`), L1, β2=0, and the entire L2/β2≠0 midpoint-
    dichotomy arc (`ErrFMA_L2.lean`) are done — **Pff's ~1700-line MSB/LSB `FmaErr`
    replaced by ~700 lines, no MSB/LSB.**
-7. Compensated discriminant `b·b − a·c` — **Boldo §3 COMPLETE** (`Algorithms/Discriminant_FLX.lean`,
-   Boldo 2009 `boldo.pdf`). DONE: structural core (D0–D2), opposite-sign `2u`
-   (sharper than Boldo), and the **entire** Boldo branch `2·ulp(d)` arc — §3.1 benign,
-   §3.2 analytic, Lemma 4, **both orientations of §3.2.2** (the `p<q` case is a genuine
-   mirror — Boldo's relational WLOG does not collapse with functional rounding),
-   unconditional grid discharge (`disc_mag_prod_no_bump`), full dispatch `disc_correction`,
-   and the §3 capstone `disc_branch_real_test`. REMAINING: only §4 (rounded-test
-   disagreement with the real test, Lemmas 5–12, incl. number-theoretic Lemma 9). A
-   multi-session climb, now at the §3/§4 boundary. See [[feedback_push_through_when_user_encourages]].
+7. Compensated discriminant `b·b − a·c` — **Boldo §3 COMPLETE + §4.1 COMPLETE**
+   (`Algorithms/Discriminant_FLX.lean`, Boldo 2009 `boldo.pdf`). DONE: structural core
+   (D0–D2), opposite-sign `2u` (sharper than Boldo), the **entire** §3 branch `2·ulp(d)`
+   arc (§3.1 benign, §3.2 analytic, Lemma 4, **both orientations of §3.2.2** — the `p<q`
+   case is a genuine mirror, Boldo's relational WLOG not collapsing with functional
+   rounding; unconditional grid discharge `disc_mag_prod_no_bump`; full dispatch
+   `disc_correction`; capstone `disc_branch_real_test`), **and §4.1** — the first FP-test
+   disagreement (`disc_fp_first_disagreement`), including Boldo's **number-theoretic crux**
+   L8+L9 (`disc_fp_ulp_gt_impossible`) by a clean choice-robust rounding argument shorter
+   than the paper's. REMAINING: §4.2 (second disagreement, analytic, `prec≥4`) + the
+   FP-test capstone. A multi-session climb, now deep into §4. See
+   [[feedback_push_through_when_user_encourages]].
 
 #### Veltkamp_Even scope
 
