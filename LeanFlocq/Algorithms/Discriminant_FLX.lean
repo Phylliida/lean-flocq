@@ -2555,4 +2555,87 @@ theorem disc_fp_first_disagreement (beta : radix) (hbeta : beta.val = 2)
       exact disc_fp_ulp_gt_impossible beta hbeta prec hp3 choice Fp Fq hq_pos hqp
         hbranch' hfp_benign hulp_lt hed'
 
+/-! ### §4.2 — Second disagreement (real benign, program runs correction)
+
+Now the *real* test says benign (`3|p−q| ≥ p+q`) but the *floating-point* test runs the
+correction (`◦(3·◦(|p−q|)) < ◦(p+q)`), so the program returns the corrected value
+`d = ◦(◦(p−q) + ◦(dp−dq))`. Unlike §4.1 the benign `◦(p−q)` is **not** exact here (real
+benign means `p, q` need not be in Sterbenz range), so the analysis is analytic rather
+than number-theoretic. WLOG `q < p`; needs `prec ≥ 4`. -/
+
+/-- **Boldo §4.2 Lemma 10** (radix 2, `prec ≥ 1`). The relative-error chain bounding
+`p − q` by a third of `p + q`. With `w = β^(1−prec)` (so the round-to-nearest relative
+factor is `w/2 = β^(−prec)`):
+
+`p − q ≤ ◦(p−q)(1+w/2) ≤ ⅓◦(3◦(p−q))(1+w/2)² ≤ ⅓◦(p+q)(1+w/2)² ≤ ⅓(p+q)(1+w/2)²/(1−w/2)`,
+
+the last step using `◦(p+q)(1−w/2) ≤ p+q`. Stated multiplicatively (no division) as
+`(p−q)(1−w/2) ≤ ⅓(p+q)(1+w/2)²`. Every step uses only the relative bound
+`|◦x − x| ≤ ◦x·(w/2)` (from `error ≤ ½ulp(◦x)` and `ulp_FLX_le`), so it is choice-robust.
+The FP-correction hypothesis `◦(3◦(p−q)) < ◦(p+q)` supplies the middle inequality. -/
+theorem disc_fp_lemma10 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp : 0 < prec)
+    (choice : ℤ → Bool) {p q : ℝ}
+    (hqp : q < p)
+    (hfp_corr : round beta (FLX_exp prec) (Znearest choice)
+                  (3 * round beta (FLX_exp prec) (Znearest choice) (p - q))
+                < round beta (FLX_exp prec) (Znearest choice) (p + q)) :
+    (p - q) * (1 - bpow beta (1 - prec) / 2)
+      ≤ (1/3) * (p + q) * (1 + bpow beta (1 - prec) / 2)^2 := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  set w := bpow beta (1 - prec) with hw_def
+  have hw_pos : (0:ℝ) < w := bpow_gt_0 _ _
+  have hw_le1 : w ≤ 1 := by
+    rw [hw_def]
+    calc bpow beta (1 - prec) ≤ bpow beta 0 := bpow_le beta (by omega)
+      _ = 1 := bpow_zero beta
+  have hw2_pos : (0:ℝ) < 1 - w/2 := by linarith
+  have hK_nonneg : (0:ℝ) ≤ 1 + w/2 := by linarith
+  -- relative bound: for `◦x > 0`, `|◦x − x| ≤ ◦x·(w/2)`.
+  have relbound : ∀ x : ℝ, 0 < round beta (FLX_exp prec) (Znearest choice) x →
+      |round beta (FLX_exp prec) (Znearest choice) x - x|
+        ≤ round beta (FLX_exp prec) (Znearest choice) x * (w/2) := by
+    intro x hx
+    have herr := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice x
+    have hulp := ulp_FLX_le beta prec hp (round beta (FLX_exp prec) (Znearest choice) x)
+    rw [abs_of_pos hx, ← hw_def] at hulp
+    calc |round beta (FLX_exp prec) (Znearest choice) x - x|
+        ≤ (1/2) * ulp beta (FLX_exp prec) (round beta (FLX_exp prec) (Znearest choice) x) := herr
+      _ ≤ (1/2) * (round beta (FLX_exp prec) (Znearest choice) x * w) := by linarith
+      _ = round beta (FLX_exp prec) (Znearest choice) x * (w/2) := by ring
+  set r1 := round beta (FLX_exp prec) (Znearest choice) (p - q) with hr1_def
+  set r3 := round beta (FLX_exp prec) (Znearest choice) (3 * r1) with hr3_def
+  set S := round beta (FLX_exp prec) (Znearest choice) (p + q) with hS_def
+  have hr1_pos : 0 < r1 := by
+    rw [hr1_def]; exact gt_0_round_gt_0_FLX beta prec hp (Znearest choice) (by linarith)
+  have hr3_pos : 0 < r3 := by
+    rw [hr3_def]; exact gt_0_round_gt_0_FLX beta prec hp (Znearest choice) (by linarith)
+  have hS_pos : 0 < S := lt_trans hr3_pos hfp_corr
+  have hcorr_le : r3 ≤ S := le_of_lt hfp_corr
+  -- directional relative bounds.
+  have hb1 := relbound (p - q) hr1_pos
+  have hb3 := relbound (3 * r1) hr3_pos
+  have hb4 := relbound (p + q) hS_pos
+  simp only [← hr1_def, ← hr3_def, ← hS_def] at hb1 hb3 hb4
+  have S1 : p - q ≤ r1 * (1 + w/2) := by nlinarith [neg_le_of_abs_le hb1]
+  have hr1_le : r1 ≤ (1/3) * r3 * (1 + w/2) := by nlinarith [neg_le_of_abs_le hb3]
+  have e4 : S * (1 - w/2) ≤ p + q := by nlinarith [le_of_abs_le hb4]
+  -- chain.
+  have S2 : r1 * (1 + w/2) ≤ (1/3) * r3 * (1 + w/2) * (1 + w/2) :=
+    mul_le_mul_of_nonneg_right hr1_le hK_nonneg
+  have S3 : (1/3) * r3 * (1 + w/2) * (1 + w/2) ≤ (1/3) * S * (1 + w/2) * (1 + w/2) := by
+    apply mul_le_mul_of_nonneg_right _ hK_nonneg
+    apply mul_le_mul_of_nonneg_right _ hK_nonneg
+    linarith [hcorr_le]
+  have S123 : p - q ≤ (1/3) * S * (1 + w/2) * (1 + w/2) := le_trans S1 (le_trans S2 S3)
+  have S4 : (p - q) * (1 - w/2)
+      ≤ ((1/3) * S * (1 + w/2) * (1 + w/2)) * (1 - w/2) :=
+    mul_le_mul_of_nonneg_right S123 (le_of_lt hw2_pos)
+  have S5 : ((1/3) * S * (1 + w/2) * (1 + w/2)) * (1 - w/2)
+      ≤ (1/3) * (p + q) * (1 + w/2)^2 := by
+    nlinarith [mul_le_mul_of_nonneg_left e4
+      (show (0:ℝ) ≤ (1/3) * (1 + w/2)^2 by positivity)]
+  linarith [le_trans S4 S5]
+
 end LeanFlocq
