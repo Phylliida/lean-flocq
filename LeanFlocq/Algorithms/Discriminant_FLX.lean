@@ -2797,4 +2797,128 @@ theorem disc_fp_lemma12 (beta : radix) (hbeta : beta.val = 2) (prec : ℤ) (hp4 
     exact disc_three_bpow_format beta hbeta prec (by omega) (cexp beta (FLX_exp prec) m)
   exact abs_round_le_generic beta (FLX_exp prec) hValid (Znearest choice) h3F hbd3
 
+/-- **Boldo §4.2: the second disagreement is within `2·ulp(d)`** (radix 2, `prec ≥ 4`,
+`q < p`). The *real* test says benign (`p + q ≤ 3(p−q)`) but the *floating-point* test
+runs the correction (`◦(3◦(p−q)) < ◦(p+q)`), so the program returns
+`d = ◦(◦(p−q) + ◦(dp−dq))`. Writing `m = ◦(p−q)`, `g = ◦(dp−dq)`:
+
+The exact value is `b·b − a·c = (p−q) + (dp−dq)`, so by three half-ulp rounding errors
+`δ ≤ ½(ulp d + ulp m + ulp g)`. Lemma 12 gives `|g| ≤ 3·ulp m`, so `m + g ≥ m − 3·ulp m ≥
+m/2` (as `3·ulp m ≤ m/2` for `prec ≥ 4`); since `m/2 ∈ F` (radix 2), `d = ◦(m+g) ≥ m/2`,
+whence `ulp m ≤ 2·ulp d`. And `ulp g ≤ |g|·w ≤ 3·ulp m·w ≤ 6w·ulp d` (`ulp_FLX_le`, `w =
+β^(1−prec)`). Therefore `δ ≤ (3/2 + 3w)·ulp d ≤ 2·ulp d` for `prec ≥ 4` (`w ≤ 1/8 < 1/6`). -/
+theorem disc_fp_second_disagreement (beta : radix) (hbeta : beta.val = 2)
+    (prec : ℤ) (hp4 : 4 ≤ prec) (choice : ℤ → Bool) {a b c : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a)
+    (Fb : generic_format beta (FLX_exp prec) b)
+    (Fc : generic_format beta (FLX_exp prec) c)
+    {p q dp dq d : ℝ}
+    (hpe : p = round beta (FLX_exp prec) (Znearest choice) (b * b))
+    (hqe : q = round beta (FLX_exp prec) (Znearest choice) (a * c))
+    (hdp : dp = b * b - p)
+    (hdq : dq = a * c - q)
+    (hde : d = round beta (FLX_exp prec) (Znearest choice)
+              (round beta (FLX_exp prec) (Znearest choice) (p - q)
+               + round beta (FLX_exp prec) (Znearest choice) (dp - dq)))
+    (hqp : q < p)
+    (hreal_benign : p + q ≤ 3 * (p - q))
+    (hfp_corr : round beta (FLX_exp prec) (Znearest choice)
+                  (3 * round beta (FLX_exp prec) (Znearest choice) (p - q))
+                < round beta (FLX_exp prec) (Znearest choice) (p + q)) :
+    |d - (b * b - a * c)| ≤ 2 * ulp beta (FLX_exp prec) d := by
+  have hp : 0 < prec := by omega
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have hq_pos : 0 < q := disc_fp_lemma11 beta hbeta prec (by omega) choice hqp hfp_corr
+  have hp_pos : 0 < p := lt_trans hq_pos hqp
+  have hpq_pos : (0:ℝ) < p - q := by linarith
+  set m := round beta (FLX_exp prec) (Znearest choice) (p - q) with hm_def
+  set g := round beta (FLX_exp prec) (Znearest choice) (dp - dq) with hg_def
+  have hm_pos : 0 < m := by
+    rw [hm_def]; exact gt_0_round_gt_0_FLX beta prec hp (Znearest choice) hpq_pos
+  have Fm : generic_format beta (FLX_exp prec) m := by
+    rw [hm_def]; exact generic_format_round beta (FLX_exp prec) hValid (Znearest choice) _
+  -- L12: |g| ≤ 3·ulp m.
+  have hg_bd : |g| ≤ 3 * ulp beta (FLX_exp prec) m :=
+    disc_fp_lemma12 beta hbeta prec hp4 choice hpe hqe hdp hdq hqp hq_pos hreal_benign hfp_corr
+  -- scalar `w ≤ 1/8`.
+  set w := bpow beta (1 - prec) with hw_def
+  have hw_pos : (0:ℝ) < w := bpow_gt_0 _ _
+  have hw_ub : w ≤ 1/8 := by
+    rw [hw_def]
+    have h1 : bpow beta (1 - prec) * bpow beta (prec - 1) = 1 := by
+      rw [← bpow_plus, show (1 - prec) + (prec - 1) = 0 from by ring, bpow_zero]
+    have h2 : (8:ℝ) ≤ bpow beta (prec - 1) := by
+      have hb3 : bpow beta 3 = 8 := by
+        rw [show (3:ℤ) = 1 + (1 + 1) from by ring, bpow_plus, bpow_plus, bpow_one, hbeta]
+        norm_num
+      calc (8:ℝ) = bpow beta 3 := hb3.symm
+        _ ≤ bpow beta (prec - 1) := bpow_le beta (by omega)
+    nlinarith [h1, h2, bpow_gt_0 beta (1 - prec), bpow_gt_0 beta (prec - 1)]
+  -- `3·ulp m ≤ m/2` and hence `m + g ≥ m/2`.
+  have hulpm_le : ulp beta (FLX_exp prec) m ≤ m * w := by
+    have h := ulp_FLX_le beta prec hp m; rwa [abs_of_pos hm_pos, ← hw_def] at h
+  have h3ulpm : 3 * ulp beta (FLX_exp prec) m ≤ m / 2 := by
+    nlinarith [hulpm_le, hw_ub, hm_pos, hw_pos]
+  have hmg_ge : m / 2 ≤ m + g := by
+    have hg_lo : -(3 * ulp beta (FLX_exp prec) m) ≤ g := neg_le_of_abs_le hg_bd
+    linarith [hg_lo, h3ulpm]
+  -- `m/2 ∈ F`, hence `d = ◦(m+g) ≥ ◦(m/2) = m/2`.
+  have hm2_F : generic_format beta (FLX_exp prec) (m / 2) := by
+    have h := mult_bpow_exact_FLX beta prec (-1) Fm
+    rwa [show bpow beta (-1) = (1:ℝ)/2 by unfold bpow; rw [hbeta]; norm_num,
+      show m * ((1:ℝ)/2) = m/2 from by ring] at h
+  have hd_ge_m2 : m / 2 ≤ d := by
+    rw [hde]
+    calc m / 2 = round beta (FLX_exp prec) (Znearest choice) (m / 2) :=
+          (round_generic beta (FLX_exp prec) (Znearest choice) hm2_F).symm
+      _ ≤ round beta (FLX_exp prec) (Znearest choice) (m + g) :=
+          round_le beta (FLX_exp prec) hValid (Znearest choice) hmg_ge
+  have hd_pos : 0 < d := lt_of_lt_of_le (by linarith [hm_pos] : (0:ℝ) < m/2) hd_ge_m2
+  have hud_pos : 0 < ulp beta (FLX_exp prec) d := by
+    rw [ulp_neq_0 beta (FLX_exp prec) (ne_of_gt hd_pos)]; exact bpow_gt_0 _ _
+  -- `ulp m ≤ 2·ulp d`.
+  have hulp_md : ulp beta (FLX_exp prec) m ≤ 2 * ulp beta (FLX_exp prec) d := by
+    have hle : ulp beta (FLX_exp prec) (m / 2) ≤ ulp beta (FLX_exp prec) d := by
+      apply ulp_le beta (FLX_exp prec) hValid hMon
+      rw [abs_of_pos (by linarith [hm_pos] : (0:ℝ) < m/2), abs_of_pos hd_pos]; exact hd_ge_m2
+    rw [ulp_half_r2 beta hbeta prec hp m] at hle; linarith
+  -- `ulp g ≤ 6w·ulp d`.
+  have hulpg_le : ulp beta (FLX_exp prec) g ≤ |g| * w := by
+    have h := ulp_FLX_le beta prec hp g; rwa [← hw_def] at h
+  have hulpg_d : ulp beta (FLX_exp prec) g ≤ 6 * w * ulp beta (FLX_exp prec) d := by
+    have h1 : |g| * w ≤ 3 * ulp beta (FLX_exp prec) m * w :=
+      mul_le_mul_of_nonneg_right hg_bd (le_of_lt hw_pos)
+    have h2 : 3 * ulp beta (FLX_exp prec) m * w
+        ≤ 3 * (2 * ulp beta (FLX_exp prec) d) * w := by
+      apply mul_le_mul_of_nonneg_right _ (le_of_lt hw_pos); linarith [hulp_md]
+    nlinarith [hulpg_le, h1, h2]
+  -- three half-ulp rounding errors ⟹ `δ ≤ ½(ulp d + ulp m + ulp g)`.
+  have hexact : b * b - a * c = (p - q) + (dp - dq) := by rw [hdp, hdq]; ring
+  have hed : |d - (m + g)| ≤ (1/2) * ulp beta (FLX_exp prec) d := by
+    have h := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (m + g)
+    rw [← hde] at h; exact h
+  have hem : |m - (p - q)| ≤ (1/2) * ulp beta (FLX_exp prec) m := by
+    have h := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (p - q)
+    rw [← hm_def] at h; exact h
+  have heg : |g - (dp - dq)| ≤ (1/2) * ulp beta (FLX_exp prec) g := by
+    have h := error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (dp - dq)
+    rw [← hg_def] at h; exact h
+  have hdelta : |d - (b * b - a * c)|
+      ≤ (1/2) * ulp beta (FLX_exp prec) d + (1/2) * ulp beta (FLX_exp prec) m
+        + (1/2) * ulp beta (FLX_exp prec) g := by
+    have hsplit : d - (b * b - a * c)
+        = (d - (m + g)) + (m - (p - q)) + (g - (dp - dq)) := by rw [hexact]; ring
+    have t1 := abs_add_le ((d - (m + g)) + (m - (p - q))) (g - (dp - dq))
+    have t2 := abs_add_le (d - (m + g)) (m - (p - q))
+    rw [hsplit]
+    linarith [t1, t2, hed, hem, heg]
+  -- final: `δ ≤ (3/2 + 3w)·ulp d ≤ 2·ulp d` for `prec ≥ 4`.
+  have hfinal : (1/2) * ulp beta (FLX_exp prec) d + (1/2) * ulp beta (FLX_exp prec) m
+      + (1/2) * ulp beta (FLX_exp prec) g ≤ 2 * ulp beta (FLX_exp prec) d := by
+    nlinarith [hulp_md, hulpg_d, hw_ub, hw_pos, hud_pos,
+      mul_nonneg (show (0:ℝ) ≤ 1/2 - 3*w from by linarith [hw_ub]) hud_pos.le]
+  linarith [hdelta, hfinal]
+
 end LeanFlocq
