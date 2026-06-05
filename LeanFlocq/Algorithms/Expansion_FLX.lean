@@ -913,6 +913,57 @@ theorem nonoverlapping_shrink_left {x y z : ℝ}
   obtain ⟨s, hmy, hx'⟩ := nonoverlapping_extract beta h hx hxy
   exact nonoverlapping_of_witness_le beta hmy hx' hz
 
+/-! ### Residual localization: `MultipleOfPow` closure algebra
+
+The faithful grow-preservation crux ("each residual `hᵢ` is nonoverlapping with the
+*later* residuals") rests on **residual localization**: when `Q`, `e`, and `◦(Q+e)`
+are all multiples of a common `2^t`, the residual `(Q+e) − ◦(Q+e)` is too — so it
+lands on the `2^t` grid rather than below it. That is immediate once `MultipleOfPow`
+is known closed under `+`, `−`, and grid-coarsening, which we establish here. -/
+
+/-- Multiples of `β^s` are closed under negation. -/
+theorem multipleOfPow_neg {s : ℤ} {x : ℝ} (h : MultipleOfPow beta s x) :
+    MultipleOfPow beta s (-x) := by
+  obtain ⟨m, rfl⟩ := h; exact ⟨-m, by push_cast; ring⟩
+
+/-- Multiples of `β^s` are closed under addition. -/
+theorem multipleOfPow_add {s : ℤ} {x y : ℝ}
+    (hx : MultipleOfPow beta s x) (hy : MultipleOfPow beta s y) :
+    MultipleOfPow beta s (x + y) := by
+  obtain ⟨m, rfl⟩ := hx; obtain ⟨n, rfl⟩ := hy; exact ⟨m + n, by push_cast; ring⟩
+
+/-- Multiples of `β^s` are closed under subtraction. -/
+theorem multipleOfPow_sub {s : ℤ} {x y : ℝ}
+    (hx : MultipleOfPow beta s x) (hy : MultipleOfPow beta s y) :
+    MultipleOfPow beta s (x - y) := by
+  obtain ⟨m, rfl⟩ := hx; obtain ⟨n, rfl⟩ := hy; exact ⟨m - n, by push_cast; ring⟩
+
+/-- Grid-coarsening: a multiple of `β^s` is a multiple of any coarser `β^t` (`t ≤ s`). -/
+theorem multipleOfPow_mono {s t : ℤ} {x : ℝ}
+    (h : MultipleOfPow beta s x) (hts : t ≤ s) : MultipleOfPow beta t x := by
+  obtain ⟨m, rfl⟩ := h
+  have hst : (0 : ℤ) ≤ s - t := by omega
+  refine ⟨m * beta.val ^ (s - t).toNat, ?_⟩
+  rw [Int.cast_mul, IZR_Zpower beta hst, mul_assoc, ← bpow_plus,
+    show (s - t) + t = s from by omega]
+
+/-- Every float is a multiple of `β^t` for any `t ≤ cexp`. -/
+theorem multipleOfPow_of_le_cexp {t : ℤ} {x : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x) (ht : t ≤ cexp beta (FLX_exp prec) x) :
+    MultipleOfPow beta t x :=
+  multipleOfPow_mono beta (multipleOfPow_cexp beta prec Fx) ht
+
+/-- **Residual-localization kernel.** If `Q`, `e`, and `◦(Q+e)` all lie on the `β^t`
+grid, then so does the `TwoSum` residual `(Q+e) − ◦(Q+e)`. (This is what keeps a
+residual from sliding below the grid of the value it came from — the heart of the
+"`hᵢ` doesn't overlap later residuals" step.) -/
+theorem err_multipleOfPow {Q e : ℝ} {t : ℤ}
+    (hQ : MultipleOfPow beta t Q) (he : MultipleOfPow beta t e)
+    (hr : MultipleOfPow beta t (round beta (FLX_exp prec) (Znearest choice) (Q + e))) :
+    MultipleOfPow beta t
+      ((Q + e) - round beta (FLX_exp prec) (Znearest choice) (Q + e)) :=
+  multipleOfPow_sub beta (multipleOfPow_add beta hQ he) hr
+
 end
 
 end LeanFlocq
