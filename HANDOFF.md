@@ -4,9 +4,19 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `8d0b582`+)
+## Status (as of commit `acf5611`+)
 
-> **Latest: the 2-adic bridge — dyadic packing ⟹ sign-readable (0 sorries, general radix).**
+> **Latest: got Shewchuk's paper (`lean-flocq/shewchuk.pdf`) and ported the grow-preservation
+> building blocks (Shewchuk Theorem 10).** His `GROW-EXPANSION` proof rests on two facts, now in
+> (0 sorries): **Lemma 1** (`roundN_add_err_le_left/right`, `twoSumLo_abs_le`) — the round-nearest
+> error of `a+b` is `≤` either operand, straight from `round_N_pt` (the nearest float is no farther
+> than the float `a`, at distance `|b|`), so each residual `|hᵢ| ≤ |eᵢ|`; and **magnitude-monotonicity
+> of nonoverlapping** (`nonoverlapping_of_witness_le` / `nonoverlapping_extract` / `nonoverlapping_shrink_left`)
+> — shrinking the dominated operand keeps it nonoverlapping with the larger. **Remaining: the inductive
+> assembly** (list-level nonoverlapping-increasing predicate + `grow` preserves it). Roadmap with
+> Shewchuk's exact invariant is recorded below ([§ GROW-EXPANSION roadmap](#grow-expansion-roadmap)).
+
+> **Earlier: the 2-adic bridge — dyadic packing ⟹ sign-readable (0 sorries, general radix).**
 > The list-level consequence of nonoverlapping is now proved: `multipleOfPow_le_abs` (a nonzero
 > multiple of `β^s` has `|·| ≥ β^s`); **`dyadic_kernel`** (the genuine 2-adic lemma:
 > `e = m·β^t, |e| < β^s, t ≤ s ⟹ |e| ≤ β^s − β^t`, via integer floor `|m| ≤ β^(s−t)−1` through
@@ -972,7 +982,7 @@ The relevant algorithms, sized roughly:
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
 | ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
 | Compensated discriminant (`b² − ac`) — **COMPLETE** (`Algorithms/Discriminant_FLX.lean`): Boldo §3 + §4, real & floating-point tests, all orientations, unconditional (`disc_branch_fp_test_full`) — beyond the paper. Incl. opposite-sign `2u`, full §3 branch `2·ulp(d)` (both orientations, `disc_branch_real_test`), §4.1/§4.2 disagreements + the number-theoretic crux (`disc_fp_ulp_gt_impossible`), and the `p<q` mirror | sharp error bound for the quadratic discriminant | ~600 |
-| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** + **Stage 2 sign-reading + `Separated` + `Nonoverlapping` + 2-adic bridge DONE** (`Algorithms/Expansion_FLX.lean`): `grow`/`expansionSum`/`scale`/`det2` sum-exact + `Expansion`-preserving (`det2` = exact `orient2d` kernel); `HeadDom`/`headDom_sign`; `Separated`; **`Nonoverlapping`** (Shewchuk) + atom; **`dyadic_kernel`** + `DyadicSep` + **`dyadicSep_headDom`** (packed ⟹ sign-readable) + `dyadicSep_cons` builder + `dyadicSep_pair`. **Remaining Stage 2 (the hard chaining):** `grow`/`fast_expansion_sum` *produce* packed/nonoverlapping output across a sweep (Shewchuk Thm 10), `compress` | exact multi-word arithmetic + sign decisions; foundation under all adaptive predicates | ~780 |
+| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** + **Stage 2 sign-reading + `Separated` + `Nonoverlapping` + 2-adic bridge DONE** (`Algorithms/Expansion_FLX.lean`): `grow`/`expansionSum`/`scale`/`det2` sum-exact + `Expansion`-preserving (`det2` = exact `orient2d` kernel); `HeadDom`/`headDom_sign`; `Separated`; **`Nonoverlapping`** (Shewchuk) + atom; **`dyadic_kernel`** + `DyadicSep` + **`dyadicSep_headDom`** (packed ⟹ sign-readable) + builders; **grow-preservation building blocks** (`shewchuk.pdf` obtained): Lemma 1 (`twoSumLo_abs_le`) + nonoverlapping magnitude-monotonicity (`nonoverlapping_shrink_left`). **Remaining Stage 2 (the inductive assembly):** `NOInc` list predicate + `grow` preserves it (Shewchuk Thm 10), then `EXPANSION-SUM`/`SCALE`, `compress` | exact multi-word arithmetic + sign decisions; foundation under all adaptive predicates | ~830 |
 | Adaptive predicates `orient2d`/`orient3d`/`incircle`/`insphere` — **NOT STARTED**: the fast-path error-bound filter + exact expansion fallback. `orient2d`'s exact kernel is already `det2` above | robust geometric sign decisions | ~? |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
@@ -989,6 +999,38 @@ The relevant algorithms, sized roughly:
 > mostly reachable from `headDom_approx`/`add_dominated_sign` + our error machinery, **independent
 > of (1)** (a usable robust-orient2d fast path much sooner). Then `orient3d`/`incircle`/`insphere`
 > reuse the same base (3×3 / 4×4 dets).
+
+<a name="grow-expansion-roadmap"></a>
+### GROW-EXPANSION roadmap (Shewchuk Theorem 10, `shewchuk.pdf` §2.4)
+
+The faithful exact-fallback path. Shewchuk's **GROW-EXPANSION** adds a single `p`-bit
+value `b` to a nonoverlapping expansion `e = [e₁,…,e_m]` (sorted **increasing** —
+`e₁` smallest), producing a nonoverlapping `[h₁,…,h_{m+1}]` with `Σh = b + Σe`:
+```
+Q₀ = b;  for i=1..m: (Qᵢ, hᵢ) = TWO-SUM(Q_{i-1}, eᵢ);  h_{m+1} = Q_m
+```
+(Our `growAux b e` computes exactly this — residuals then carry, smallest-first.)
+
+**Shewchuk's proof has two halves:**
+1. **Exactness** — invariant `Qᵢ + Σⱼ₌₁ⁱ hⱼ = b + Σⱼ₌₁ⁱ eⱼ` (from `Qᵢ + hᵢ = Q_{i-1} + eᵢ`,
+   the TWO-SUM property). **We have this** as `growAux_sum`.
+2. **Nonoverlapping** — three steps, **building blocks now ported** (commit `acf5611`):
+   - (a) Each TWO-SUM gives `hᵢ` nonoverlapping with `Qᵢ` — `round_residual_nonoverlapping`. ✓
+   - (b) **Lemma 1**: `|hᵢ| ≤ |eᵢ|` — `twoSumLo_abs_le`. ✓
+   - (c) Because `e` is nonoverlapping-increasing, `eᵢ` is nonoverlapping-below
+     `e_{i+1},…,e_m`; with `|hᵢ| ≤ |eᵢ|`, **`hᵢ` is nonoverlapping-below them too** —
+     `nonoverlapping_shrink_left`. ✓  And the later output components `h_{i+1},…,h_{m+1}`
+     are built by summing `Qᵢ` with `e_{i+1},…` (all ≥ `e_{i+1}`'s scale), so `hᵢ`
+     can't overlap them either. Hence the output is nonoverlapping and increasing.
+
+**Remaining (the inductive assembly):** define a list-level predicate `NOInc` (sorted
+increasing + mutually nonoverlapping, zeros allowed as in Shewchuk's spurious-zero
+remark), and prove `growAux` preserves it via the (a)/(b)/(c) facts. Then bridge
+`NOInc ⟹ sign-readable` (reverse to `DyadicSep`, or read the largest = last element —
+Shewchuk: "take the sign of the largest component"). Then `EXPANSION-SUM` (Theorem 12,
+fold of grow) and `SCALE-EXPANSION` (Theorem 19) follow, giving sign-readable `det2`.
+Lemma 1's analog for products and `Corollary 8` (the witness-preservation under TWO-SUM)
+are the extra facts those need.
 
 **Why these specifically:** Shewchuk-style **adaptive geometric
 predicates** (`orient2d`, `orient3d`, `incircle`, `insphere`) are all
