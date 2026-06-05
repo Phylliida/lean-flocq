@@ -987,6 +987,80 @@ theorem err_localizes {Q e : ℝ} {t : ℤ}
   err_multipleOfPow beta prec choice hQ he
     (round_multipleOfPow beta prec choice (multipleOfPow_add beta hQ he))
 
+/-- `0` is a multiple of every `β^s`. -/
+theorem multipleOfPow_zero (s : ℤ) : MultipleOfPow beta s 0 := ⟨0, by simp⟩
+
+/-- The absolute value of a multiple of `β^s` is a multiple of `β^s`. -/
+theorem multipleOfPow_abs {s : ℤ} {x : ℝ} (h : MultipleOfPow beta s x) :
+    MultipleOfPow beta s |x| := by
+  obtain ⟨m, rfl⟩ := h
+  exact ⟨|m|, by rw [abs_mul, abs_of_pos (bpow_gt_0 beta s), Int.cast_abs]⟩
+
+/-- A list sum of multiples of `β^s` is a multiple of `β^s`. -/
+theorem multipleOfPow_listSum {s : ℤ} :
+    ∀ (l : List ℝ), (∀ x ∈ l, MultipleOfPow beta s x) → MultipleOfPow beta s l.sum := by
+  intro l
+  induction l with
+  | nil => intro _; simpa using multipleOfPow_zero beta s
+  | cons a tl ih =>
+      intro h
+      rw [List.sum_cons]
+      exact multipleOfPow_add beta (h a (by simp)) (ih (fun x hx => h x (by simp [hx])))
+
+/-- **Snoc preserves packing.** Appending `y` at the small end of a `DyadicSep`
+expansion keeps it packed, provided every component (and `y`) lies on a common grid
+`β^t` with `y` strictly below it. The dyadic kernel supplies the headroom: each
+prefix sum is a multiple of `β^t` strictly below its witness power, hence `≤ β^s − β^t`,
+leaving exactly room for `|y| < β^t`. -/
+theorem dyadicSep_snoc :
+    ∀ (l : List ℝ) (y : ℝ) (t : ℤ),
+      DyadicSep beta l → (∀ x ∈ l, MultipleOfPow beta t x) →
+      MultipleOfPow beta t y → |y| < bpow beta t →
+      DyadicSep beta (l ++ [y]) := by
+  intro l
+  induction l with
+  | nil =>
+      intro y t _ _ Hy _
+      refine ⟨⟨t, Hy, ?_⟩, trivial⟩
+      simpa using bpow_gt_0 beta t
+  | cons h tl ih =>
+      intro y t Hl Hgrid Hy Hylt
+      simp only [DyadicSep] at Hl ⊢
+      obtain ⟨⟨s, hmh, hsum⟩, Htl⟩ := Hl
+      have Hgrid_h : MultipleOfPow beta t h := Hgrid h (by simp)
+      have Hgrid_tl : ∀ x ∈ tl, MultipleOfPow beta t x :=
+        fun x hx => Hgrid x (by simp [hx])
+      have Hrec : DyadicSep beta (tl ++ [y]) := ih y t Htl Hgrid_tl Hy Hylt
+      have hnn : (0 : ℝ) ≤ (tl.map (fun x => |x|)).sum := by
+        apply List.sum_nonneg; intro z hz
+        obtain ⟨x, _, rfl⟩ := List.mem_map.mp hz; exact abs_nonneg x
+      have hSt : MultipleOfPow beta t ((tl.map (fun x => |x|)).sum) := by
+        apply multipleOfPow_listSum beta
+        intro z hz
+        obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hz
+        exact multipleOfPow_abs beta (Hgrid_tl x hx)
+      have e1 : ((tl ++ [y]).map (fun x => |x|)).sum
+          = (tl.map (fun x => |x|)).sum + |y| := by simp
+      rcases eq_or_lt_of_le hnn with hz | hpos
+      · refine ⟨⟨t, Hgrid_h, ?_⟩, Hrec⟩
+        have hlt : (tl.map (fun x => |x|)).sum + |y| < bpow beta t := by
+          rw [← hz]; simpa using Hylt
+        rw [← e1] at hlt; exact hlt
+      · have hge : bpow beta t ≤ (tl.map (fun x => |x|)).sum := by
+          have := multipleOfPow_le_abs beta (ne_of_gt hpos) hSt
+          rwa [abs_of_pos hpos] at this
+        have hts : t ≤ s := by
+          by_contra hcon
+          push_neg at hcon
+          have := bpow_lt beta hcon
+          linarith
+        have hker : (tl.map (fun x => |x|)).sum ≤ bpow beta s - bpow beta t := by
+          have := dyadic_kernel beta hSt (by rwa [abs_of_pos hpos]) hts
+          rwa [abs_of_pos hpos] at this
+        refine ⟨⟨s, hmh, ?_⟩, Hrec⟩
+        have hlt : (tl.map (fun x => |x|)).sum + |y| < bpow beta s := by linarith
+        rw [← e1] at hlt; exact hlt
+
 /-- **The per-step crux (Shewchuk Theorem 10, step c).** A *new* residual
 `err(Qᵢ + eᵢ₊₁)` is nonoverlapping with the *previous* residual `hᵢ`, given: `eᵢ₊₁`
 on the `β^t` separation grid, `eᵢ` (hence `hᵢ`) strictly below it, and **the carry
