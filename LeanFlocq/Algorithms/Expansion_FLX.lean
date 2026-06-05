@@ -713,6 +713,135 @@ theorem separated_pair_nonoverlapping {x y : ℝ}
     apply nonoverlapping_of_abs_lt_ulp beta prec Fx
     linarith
 
+/-! ### The 2-adic bridge: dyadic packing ⟹ sign-readable
+
+The list-level consequence of nonoverlapping: a sorted expansion whose components
+pack into disjoint dyadic ranges has `Σ|tail| < |head|`, so its sign is read off the
+head (`headDom_sign`). We formalize the "packed" form directly as `DyadicSep` (each
+head a multiple of `β^s` whose power exceeds the total magnitude below it), prove the
+bridge to `HeadDom`, and give the **dyadic kernel** — the integer-packing lemma
+`(e = m·β^t, |e| < β^s, t ≤ s) ⟹ |e| ≤ β^s − β^t` — that powers the builder. -/
+
+/-- A nonzero multiple of `β^s` has magnitude at least `β^s`. -/
+theorem multipleOfPow_le_abs {x : ℝ} {s : ℤ}
+    (hx : x ≠ 0) (h : MultipleOfPow beta s x) : bpow beta s ≤ |x| := by
+  obtain ⟨m, rfl⟩ := h
+  have hbs : (0 : ℝ) < bpow beta s := bpow_gt_0 beta s
+  have hm0 : m ≠ 0 := by rintro rfl; simp at hx
+  have hm1 : (1 : ℝ) ≤ |(m : ℝ)| := by
+    have h1 : (1 : ℤ) ≤ |m| := Int.one_le_abs hm0
+    calc (1 : ℝ) = ((1 : ℤ) : ℝ) := by norm_num
+      _ ≤ ((|m| : ℤ) : ℝ) := by exact_mod_cast h1
+      _ = |(m : ℝ)| := by rw [Int.cast_abs]
+  rw [abs_mul, abs_of_pos hbs]
+  calc bpow beta s = 1 * bpow beta s := (one_mul _).symm
+    _ ≤ |(m : ℝ)| * bpow beta s := mul_le_mul_of_nonneg_right hm1 (le_of_lt hbs)
+
+/-- **The dyadic packing kernel.** If `e` is a multiple of `β^t`, strictly below
+`β^s` in magnitude, with `t ≤ s`, then `|e| ≤ β^s − β^t` — there is at least a full
+`β^t` of headroom below `β^s`. (General radix; the integer mantissa `|m|` satisfies
+`|m| ≤ β^(s−t) − 1`.) -/
+theorem dyadic_kernel {e : ℝ} {s t : ℤ}
+    (hmult : MultipleOfPow beta t e) (hlt : |e| < bpow beta s) (hts : t ≤ s) :
+    |e| ≤ bpow beta s - bpow beta t := by
+  obtain ⟨m, rfl⟩ := hmult
+  have hbt : (0 : ℝ) < bpow beta t := bpow_gt_0 beta t
+  have hst : (0 : ℤ) ≤ s - t := by omega
+  have hsplit : bpow beta s = bpow beta (s - t) * bpow beta t := by
+    rw [← bpow_plus]; congr 1; omega
+  rw [abs_mul, abs_of_pos hbt] at hlt ⊢
+  rw [hsplit] at hlt
+  have hmlt : |(m : ℝ)| < bpow beta (s - t) :=
+    lt_of_mul_lt_mul_right hlt (le_of_lt hbt)
+  have hNeq : bpow beta (s - t) = ((beta.val ^ (s - t).toNat : ℤ) : ℝ) :=
+    (IZR_Zpower beta hst).symm
+  have hmInt : |m| < (beta.val ^ (s - t).toNat : ℤ) := by
+    have : ((|m| : ℤ) : ℝ) < ((beta.val ^ (s - t).toNat : ℤ) : ℝ) := by
+      rw [Int.cast_abs, ← hNeq]; exact hmlt
+    exact_mod_cast this
+  have hmle : |(m : ℝ)| ≤ bpow beta (s - t) - 1 := by
+    have h1 : (|m| : ℤ) ≤ (beta.val ^ (s - t).toNat : ℤ) - 1 := by omega
+    have h2 : ((|m| : ℤ) : ℝ) ≤ ((beta.val ^ (s - t).toNat : ℤ) : ℝ) - 1 := by
+      push_cast at h1 ⊢; exact_mod_cast h1
+    rw [Int.cast_abs] at h2; rw [hNeq]; exact h2
+  calc |(m : ℝ)| * bpow beta t
+      ≤ (bpow beta (s - t) - 1) * bpow beta t :=
+        mul_le_mul_of_nonneg_right hmle (le_of_lt hbt)
+    _ = bpow beta (s - t) * bpow beta t - bpow beta t := by ring
+    _ = bpow beta s - bpow beta t := by rw [← hsplit]
+
+/-- Dyadically packed expansion: each component is a multiple of some `β^s` whose
+power strictly exceeds the total magnitude of everything below it. The "strongly
+packed" form of sorted-nonoverlapping — it directly certifies sign-readability. -/
+def DyadicSep : List ℝ → Prop
+  | [] => True
+  | h :: t =>
+      (∃ s : ℤ, MultipleOfPow beta s h ∧ (t.map (fun x => |x|)).sum < bpow beta s) ∧
+        DyadicSep t
+
+/-- **The 2-adic bridge:** a dyadically-packed expansion with nonzero head dominates
+its tail (`HeadDom`), so its sign is read off the head. -/
+theorem dyadicSep_headDom {h : ℝ} {t : List ℝ}
+    (H : DyadicSep beta (h :: t)) (hh : h ≠ 0) : HeadDom h t := by
+  simp only [DyadicSep] at H
+  obtain ⟨⟨s, hmult, hsum⟩, _⟩ := H
+  have hle : bpow beta s ≤ |h| := multipleOfPow_le_abs beta hh hmult
+  unfold HeadDom
+  linarith
+
+/-- A dyadically-packed expansion with nonzero head is sign-readable. -/
+theorem dyadicSep_sign {h : ℝ} {t : List ℝ}
+    (H : DyadicSep beta (h :: t)) (hh : h ≠ 0) :
+    (h :: t).sum ≠ 0 ∧ (0 < (h :: t).sum ↔ 0 < h) ∧ ((h :: t).sum < 0 ↔ h < 0) :=
+  headDom_sign (dyadicSep_headDom beta H hh)
+
+include hp in
+/-- **Builder (kernel-powered):** prepending a dominant head `g` (a float whose ulp
+exceeds `|h|`) to a packed expansion keeps it packed — the kernel supplies exactly
+the `β^cexp(g)` headroom needed to absorb `|h|` plus the rest. -/
+theorem dyadicSep_cons {g h : ℝ} {t : List ℝ}
+    (Fg : generic_format beta (FLX_exp prec) g) (hh : h ≠ 0)
+    (hgh : |h| < ulp beta (FLX_exp prec) g)
+    (Ht : DyadicSep beta (h :: t)) :
+    DyadicSep beta (g :: h :: t) := by
+  have hg0 : g ≠ 0 := by
+    rintro rfl; rw [ulp_FLX_0 beta prec hp] at hgh; exact absurd hgh (not_lt.mpr (abs_nonneg h))
+  have hgulp : ulp beta (FLX_exp prec) g = bpow beta (cexp beta (FLX_exp prec) g) :=
+    ulp_neq_0 beta (FLX_exp prec) hg0
+  simp only [DyadicSep] at Ht ⊢
+  obtain ⟨⟨s_h, hmult_h, hsum_t⟩, Ht'⟩ := Ht
+  refine ⟨⟨cexp beta (FLX_exp prec) g, multipleOfPow_cexp beta prec Fg, ?_⟩,
+    ⟨s_h, hmult_h, hsum_t⟩, Ht'⟩
+  have hgh' : |h| < bpow beta (cexp beta (FLX_exp prec) g) := by rwa [hgulp] at hgh
+  have hbsh : bpow beta s_h ≤ |h| := multipleOfPow_le_abs beta hh hmult_h
+  have hsh_le : s_h ≤ cexp beta (FLX_exp prec) g := by
+    by_contra hcon
+    push_neg at hcon
+    have := bpow_lt beta hcon
+    linarith
+  have hker : |h| ≤ bpow beta (cexp beta (FLX_exp prec) g) - bpow beta s_h :=
+    dyadic_kernel beta hmult_h hgh' hsh_le
+  have hsumcons : ((h :: t).map (fun x => |x|)).sum
+      = |h| + (t.map (fun x => |x|)).sum := by simp [List.sum_cons]
+  rw [hsumcons]
+  linarith
+
+/-- **2-element base case:** two floats with `x ≠ 0` and `|y| < ulp x` form a packed
+expansion (`DyadicSep [x, y]`). -/
+theorem dyadicSep_pair {x y : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x) (Fy : generic_format beta (FLX_exp prec) y)
+    (hx : x ≠ 0) (hxy : |y| < ulp beta (FLX_exp prec) x) :
+    DyadicSep beta [x, y] := by
+  have hxulp : ulp beta (FLX_exp prec) x = bpow beta (cexp beta (FLX_exp prec) x) :=
+    ulp_neq_0 beta (FLX_exp prec) hx
+  simp only [DyadicSep]
+  refine ⟨⟨cexp beta (FLX_exp prec) x, multipleOfPow_cexp beta prec Fx, ?_⟩,
+    ⟨cexp beta (FLX_exp prec) y, multipleOfPow_cexp beta prec Fy, ?_⟩, trivial⟩
+  · simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+    rwa [hxulp] at hxy
+  · simp only [List.map_nil, List.sum_nil]
+    exact bpow_gt_0 beta _
+
 end
 
 end LeanFlocq
