@@ -1202,6 +1202,84 @@ theorem IncrNO_head_grid :
           linarith
         exact ih z' t Hrest (le_of_lt (lt_of_le_of_lt ht hcexp)) z hz'
 
+include hp in
+/-- **Grow-preservation — Shewchuk Theorem 10.** Sweeping a carry `Q ∈ F` through an
+increasing-nonoverlapping expansion `e` yields a *sign-readable* result: the reversed
+output `(growAux Q e).reverse` is `DyadicSep` (largest-first, dyadically packed), hence
+its sign is read off the head via `dyadicSep_sign`. Each new residual is appended at the
+small end (`dyadicSep_snoc`); it lands below the grid `β^t` with `t = min(cexp Q₁, cexp e₂)`
+on which the whole recursive output sits (`growAux_all_multipleOfPow`) — the `min` makes
+the carry/input regime-flip vanish. -/
+theorem grow_dyadicSep :
+    ∀ (e : List ℝ) (Q : ℝ),
+      generic_format beta (FLX_exp prec) Q → IncrNO beta prec e →
+      DyadicSep beta (growAux beta prec choice Q e).reverse := by
+  intro e
+  induction e with
+  | nil =>
+      intro Q FQ _
+      simp only [growAux, List.reverse_cons, List.reverse_nil, List.nil_append]
+      refine ⟨⟨cexp beta (FLX_exp prec) Q, multipleOfPow_cexp beta prec FQ, ?_⟩, trivial⟩
+      simpa using bpow_gt_0 beta _
+  | cons e1 rest ih =>
+      intro Q FQ HiNO
+      have Fe1 : generic_format beta (FLX_exp prec) e1 := by cases rest <;> exact HiNO.1
+      have FQ1 : generic_format beta (FLX_exp prec) (twoSumHi beta prec choice Q e1) :=
+        twoSumHi_format beta prec hp choice Q e1
+      have Fh1 : generic_format beta (FLX_exp prec) (twoSumLo beta prec choice Q e1) :=
+        twoSumLo_format beta prec hp choice FQ Fe1
+      have hh1_le : |twoSumLo beta prec choice Q e1| ≤ |e1| :=
+        twoSumLo_abs_le beta prec hp choice FQ
+      have hhi : |twoSumLo beta prec choice Q e1|
+          < bpow beta (cexp beta (FLX_exp prec) (twoSumHi beta prec choice Q e1)) := by
+        rcases eq_or_ne (twoSumHi beta prec choice Q e1) 0 with hz | hz
+        · rw [twoSumLo_eq_zero_of_hi_zero beta prec hp choice Q e1 hz, abs_zero]
+          exact bpow_gt_0 beta _
+        · exact twoSumLo_abs_lt_cexp_hi beta prec hp choice Q e1 hz
+      have HiNO_rest : IncrNO beta prec rest := by
+        cases rest with
+        | nil => exact trivial
+        | cons e2 r => exact HiNO.2.2.2
+      have Hrec : DyadicSep beta
+          ((growAux beta prec choice (twoSumHi beta prec choice Q e1) rest).reverse) :=
+        ih (twoSumHi beta prec choice Q e1) FQ1 HiNO_rest
+      have hgoal : (growAux beta prec choice Q (e1 :: rest)).reverse
+          = (growAux beta prec choice (twoSumHi beta prec choice Q e1) rest).reverse
+              ++ [twoSumLo beta prec choice Q e1] := by
+        simp only [growAux, List.reverse_cons]
+      rw [hgoal]
+      cases rest with
+      | nil =>
+          refine dyadicSep_snoc beta _ _
+            (cexp beta (FLX_exp prec) (twoSumHi beta prec choice Q e1))
+            (cexp beta (FLX_exp prec) (twoSumLo beta prec choice Q e1))
+            Hrec ?_ (multipleOfPow_cexp beta prec Fh1) hhi
+          intro z hz
+          rw [List.mem_reverse] at hz
+          exact growAux_all_multipleOfPow beta prec choice []
+            (twoSumHi beta prec choice Q e1)
+            (multipleOfPow_cexp beta prec FQ1) (by simp) z hz
+      | cons e2 r =>
+          set t := min (cexp beta (FLX_exp prec) (twoSumHi beta prec choice Q e1))
+            (cexp beta (FLX_exp prec) e2) with htdef
+          have hh1_lt_t : |twoSumLo beta prec choice Q e1| < bpow beta t := by
+            have hlt2 : |twoSumLo beta prec choice Q e1|
+                < bpow beta (cexp beta (FLX_exp prec) e2) :=
+              lt_of_le_of_lt hh1_le HiNO.2.2.1
+            rcases le_total (cexp beta (FLX_exp prec) (twoSumHi beta prec choice Q e1))
+              (cexp beta (FLX_exp prec) e2) with hle | hle
+            · rw [htdef, min_eq_left hle]; exact hhi
+            · rw [htdef, min_eq_right hle]; exact hlt2
+          refine dyadicSep_snoc beta _ _ t
+            (cexp beta (FLX_exp prec) (twoSumLo beta prec choice Q e1))
+            Hrec ?_ (multipleOfPow_cexp beta prec Fh1) hh1_lt_t
+          intro z hz
+          rw [List.mem_reverse] at hz
+          exact growAux_all_multipleOfPow beta prec choice (e2 :: r)
+            (twoSumHi beta prec choice Q e1)
+            (multipleOfPow_mono beta (multipleOfPow_cexp beta prec FQ1) (min_le_left _ _))
+            (IncrNO_head_grid beta prec r e2 t HiNO_rest (min_le_right _ _)) z hz
+
 end
 
 end LeanFlocq
