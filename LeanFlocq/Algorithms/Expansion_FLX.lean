@@ -964,6 +964,46 @@ theorem err_multipleOfPow {Q e : ℝ} {t : ℤ}
       ((Q + e) - round beta (FLX_exp prec) (Znearest choice) (Q + e)) :=
   multipleOfPow_sub beta (multipleOfPow_add beta hQ he) hr
 
+/-- **Rounding preserves the grid** (unconditionally): rounding a multiple of `β^t`
+yields a multiple of `β^t`. This is `round_repr_same_exp` (`◦(m·β^t) = m'·β^t`) — the
+key that the localization needs *no* `mag`/`cexp` side-condition. -/
+theorem round_multipleOfPow {t : ℤ} {x : ℝ} (h : MultipleOfPow beta t x) :
+    MultipleOfPow beta t (round beta (FLX_exp prec) (Znearest choice) x) := by
+  obtain ⟨m, hx⟩ := h
+  obtain ⟨m', hm'⟩ := round_repr_same_exp beta (FLX_exp prec) (Znearest choice) m t
+  refine ⟨m', ?_⟩
+  rw [show x = F2R (beta := beta) (⟨m, t⟩ : float beta) from hx, hm']
+  rfl
+
+/-- **Residual localization (unconditional).** If `Q` and `e` both lie on the `β^t`
+grid, the `TwoSum` residual `(Q+e) − ◦(Q+e)` does too. So a residual never escapes the
+grid shared by its operands — the per-step fact behind "`hᵢ` nonoverlapping later
+residuals" (the remaining work is the inductive invariant that puts the carry on the
+next input's grid). -/
+theorem err_localizes {Q e : ℝ} {t : ℤ}
+    (hQ : MultipleOfPow beta t Q) (he : MultipleOfPow beta t e) :
+    MultipleOfPow beta t
+      ((Q + e) - round beta (FLX_exp prec) (Znearest choice) (Q + e)) :=
+  err_multipleOfPow beta prec choice hQ he
+    (round_multipleOfPow beta prec choice (multipleOfPow_add beta hQ he))
+
+/-- **The per-step crux (Shewchuk Theorem 10, step c).** A *new* residual
+`err(Qᵢ + eᵢ₊₁)` is nonoverlapping with the *previous* residual `hᵢ`, given: `eᵢ₊₁`
+on the `β^t` separation grid, `eᵢ` (hence `hᵢ`) strictly below it, and **the carry
+`Qᵢ` on that same grid**. The new residual localizes to grid `β^t` (`err_localizes`),
+while `hᵢ` sits below `β^t` — disjoint. The sole nontrivial hypothesis,
+`MultipleOfPow t Qᵢ`, is exactly the inductive invariant the sweep must maintain
+(the carry stays coarser than the separations it has already passed). -/
+theorem residual_no_residual {Qi ei ei1 hi : ℝ} {t : ℤ}
+    (hei1_grid : MultipleOfPow beta t ei1)
+    (hei_lt : |ei| < bpow beta t)
+    (hQi_grid : MultipleOfPow beta t Qi)
+    (hhi : |hi| ≤ |ei|) :
+    Nonoverlapping beta hi
+      ((Qi + ei1) - round beta (FLX_exp prec) (Znearest choice) (Qi + ei1)) :=
+  nonoverlapping_of_witness_le beta
+    (err_localizes beta prec choice hQi_grid hei1_grid) hei_lt hhi
+
 end
 
 end LeanFlocq
