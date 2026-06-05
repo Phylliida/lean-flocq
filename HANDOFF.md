@@ -4,9 +4,26 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `ee78abd`+)
+## Status (as of commit `e29a6a0`+)
 
-> **Latest session (2026-06-05): Stage 2 of expansion arithmetic — sign-reading keystone
+> **Latest session (2026-06-05, later): began the *faithful* grow-preservation port — the
+> bit-level `Nonoverlapping` predicate.** Key finding worth carrying: **our `Separated`
+> (½·ulp chain) is too strong to be preserved by `grow`.** A sweep produces residuals at the
+> *same* scale (both `≲ ½ulp` of the running carry) — mutually *bit*-nonoverlapping (disjoint
+> bit ranges) but **not** ulp-chain separated; even the weaker `|y| < ulp(x)` fails (a residual
+> that is a power of two has its lsb far above its `cexp`). So preservation genuinely needs
+> Shewchuk's bit-level **nonoverlapping**, which I've now started (0 sorries, general radix):
+> `MultipleOfPow` + `multipleOfPow_cexp` (a float is a multiple of `β^cexp`); `Nonoverlapping`
+> (Shewchuk existential — one operand a multiple of `β^s`, the other strictly below `β^s`) +
+> symmetry/zero; `nonoverlapping_of_abs_lt_ulp` (`|y| < ulp(x)`, `x∈F` ⟹ NO, witness `cexp x`);
+> **the atom** `round_residual_nonoverlapping` (`◦v` and `v−◦v` are nonoverlapping, via
+> `|residual| ≤ ½ulp < ulp`) + `twoProd/twoSum_nonoverlapping`; `separated_pair_nonoverlapping`
+> bridges the old invariant to the new. **Next (the hard chaining):** the list-level NO invariant
+> + its **2-adic `HeadDom` bridge** (`Σ|tail| < 2^lsb(head)` via disjoint bit-ranges — needs the
+> trailing-zeros/2-adic valuation), then `grow`/`fast_expansion_sum` *preserve* NO (Shewchuk
+> Theorem 10). That is the genuinely multi-session part.
+
+> **Earlier this session (2026-06-05): Stage 2 of expansion arithmetic — sign-reading keystone
 > + the `Separated` structural-invariant foundation.** `Expansion_FLX.lean` now has, 0 sorries:
 > - **Consumer side (sign-reading):** `HeadDom h t := Σ|t| < |h|`, `headDom_sign` (**keystone**
 >   — `sum ≠ 0` ∧ `sign(sum) = sign(h)`), `headDom_approx` (`|sum − h| < |h|`, the filter
@@ -942,7 +959,7 @@ The relevant algorithms, sized roughly:
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
 | ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
 | Compensated discriminant (`b² − ac`) — **COMPLETE** (`Algorithms/Discriminant_FLX.lean`): Boldo §3 + §4, real & floating-point tests, all orientations, unconditional (`disc_branch_fp_test_full`) — beyond the paper. Incl. opposite-sign `2u`, full §3 branch `2·ulp(d)` (both orientations, `disc_branch_real_test`), §4.1/§4.2 disagreements + the number-theoretic crux (`disc_fp_ulp_gt_impossible`), and the `p<q` mirror | sharp error bound for the quadratic discriminant | ~600 |
-| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** + **Stage 2 sign-reading + `Separated` foundation DONE** (`Algorithms/Expansion_FLX.lean`): `grow`/`expansionSum`/`scale`/`det2` sum-exact + `Expansion`-preserving (`det2` = exact `orient2d` kernel); `HeadDom`/`headDom_sign`/`headDom_approx`; `Separated` invariant + `separated_headDom` (structure→sign bridge) + `separatedFrom_abs_sum_le` + base case. **Remaining Stage 2 (hard):** preservation — `grow`/`fast_expansion_sum` *maintain* `Separated` (bit-level, radix 2); `compress`/renormalize to produce `Separated` results | exact multi-word arithmetic + sign decisions; foundation under all adaptive predicates | ~600 |
+| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** + **Stage 2 sign-reading + `Separated` + bit-level `Nonoverlapping` foundation DONE** (`Algorithms/Expansion_FLX.lean`): `grow`/`expansionSum`/`scale`/`det2` sum-exact + `Expansion`-preserving (`det2` = exact `orient2d` kernel); `HeadDom`/`headDom_sign`; `Separated` + `separated_headDom`; **`Nonoverlapping`** (Shewchuk) + atom `round_residual_nonoverlapping`. **Remaining Stage 2 (the hard arc):** list-level NO + 2-adic `HeadDom` bridge, then `grow`/`fast_expansion_sum` *preserve* `Nonoverlapping` (Shewchuk Thm 10), `compress` | exact multi-word arithmetic + sign decisions; foundation under all adaptive predicates | ~680 |
 | Adaptive predicates `orient2d`/`orient3d`/`incircle`/`insphere` — **NOT STARTED**: the fast-path error-bound filter + exact expansion fallback. `orient2d`'s exact kernel is already `det2` above | robust geometric sign decisions | ~? |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
@@ -950,14 +967,14 @@ The relevant algorithms, sized roughly:
 
 > **Where we are now (2026-06-05):** all six EFT primitives (rows 1–6) are **done**; the
 > *predicate* layer's Stage 1 (`det2`) + Stage 2 **sign-reading keystone** (`headDom_sign`) +
-> the **`Separated` structural-invariant foundation** (`separated_headDom` bridges structure →
-> sign) are in. **Immediate next moves**, in order: (1) **the hard part of Stage 2 —
-> preservation:** prove `grow`/`fast_expansion_sum` *maintain* `Separated` (the bit-level sweep
-> theorems, radix 2), and/or a `compress`/renormalize that *produces* a `Separated` result from
-> the simple Stage-1 expansions — that's what makes multi-component `det2` feed `separated_sign`.
-> (2) **`orient2d`** — exact kernel is `det2`; the fast-path error-bound *filter*
-> (`|det| > ε ⟹ sign correct`) is mostly reachable from `headDom_approx` + our error machinery,
-> independent of (1). Then `orient3d`/`incircle`/`insphere` reuse the same base (3×3 / 4×4 dets).
+> the **`Separated`** structural invariant + the start of the **faithful `Nonoverlapping`** port
+> (predicate + atom) are in. **Immediate next moves:** (1) **the hard arc — bit-level preservation:**
+> the list-level NO invariant + its **2-adic `HeadDom` bridge** (`Σ|tail| < 2^lsb(head)` via
+> disjoint bit-ranges), then `grow`/`fast_expansion_sum` *preserve* `Nonoverlapping` (Shewchuk
+> Thm 10), so multi-component `det2` becomes sign-readable. (2) **`orient2d` filter** —
+> `|det| > ε ⟹ sign correct`, mostly reachable from `headDom_approx`/`add_dominated_sign` + our
+> error machinery, **independent of (1)** (gives a usable robust-orient2d fast path much sooner).
+> Then `orient3d`/`incircle`/`insphere` reuse the same base (3×3 / 4×4 dets).
 
 **Why these specifically:** Shewchuk-style **adaptive geometric
 predicates** (`orient2d`, `orient3d`, `incircle`, `insphere`) are all
