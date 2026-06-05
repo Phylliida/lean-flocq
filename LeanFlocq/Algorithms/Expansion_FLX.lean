@@ -1078,6 +1078,32 @@ theorem residual_no_residual {Qi ei ei1 hi : ℝ} {t : ℤ}
   nonoverlapping_of_witness_le beta
     (err_localizes beta prec choice hQi_grid hei1_grid) hei_lt hhi
 
+include hp in
+/-- The TwoSum residual sits strictly below the high word's lsb:
+`|twoSumLo Q x| ≤ ½·ulp(twoSumHi Q x) < β^{cexp(twoSumHi Q x)}`. This is the `cexp Qᵢ`
+half of the separation grid `t = min(cexp Qᵢ, cexp eᵢ₊₁)`. -/
+theorem twoSumLo_abs_lt_cexp_hi (a b : ℝ)
+    (h0 : twoSumHi beta prec choice a b ≠ 0) :
+    |twoSumLo beta prec choice a b|
+      < bpow beta (cexp beta (FLX_exp prec) (twoSumHi beta prec choice a b)) := by
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have herr : |twoSumHi beta prec choice a b - (a + b)|
+      ≤ (1 / 2) * ulp beta (FLX_exp prec) (twoSumHi beta prec choice a b) := by
+    unfold twoSumHi
+    exact error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice (a + b)
+  have hulp : ulp beta (FLX_exp prec) (twoSumHi beta prec choice a b)
+      = bpow beta (cexp beta (FLX_exp prec) (twoSumHi beta prec choice a b)) :=
+    ulp_neq_0 beta (FLX_exp prec) h0
+  have hb : (0:ℝ) < bpow beta (cexp beta (FLX_exp prec) (twoSumHi beta prec choice a b)) :=
+    bpow_gt_0 beta _
+  have hlo : twoSumLo beta prec choice a b
+      = -(twoSumHi beta prec choice a b - (a + b)) := by unfold twoSumLo; ring
+  rw [hlo, abs_neg]
+  rw [hulp] at herr
+  linarith
+
 /-- **Grid-preservation of the whole sweep (no regime condition).** If the carry `Q`
 and every input `eᵢ` are multiples of `β^t`, then *every* component of `growAux Q e`
 is a multiple of `β^t` — because each step only does a TwoSum: `twoSumHi = ◦(Q+x)`
