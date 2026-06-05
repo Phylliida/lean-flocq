@@ -1079,6 +1079,17 @@ theorem residual_no_residual {Qi ei ei1 hi : ℝ} {t : ℤ}
     (err_localizes beta prec choice hQi_grid hei1_grid) hei_lt hhi
 
 include hp in
+/-- Degenerate TwoSum: if the high word rounds to `0` then (FLX has no underflow, so
+`Q+x = 0`) the low word is `0` too. -/
+theorem twoSumLo_eq_zero_of_hi_zero (a b : ℝ)
+    (h0 : twoSumHi beta prec choice a b = 0) :
+    twoSumLo beta prec choice a b = 0 := by
+  unfold twoSumHi at h0
+  have hab : a + b = 0 := eq_0_round_0_FLX beta prec hp (Znearest choice) h0
+  unfold twoSumLo twoSumHi
+  rw [hab, round_0]; ring
+
+include hp in
 /-- The TwoSum residual sits strictly below the high word's lsb:
 `|twoSumLo Q x| ≤ ½·ulp(twoSumHi Q x) < β^{cexp(twoSumHi Q x)}`. This is the `cexp Qᵢ`
 half of the separation grid `t = min(cexp Qᵢ, cexp eᵢ₊₁)`. -/
