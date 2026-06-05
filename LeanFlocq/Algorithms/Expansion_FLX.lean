@@ -842,6 +842,77 @@ theorem dyadicSep_pair {x y : ℝ}
   · simp only [List.map_nil, List.sum_nil]
     exact bpow_gt_0 beta _
 
+/-! ### Toward grow-preservation (Shewchuk Theorem 10): the building blocks
+
+Shewchuk's `GROW-EXPANSION` adds a single float `b` to a nonoverlapping expansion `e`
+(sorted increasing), sweeping `Q ← TWO-SUM(Q, eᵢ)` and emitting the residuals `hᵢ`
+plus the final carry. The output is nonoverlapping. His proof rests on two facts,
+ported here (the inductive assembly over the list is the remaining step):
+
+* **Lemma 1** — the round-to-nearest error of `a + b` is no larger than either
+  operand (`◦(a+b)` is the closest float to `a+b`, and the float `a` is at distance
+  `|b|`). So each residual `hᵢ = err(Q, eᵢ)` has `|hᵢ| ≤ |eᵢ|`.
+* **Magnitude-monotonicity of nonoverlapping** — shrinking the smaller operand keeps
+  it nonoverlapping with the larger. Since `|hᵢ| ≤ |eᵢ|` and `eᵢ` is
+  nonoverlapping-below the later (larger) components, `hᵢ` is too — so it cannot
+  overlap any later output. -/
+
+include hp in
+/-- **Lemma 1 (Shewchuk), left form:** `|◦(a+b) − (a+b)| ≤ |b|` (the float `a` is a
+witness no farther than the nearest). -/
+theorem roundN_add_err_le_left {a b : ℝ}
+    (Fa : generic_format beta (FLX_exp prec) a) :
+    |round beta (FLX_exp prec) (Znearest choice) (a + b) - (a + b)| ≤ |b| := by
+  have h := (round_N_pt beta (FLX_exp prec) (FLX_exp_valid prec hp) choice (a + b)).2 a Fa
+  rwa [show a - (a + b) = -b from by ring, abs_neg] at h
+
+include hp in
+/-- **Lemma 1, right form:** `|◦(a+b) − (a+b)| ≤ |a|`. -/
+theorem roundN_add_err_le_right {a b : ℝ}
+    (Fb : generic_format beta (FLX_exp prec) b) :
+    |round beta (FLX_exp prec) (Znearest choice) (a + b) - (a + b)| ≤ |a| := by
+  have h := (round_N_pt beta (FLX_exp prec) (FLX_exp_valid prec hp) choice (a + b)).2 b Fb
+  rwa [show b - (a + b) = -a from by ring, abs_neg] at h
+
+include hp in
+/-- The `TwoSum` residual is no larger than the second operand (Lemma 1 applied to
+`twoSumLo`). -/
+theorem twoSumLo_abs_le {a b : ℝ} (Fa : generic_format beta (FLX_exp prec) a) :
+    |twoSumLo beta prec choice a b| ≤ |b| := by
+  unfold twoSumLo twoSumHi
+  rw [show (a + b) - round beta (FLX_exp prec) (Znearest choice) (a + b)
+      = -(round beta (FLX_exp prec) (Znearest choice) (a + b) - (a + b)) from by ring, abs_neg]
+  exact roundN_add_err_le_left beta prec hp choice Fa
+
+/-- Shrinking the dominated operand preserves nonoverlapping: if `w` is a multiple of
+`β^s` strictly above `u`, then any `z` with `|z| ≤ |u|` is nonoverlapping with `w`. -/
+theorem nonoverlapping_of_witness_le {w u z : ℝ} {s : ℤ}
+    (hw : MultipleOfPow beta s w) (hu : |u| < bpow beta s) (hz : |z| ≤ |u|) :
+    Nonoverlapping beta z w :=
+  Or.inr (Or.inr (Or.inr ⟨s, hw, lt_of_le_of_lt hz hu⟩))
+
+/-- From `Nonoverlapping x y` with `y` the larger (`|x| ≤ |y|`) and `x ≠ 0`, recover
+the witness in which `y` is the multiple: `∃ s, MultipleOfPow s y ∧ |x| < β^s`. -/
+theorem nonoverlapping_extract {x y : ℝ}
+    (h : Nonoverlapping beta x y) (hx : x ≠ 0) (hxy : |x| ≤ |y|) :
+    ∃ s : ℤ, MultipleOfPow beta s y ∧ |x| < bpow beta s := by
+  rcases h with h | h | ⟨s, hmx, hy⟩ | ⟨s, hmy, hx'⟩
+  · exact absurd h hx
+  · rw [h, abs_zero] at hxy
+    exact absurd (abs_eq_zero.mp (le_antisymm hxy (abs_nonneg x))) hx
+  · exact absurd (multipleOfPow_le_abs beta hx hmx) (by
+      have := lt_of_le_of_lt hxy hy; linarith)
+  · exact ⟨s, hmy, hx'⟩
+
+/-- **Magnitude-monotonicity:** if `x` (nonzero) is nonoverlapping with the larger `y`
+and `z` is no larger than `x`, then `z` is nonoverlapping with `y`. This is the step
+that carries each `TwoSum` residual's nonoverlapping past the larger components. -/
+theorem nonoverlapping_shrink_left {x y z : ℝ}
+    (h : Nonoverlapping beta x y) (hx : x ≠ 0) (hxy : |x| ≤ |y|) (hz : |z| ≤ |x|) :
+    Nonoverlapping beta z y := by
+  obtain ⟨s, hmy, hx'⟩ := nonoverlapping_extract beta h hx hxy
+  exact nonoverlapping_of_witness_le beta hmy hx' hz
+
 end
 
 end LeanFlocq
