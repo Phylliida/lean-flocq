@@ -4,9 +4,27 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `b518351`+)
+## Status (as of commit `ca27a33`+)
 
-> **Latest: the grow-preservation PER-STEP CRUX is proved (Shewchuk Thm 10 step c), 0 sorries.**
+> **Latest: GROW-PRESERVATION IS PROVEN — `grow_dyadicSep`, Shewchuk Theorem 10, 0 sorries.**
+> The "genuinely multi-session hard part" flagged below, landed. Sweeping a carry `Q ∈ F`
+> through an increasing-nonoverlapping expansion `e` yields a **sign-readable** result:
+> `(growAux Q e).reverse` is `DyadicSep`, so its sign is read off the head (`dyadicSep_sign`).
+> The induction appends each residual at the small end (`dyadicSep_snoc`, *fixed* — it had a
+> vacuous grid-conflation bug); the residual lands below grid `β^t` with **`t = min(cexp Q₁, cexp e₂)`**,
+> the grid the whole recursive output sits on (`growAux_all_multipleOfPow` — the sweep preserves
+> any common grid, no regime condition). **The `min` makes the carry/input magnitude regime-flip
+> vanish.** Supporting atoms (all 0 sorries): `growAux_all_multipleOfPow`, `twoSumLo_abs_lt_cexp_hi`
+> (residual below high word), `twoSumLo_eq_zero_of_hi_zero` (degenerate carry→0 via `eq_0_round_0_FLX`),
+> `IncrNO` predicate + `IncrNO_all_format`/`IncrNO_head_grid`.
+>
+> **Next:** (1) spurious-**zero** handling — `IncrNO` currently assumes nonzero components (a separable
+> refinement, likely a filter/`compress`); (2) **EXPANSION-SUM** (Thm 12, grow-fold) and **SCALE**
+> (Thm 19) preserve the structure, connecting multi-component `det2` to `dyadicSep_sign` for a full
+> robust `orient2d`. The consumer side (`dyadicSep_sign`) and now the producer side (`grow_dyadicSep`)
+> are both done; the remaining arc is composing sweeps.
+
+> **Earlier: the grow-preservation PER-STEP CRUX is proved (Shewchuk Thm 10 step c), 0 sorries.**
 > The feared `mag`/`cexp` regime-flip dissolved: **`round_repr_same_exp` makes grid-preservation
 > unconditional** — rounding a multiple of `β^t` is a multiple of `β^t`, full stop. So:
 > - `round_multipleOfPow` (rounding preserves the `β^t` grid) + `err_localizes` (the residual
