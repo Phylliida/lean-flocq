@@ -4,9 +4,22 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `e29a6a0`+)
+## Status (as of commit `8d0b582`+)
 
-> **Latest session (2026-06-05, later): began the *faithful* grow-preservation port — the
+> **Latest: the 2-adic bridge — dyadic packing ⟹ sign-readable (0 sorries, general radix).**
+> The list-level consequence of nonoverlapping is now proved: `multipleOfPow_le_abs` (a nonzero
+> multiple of `β^s` has `|·| ≥ β^s`); **`dyadic_kernel`** (the genuine 2-adic lemma:
+> `e = m·β^t, |e| < β^s, t ≤ s ⟹ |e| ≤ β^s − β^t`, via integer floor `|m| ≤ β^(s−t)−1` through
+> `IZR_Zpower`); `DyadicSep` (the strongly-packed form — each head a multiple of `β^s` whose
+> power exceeds the total magnitude below it); **`dyadicSep_headDom`** (the bridge: packed +
+> nonzero head ⟹ `HeadDom`, so the whole sign is read off the head) + `dyadicSep_sign`;
+> **`dyadicSep_cons`** (kernel-powered builder — prepend a dominant head, the kernel gives the
+> `β^cexp(g)` headroom) + `dyadicSep_pair` (2-element base). So a packed expansion is
+> sign-readable *and* packed expansions can be built up. **Next (the remaining hard chaining):**
+> `grow`/`fast_expansion_sum` *produce* packed/nonoverlapping output across a sweep (Shewchuk
+> Theorem 10) — that connects multi-component `det2` to `dyadicSep_sign`.
+
+> **Earlier: began the *faithful* grow-preservation port — the
 > bit-level `Nonoverlapping` predicate.** Key finding worth carrying: **our `Separated`
 > (½·ulp chain) is too strong to be preserved by `grow`.** A sweep produces residuals at the
 > *same* scale (both `≲ ½ulp` of the running carry) — mutually *bit*-nonoverlapping (disjoint
@@ -959,7 +972,7 @@ The relevant algorithms, sized roughly:
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
 | ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
 | Compensated discriminant (`b² − ac`) — **COMPLETE** (`Algorithms/Discriminant_FLX.lean`): Boldo §3 + §4, real & floating-point tests, all orientations, unconditional (`disc_branch_fp_test_full`) — beyond the paper. Incl. opposite-sign `2u`, full §3 branch `2·ulp(d)` (both orientations, `disc_branch_real_test`), §4.1/§4.2 disagreements + the number-theoretic crux (`disc_fp_ulp_gt_impossible`), and the `p<q` mirror | sharp error bound for the quadratic discriminant | ~600 |
-| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** + **Stage 2 sign-reading + `Separated` + bit-level `Nonoverlapping` foundation DONE** (`Algorithms/Expansion_FLX.lean`): `grow`/`expansionSum`/`scale`/`det2` sum-exact + `Expansion`-preserving (`det2` = exact `orient2d` kernel); `HeadDom`/`headDom_sign`; `Separated` + `separated_headDom`; **`Nonoverlapping`** (Shewchuk) + atom `round_residual_nonoverlapping`. **Remaining Stage 2 (the hard arc):** list-level NO + 2-adic `HeadDom` bridge, then `grow`/`fast_expansion_sum` *preserve* `Nonoverlapping` (Shewchuk Thm 10), `compress` | exact multi-word arithmetic + sign decisions; foundation under all adaptive predicates | ~680 |
+| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** + **Stage 2 sign-reading + `Separated` + `Nonoverlapping` + 2-adic bridge DONE** (`Algorithms/Expansion_FLX.lean`): `grow`/`expansionSum`/`scale`/`det2` sum-exact + `Expansion`-preserving (`det2` = exact `orient2d` kernel); `HeadDom`/`headDom_sign`; `Separated`; **`Nonoverlapping`** (Shewchuk) + atom; **`dyadic_kernel`** + `DyadicSep` + **`dyadicSep_headDom`** (packed ⟹ sign-readable) + `dyadicSep_cons` builder + `dyadicSep_pair`. **Remaining Stage 2 (the hard chaining):** `grow`/`fast_expansion_sum` *produce* packed/nonoverlapping output across a sweep (Shewchuk Thm 10), `compress` | exact multi-word arithmetic + sign decisions; foundation under all adaptive predicates | ~780 |
 | Adaptive predicates `orient2d`/`orient3d`/`incircle`/`insphere` — **NOT STARTED**: the fast-path error-bound filter + exact expansion fallback. `orient2d`'s exact kernel is already `det2` above | robust geometric sign decisions | ~? |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
@@ -967,14 +980,15 @@ The relevant algorithms, sized roughly:
 
 > **Where we are now (2026-06-05):** all six EFT primitives (rows 1–6) are **done**; the
 > *predicate* layer's Stage 1 (`det2`) + Stage 2 **sign-reading keystone** (`headDom_sign`) +
-> the **`Separated`** structural invariant + the start of the **faithful `Nonoverlapping`** port
-> (predicate + atom) are in. **Immediate next moves:** (1) **the hard arc — bit-level preservation:**
-> the list-level NO invariant + its **2-adic `HeadDom` bridge** (`Σ|tail| < 2^lsb(head)` via
-> disjoint bit-ranges), then `grow`/`fast_expansion_sum` *preserve* `Nonoverlapping` (Shewchuk
-> Thm 10), so multi-component `det2` becomes sign-readable. (2) **`orient2d` filter** —
-> `|det| > ε ⟹ sign correct`, mostly reachable from `headDom_approx`/`add_dominated_sign` + our
-> error machinery, **independent of (1)** (gives a usable robust-orient2d fast path much sooner).
-> Then `orient3d`/`incircle`/`insphere` reuse the same base (3×3 / 4×4 dets).
+> the **`Separated`** structural invariant + the **faithful `Nonoverlapping`** predicate + atom +
+> the **2-adic bridge** (`dyadic_kernel`, `DyadicSep`, `dyadicSep_headDom`: packed ⟹ sign-readable,
+> + `dyadicSep_cons` builder) are in. **Immediate next moves:** (1) **the remaining hard chaining —
+> sweep preservation:** prove `grow`/`fast_expansion_sum` *produce* a packed (`DyadicSep`) /
+> nonoverlapping result across a sweep (Shewchuk Thm 10), so multi-component `det2` becomes
+> sign-readable via `dyadicSep_sign`. (2) **`orient2d` filter** — `|det| > ε ⟹ sign correct`,
+> mostly reachable from `headDom_approx`/`add_dominated_sign` + our error machinery, **independent
+> of (1)** (a usable robust-orient2d fast path much sooner). Then `orient3d`/`incircle`/`insphere`
+> reuse the same base (3×3 / 4×4 dets).
 
 **Why these specifically:** Shewchuk-style **adaptive geometric
 predicates** (`orient2d`, `orient3d`, `incircle`, `insphere`) are all
