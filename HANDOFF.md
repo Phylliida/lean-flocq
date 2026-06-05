@@ -4,9 +4,24 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `e138e5c`+)
+## Status (as of commit `af22f77`+)
 
-> **Latest session (2026-06-02, later): started the *predicate* layer that consumes
+> **Latest session (2026-06-05): Stage 2 of expansion arithmetic *begun* — the
+> sign-reading keystone.** `Expansion_FLX.lean` now has the *consumer* side of the
+> nonoverlapping invariant (radix-general, 0 sorries): `HeadDom h t := Σ|t| < |h|`
+> (leading term dominates the rest), `headDom_sign` (**the keystone** — `sum ≠ 0` and
+> `sign(sum) = sign(h)`, so an expansion's sign is read off its top component),
+> `headDom_approx` (`|sum − h| < |h|`, the filter primitive), and the grounding
+> `round_residual_headDom` (`|x − ◦x| ≤ ½ulp(◦x) ≤ ½|◦x| < |◦x|` via
+> `error_le_half_ulp_round` + `ulp_le_abs`) ⟹ `twoProd_headDom`/`twoProd_sign`,
+> `twoSum_headDom`/`twoSum_sign` (a single product/sum is sign-readable off its rounded
+> high word). **Deliberate order:** define the target the structural ops must hit, prove
+> it suffices for sign decisions + ground it in the atoms, *then* attack preservation.
+> **Next (the larger arc): operation-preservation** — prove `grow`/`fast_expansion_sum`
+> *produce* sorted-nonoverlapping output (Shewchuk's bit-level theorems, radix 2). That is
+> what connects multi-component `det2` to `headDom_sign` for a full robust `orient2d`.
+
+> **Earlier session (2026-06-02, later): started the *predicate* layer that consumes
 > all six EFTs — Shewchuk floating-point expansion arithmetic.**
 > `Algorithms/Expansion_FLX.lean` builds the **exactness layer** (Stage 1), 0 sorries,
 > **general radix**: an expansion is a `List ℝ` of FLX floats whose exact `List.sum` is
@@ -923,20 +938,21 @@ The relevant algorithms, sized roughly:
 | ~~`Dekker` / `TwoProduct`~~ ✓ **DONE 2026-05-31** (`Algorithms/TwoProduct.lean`, 805 lines): Chunks 1–4 all complete — `TwoProduct_FLX` (bare) and `TwoProduct_FLX_machine` (rounded products, the real FMA-free algorithm) prove `a·b = round(a·b) + e` exactly for `radix 2 ∨ Even prec`, covering every IEEE format incl. binary64 | `a · b = round(a·b) + e` exactly (radix 2 or even prec) | ~~~500~~ 805 (builds on Veltkamp) |
 | ~~`ErrFMA`~~ ✓ **DONE 2026-05-31** (`Algorithms/ErrFMA.lean` + `ErrFMA_L2.lean`): `a·b + c = r1 + r2 + r3` exactly | FMA with an explicit error term | ~500 |
 | Compensated discriminant (`b² − ac`) — **COMPLETE** (`Algorithms/Discriminant_FLX.lean`): Boldo §3 + §4, real & floating-point tests, all orientations, unconditional (`disc_branch_fp_test_full`) — beyond the paper. Incl. opposite-sign `2u`, full §3 branch `2·ulp(d)` (both orientations, `disc_branch_real_test`), §4.1/§4.2 disagreements + the number-theoretic crux (`disc_fp_ulp_gt_impossible`), and the `p<q` mirror | sharp error bound for the quadratic discriminant | ~600 |
-| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** (`Algorithms/Expansion_FLX.lean`, general radix): `grow`/`expansionSum`/`scale`/`det2`, each sum-exact + `Expansion`-preserving; `det2` is the exact `orient2d` kernel. Stage 2 (nonoverlapping invariants, `fast_expansion_sum`, sign-reading, `compress`) is the next arc | exact multi-word arithmetic; foundation under all adaptive predicates | ~360 |
+| Shewchuk **expansion arithmetic** — **Stage 1 (exactness) DONE** + **Stage 2 sign-reading keystone DONE** (`Algorithms/Expansion_FLX.lean`, general radix): `grow`/`expansionSum`/`scale`/`det2` sum-exact + `Expansion`-preserving (`det2` = exact `orient2d` kernel); `HeadDom`/`headDom_sign`/`headDom_approx` + atom grounding (`twoProd_sign`/`twoSum_sign`). **Remaining Stage 2:** operation-preservation (`grow`/`fast_expansion_sum` produce sorted-nonoverlapping output — bit-level, radix 2), `compress` | exact multi-word arithmetic + sign decisions; foundation under all adaptive predicates | ~470 |
 | Adaptive predicates `orient2d`/`orient3d`/`incircle`/`insphere` — **NOT STARTED**: the fast-path error-bound filter + exact expansion fallback. `orient2d`'s exact kernel is already `det2` above | robust geometric sign decisions | ~? |
 
 **Total: ~2.5–3k lines of Lean** vs ~35–40k for porting all of Pff
 (roughly 10× ratio).
 
-> **Where we are now (2026-06-02):** all six EFT primitives (rows 1–6) are **done**, and
-> the *predicate* layer that consumes them is **underway** — `Expansion_FLX.lean` Stage 1
-> (exactness) lands `grow`/`sum`/`scale` + the exact `det2` kernel. **Immediate next two
-> moves**, in order: (1) **Stage 2 of expansion arithmetic** — the nonoverlapping/nonadjacent
-> invariants, `fast_expansion_sum`, sign-reading, `compress` (what makes the predicates
-> *adaptive*); (2) **`orient2d`** — its exact kernel is already `det2`, so it needs the
-> fast-path error-bound *filter* (`|det| > ε ⟹ sign correct`) plus the exact-fallback wiring.
-> Then `orient3d`/`incircle`/`insphere` reuse the same expansion base (3×3 / 4×4 determinants).
+> **Where we are now (2026-06-05):** all six EFT primitives (rows 1–6) are **done**, and the
+> *predicate* layer is **underway** — `Expansion_FLX.lean` has Stage 1 (exactness, `det2`) and
+> the Stage 2 **sign-reading keystone** (`headDom_sign`: an expansion's sign = its leading
+> component's sign, given dominance). **Immediate next moves**, in order: (1) **finish Stage 2
+> operation-preservation** — `grow`/`fast_expansion_sum` *produce* sorted-nonoverlapping output
+> (the bit-level theorems, radix 2), so multi-component `det2` becomes `HeadDom` and feeds
+> `headDom_sign`; `compress`. (2) **`orient2d`** — exact kernel is `det2`; needs the fast-path
+> error-bound *filter* (`|det| > ε ⟹ sign correct`) + exact-fallback via sign-reading.
+> Then `orient3d`/`incircle`/`insphere` reuse the same base (3×3 / 4×4 determinants).
 
 **Why these specifically:** Shewchuk-style **adaptive geometric
 predicates** (`orient2d`, `orient3d`, `incircle`, `insphere`) are all
