@@ -1136,6 +1136,61 @@ theorem growAux_all_multipleOfPow {t : ℤ} :
       · exact ih (twoSumHi beta prec choice Q x) hhi
           (fun z hz => hxs z (by simp [hz])) y h
 
+/-- **Increasing nonoverlapping expansion** (nonzero components — zeros are a separable
+refinement): each component is a nonzero float strictly below the *next* component's lsb,
+`|eᵢ| < β^{cexp eᵢ₊₁}`. Hence magnitudes (and `cexp`s) strictly increase. -/
+def IncrNO : List ℝ → Prop
+  | [] => True
+  | [x] => generic_format beta (FLX_exp prec) x ∧ x ≠ 0
+  | x :: y :: rest =>
+      generic_format beta (FLX_exp prec) x ∧ x ≠ 0 ∧
+      |x| < bpow beta (cexp beta (FLX_exp prec) y) ∧ IncrNO (y :: rest)
+
+/-- Every component of an `IncrNO` list is a float. -/
+theorem IncrNO_all_format :
+    ∀ (l : List ℝ), IncrNO beta prec l →
+      ∀ x ∈ l, generic_format beta (FLX_exp prec) x := by
+  intro l
+  induction l with
+  | nil => intro _ x hx; simp at hx
+  | cons a tl ih =>
+      cases tl with
+      | nil =>
+          intro H x hx; rw [List.mem_singleton] at hx; subst hx; exact H.1
+      | cons b r =>
+          intro H x hx
+          obtain ⟨Fa, _, _, Hrest⟩ := H
+          rcases List.mem_cons.mp hx with rfl | hx'
+          · exact Fa
+          · exact ih Hrest x hx'
+
+/-- All components of an `IncrNO` list lie on any grid `β^t` coarser than the head's lsb
+(`t ≤ cexp` of the head): each is a float, and `cexp` strictly increases down the list, so
+`t ≤ cexp(head) ≤ cexp(component)`. -/
+theorem IncrNO_head_grid :
+    ∀ (rest : List ℝ) (y : ℝ) (t : ℤ),
+      IncrNO beta prec (y :: rest) → t ≤ cexp beta (FLX_exp prec) y →
+      ∀ z ∈ (y :: rest), MultipleOfPow beta t z := by
+  intro rest
+  induction rest with
+  | nil =>
+      intro y t H ht z hz
+      rw [List.mem_singleton] at hz; subst hz
+      exact multipleOfPow_mono beta (multipleOfPow_cexp beta prec H.1) ht
+  | cons z' rest'' ih =>
+      intro y t H ht z hz
+      obtain ⟨Fy, hy0, hylt, Hrest⟩ := H
+      rcases List.mem_cons.mp hz with rfl | hz'
+      · exact multipleOfPow_mono beta (multipleOfPow_cexp beta prec Fy) ht
+      · have hge : bpow beta (cexp beta (FLX_exp prec) y) ≤ |y| :=
+          multipleOfPow_le_abs beta hy0 (multipleOfPow_cexp beta prec Fy)
+        have hcexp : cexp beta (FLX_exp prec) y < cexp beta (FLX_exp prec) z' := by
+          by_contra hcon
+          push_neg at hcon
+          have := bpow_le beta hcon
+          linarith
+        exact ih z' t Hrest (le_of_lt (lt_of_le_of_lt ht hcexp)) z hz'
+
 end
 
 end LeanFlocq
