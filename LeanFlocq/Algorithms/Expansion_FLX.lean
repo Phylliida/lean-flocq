@@ -341,6 +341,157 @@ theorem det2_format {a b c d : ℝ}
     (prodExp_format beta prec hp choice Fa Fd)
     (negExp_format beta prec (prodExp_format beta prec hp choice Fb Fc))
 
+/-! ## Stage 2 (begun): sign-reading
+
+The keystone that makes expansions usable for *exact sign decisions* — the CAD
+filter/fallback. If the leading (largest-magnitude) component `h` dominates the
+combined magnitude of all the others, then the exact value `h + Σt` is nonzero and
+shares `h`'s sign: the sign of the represented number can be read off one component.
+
+`HeadDom` is the value-based, **radix-general** form of Shewchuk's
+"sorted + nonoverlapping" condition. *Producing* it from the expansion operations
+(`grow`/`fast_expansion_sum` preserve it) is the bit-level structural theory — the
+larger next arc; here we establish the consumer side and ground it in the rounding
+atoms. -/
+
+/-- Triangle inequality for a list sum: `|Σ l| ≤ Σ |l|`. -/
+theorem expansion_abs_sum_le (l : List ℝ) :
+    |l.sum| ≤ (l.map (fun x => |x|)).sum := by
+  induction l with
+  | nil => simp
+  | cons a t ih =>
+      simp only [List.sum_cons, List.map_cons]
+      calc |a + t.sum| ≤ |a| + |t.sum| := abs_add_le a t.sum
+        _ ≤ |a| + (t.map (fun x => |x|)).sum := by linarith
+
+/-- If a perturbation is strictly dominated in magnitude, `a + b` is nonzero and
+keeps `a`'s sign. -/
+theorem add_dominated_sign {a b : ℝ} (hab : |b| < |a|) :
+    a + b ≠ 0 ∧ (0 < a + b ↔ 0 < a) ∧ (a + b < 0 ↔ a < 0) := by
+  have hb := abs_lt.mp hab
+  rcases lt_trichotomy a 0 with ha | ha | ha
+  · rw [abs_of_neg ha] at hb
+    have hlt : a + b < 0 := by linarith [hb.2]
+    exact ⟨ne_of_lt hlt,
+      ⟨fun hpos => by linarith, fun hpos => by linarith⟩,
+      ⟨fun _ => ha, fun _ => hlt⟩⟩
+  · exfalso
+    rw [ha, abs_zero] at hab
+    exact absurd hab (not_lt.mpr (abs_nonneg b))
+  · rw [abs_of_pos ha] at hb
+    have hgt : 0 < a + b := by linarith [hb.1]
+    exact ⟨ne_of_gt hgt,
+      ⟨fun _ => ha, fun _ => hgt⟩,
+      ⟨fun hneg => by linarith, fun hneg => by linarith⟩⟩
+
+/-- The leading component dominates the combined magnitude of the rest — the
+condition that lets a sorted, nonoverlapping expansion's sign be read off its top
+component. (Forces `h ≠ 0`; `t` may contain zeros.) -/
+def HeadDom (h : ℝ) (t : List ℝ) : Prop := (t.map (fun x => |x|)).sum < |h|
+
+/-- A dominating head is nonzero. -/
+theorem headDom_ne_zero {h : ℝ} {t : List ℝ} (H : HeadDom h t) : h ≠ 0 := by
+  have h0 : (0 : ℝ) ≤ (t.map (fun x => |x|)).sum := by
+    apply List.sum_nonneg
+    intro z hz
+    obtain ⟨y, _, rfl⟩ := List.mem_map.mp hz
+    exact abs_nonneg y
+  intro hh
+  unfold HeadDom at H
+  rw [hh, abs_zero] at H
+  linarith
+
+/-- Under domination, the tail sum is strictly smaller than the head in magnitude. -/
+theorem headDom_tail_lt {h : ℝ} {t : List ℝ} (H : HeadDom h t) : |t.sum| < |h| :=
+  lt_of_le_of_lt (expansion_abs_sum_le t) H
+
+/-- **Sign-reading.** When the head dominates, the exact sum is nonzero and shares
+the head's sign — so the sign of the value represented by `h :: t` is the sign of
+`h` alone. -/
+theorem headDom_sign {h : ℝ} {t : List ℝ} (H : HeadDom h t) :
+    (h :: t).sum ≠ 0 ∧ (0 < (h :: t).sum ↔ 0 < h) ∧ ((h :: t).sum < 0 ↔ h < 0) := by
+  have hcons : (h :: t).sum = h + t.sum := by simp
+  rw [hcons]
+  exact add_dominated_sign (headDom_tail_lt H)
+
+/-- **Leading-term approximation (the filter primitive).** The head approximates the
+exact value within the head's own magnitude (in fact within the tail's total
+magnitude). -/
+theorem headDom_approx {h : ℝ} {t : List ℝ} (H : HeadDom h t) :
+    |(h :: t).sum - h| < |h| := by
+  have : (h :: t).sum - h = t.sum := by simp
+  rw [this]
+  exact headDom_tail_lt H
+
+/-! ### Grounding in the rounding atoms -/
+
+include hp in
+/-- A single rounding's residual is dominated by the rounded value: for `hi = ◦x`
+and `lo = x − hi` with `hi ≠ 0`, `HeadDom hi [lo]` — i.e. `|lo| < |hi|` — via
+`|x − ◦x| ≤ ½·ulp(◦x) ≤ ½·|◦x| < |◦x|`. -/
+theorem round_residual_headDom {x : ℝ}
+    (hx : round beta (FLX_exp prec) (Znearest choice) x ≠ 0) :
+    HeadDom (round beta (FLX_exp prec) (Znearest choice) x)
+      [x - round beta (FLX_exp prec) (Znearest choice) x] := by
+  set hi := round beta (FLX_exp prec) (Znearest choice) x with hhi
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have herr : |hi - x| ≤ (1 / 2) * ulp beta (FLX_exp prec) hi :=
+    error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice x
+  have huf : ulp beta (FLX_exp prec) hi ≤ |hi| :=
+    ulp_le_abs beta (FLX_exp prec) hx
+      (generic_format_round beta (FLX_exp prec) hValid (Znearest choice) x)
+  have hupos : 0 < |hi| := abs_pos.mpr hx
+  unfold HeadDom
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+  rw [show x - hi = -(hi - x) from by ring, abs_neg]
+  linarith
+
+include hp in
+/-- The two words of a `TwoProduct` form a sign-readable pair: when `◦(a·b) ≠ 0`,
+`HeadDom (twoProdHi a b) [twoProdLo a b]`. -/
+theorem twoProd_headDom {a b : ℝ}
+    (hab : twoProdHi beta prec choice a b ≠ 0) :
+    HeadDom (twoProdHi beta prec choice a b) [twoProdLo beta prec choice a b] :=
+  round_residual_headDom beta prec hp choice hab
+
+include hp in
+/-- **Reading the sign of a product off its rounded value:** `0 < a·b ↔ 0 < ◦(a·b)`
+(when `◦(a·b) ≠ 0`), justified by the dominated residual. -/
+theorem twoProd_sign {a b : ℝ}
+    (hab : twoProdHi beta prec choice a b ≠ 0) :
+    (0 < a * b ↔ 0 < twoProdHi beta prec choice a b) := by
+  have hH := twoProd_headDom beta prec hp choice hab
+  have hsumeq :
+      (twoProdHi beta prec choice a b :: [twoProdLo beta prec choice a b]).sum = a * b := by
+    simp only [List.sum_cons, List.sum_nil, add_zero]
+    exact twoProd_add beta prec choice a b
+  have := (headDom_sign hH).2.1
+  rwa [hsumeq] at this
+
+include hp in
+/-- The two words of a `TwoSum` form a sign-readable pair: when `◦(a+b) ≠ 0`,
+`HeadDom (twoSumHi a b) [twoSumLo a b]`. -/
+theorem twoSum_headDom {a b : ℝ}
+    (hab : twoSumHi beta prec choice a b ≠ 0) :
+    HeadDom (twoSumHi beta prec choice a b) [twoSumLo beta prec choice a b] :=
+  round_residual_headDom beta prec hp choice hab
+
+include hp in
+/-- **Reading the sign of a sum off its rounded value:** `0 < a+b ↔ 0 < ◦(a+b)`
+(when `◦(a+b) ≠ 0`). -/
+theorem twoSum_sign {a b : ℝ}
+    (hab : twoSumHi beta prec choice a b ≠ 0) :
+    (0 < a + b ↔ 0 < twoSumHi beta prec choice a b) := by
+  have hH := twoSum_headDom beta prec hp choice hab
+  have hsumeq :
+      (twoSumHi beta prec choice a b :: [twoSumLo beta prec choice a b]).sum = a + b := by
+    simp only [List.sum_cons, List.sum_nil, add_zero]
+    exact twoSum_add beta prec choice a b
+  have := (headDom_sign hH).2.1
+  rwa [hsumeq] at this
+
 end
 
 end LeanFlocq
