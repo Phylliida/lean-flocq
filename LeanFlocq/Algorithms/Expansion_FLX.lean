@@ -610,6 +610,109 @@ theorem twoSum_separated (a b : ℝ) :
     Separated beta prec [twoSumHi beta prec choice a b, twoSumLo beta prec choice a b] :=
   round_residual_separated beta prec hp choice
 
+/-! ## Stage 2, the hard arc — faithful bit-level `Nonoverlapping` (begun)
+
+`Separated` (the ½·ulp chain) is perfect for the base case and the structure→sign
+bridge, but it is **too strong to be preserved by `grow`**: a sweep produces
+residuals at the *same* scale (both `≲ ½ulp` of the running carry), which are
+mutually *bit*-nonoverlapping (disjoint bit ranges) but not ulp-chain separated.
+So faithful preservation needs Shewchuk's genuine **nonoverlapping** predicate.
+
+This section lays its foundation: the predicate, its basic algebra, and the
+rounding **atom** (`◦v` and its residual are nonoverlapping). The remaining work —
+the list-level invariant with its 2-adic `HeadDom` bridge, and `grow`/`fast_expansion_sum`
+*preserving* it (Shewchuk's Theorem 10 chaining) — is the next arc. -/
+
+/-- `x` is an integer multiple of `β^s`. -/
+def MultipleOfPow (s : ℤ) (x : ℝ) : Prop := ∃ m : ℤ, x = (m : ℝ) * bpow beta s
+
+/-- Every float is a multiple of `β^cexp`. -/
+theorem multipleOfPow_cexp {x : ℝ} (Fx : generic_format beta (FLX_exp prec) x) :
+    MultipleOfPow beta (cexp beta (FLX_exp prec) x) x :=
+  ⟨Ztrunc (scaled_mantissa beta (FLX_exp prec) x), Fx⟩
+
+/-- **Nonoverlapping** (Shewchuk): the nonzero bits of `x` and `y` occupy disjoint
+ranges. Encoded as: one is an integer multiple of `β^s` while the other is strictly
+below `β^s` in magnitude (its bits lie strictly under the `β^s` place). Zero is
+nonoverlapping with everything. -/
+def Nonoverlapping (x y : ℝ) : Prop :=
+  x = 0 ∨ y = 0 ∨
+    (∃ s : ℤ, MultipleOfPow beta s x ∧ |y| < bpow beta s) ∨
+    (∃ s : ℤ, MultipleOfPow beta s y ∧ |x| < bpow beta s)
+
+/-- Nonoverlapping is symmetric. -/
+theorem nonoverlapping_symm {x y : ℝ} (h : Nonoverlapping beta x y) :
+    Nonoverlapping beta y x := by
+  rcases h with h | h | h | h
+  · exact Or.inr (Or.inl h)
+  · exact Or.inl h
+  · exact Or.inr (Or.inr (Or.inr h))
+  · exact Or.inr (Or.inr (Or.inl h))
+
+theorem nonoverlapping_zero_right (x : ℝ) : Nonoverlapping beta x 0 := Or.inr (Or.inl rfl)
+
+theorem nonoverlapping_zero_left (x : ℝ) : Nonoverlapping beta 0 x := Or.inl rfl
+
+/-- Sufficient condition: if `y` is strictly within the ulp of a float `x`, they are
+nonoverlapping (witness `s = cexp x`, since a float is a multiple of `β^cexp` and
+`ulp x = β^cexp x`). -/
+theorem nonoverlapping_of_abs_lt_ulp {x y : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (hxy : |y| < ulp beta (FLX_exp prec) x) :
+    Nonoverlapping beta x y := by
+  rcases eq_or_ne x 0 with hx | hx
+  · exact Or.inl hx
+  · refine Or.inr (Or.inr (Or.inl ⟨cexp beta (FLX_exp prec) x,
+      multipleOfPow_cexp beta prec Fx, ?_⟩))
+    rwa [ulp_neq_0 beta (FLX_exp prec) hx] at hxy
+
+include hp in
+/-- **The grow base case (faithful form):** a single rounding's high and low words
+are nonoverlapping (`|v − ◦v| ≤ ½·ulp(◦v) < ulp(◦v)`). -/
+theorem round_residual_nonoverlapping (v : ℝ) :
+    Nonoverlapping beta (round beta (FLX_exp prec) (Znearest choice) v)
+      (v - round beta (FLX_exp prec) (Znearest choice) v) := by
+  set hi := round beta (FLX_exp prec) (Znearest choice) v with hhi
+  rcases eq_or_ne hi 0 with h0 | h0
+  · exact Or.inl h0
+  · have hValid := FLX_exp_valid prec hp
+    have hMon := FLX_exp_monotone prec
+    have hNF := monotone_exp_not_FTZ hValid hMon
+    have herr : |hi - v| ≤ (1 / 2) * ulp beta (FLX_exp prec) hi :=
+      error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice v
+    have hupos : 0 < ulp beta (FLX_exp prec) hi := by
+      rw [ulp_neq_0 beta (FLX_exp prec) h0]; exact bpow_gt_0 beta _
+    have Fhi : generic_format beta (FLX_exp prec) hi :=
+      generic_format_round beta (FLX_exp prec) hValid (Znearest choice) v
+    apply nonoverlapping_of_abs_lt_ulp beta prec Fhi
+    rw [show v - hi = -(hi - v) from by ring, abs_neg]
+    linarith
+
+include hp in
+/-- The two words of a `TwoProduct` are nonoverlapping. -/
+theorem twoProd_nonoverlapping (a b : ℝ) :
+    Nonoverlapping beta (twoProdHi beta prec choice a b) (twoProdLo beta prec choice a b) :=
+  round_residual_nonoverlapping beta prec hp choice (a * b)
+
+include hp in
+/-- The two words of a `TwoSum` are nonoverlapping. -/
+theorem twoSum_nonoverlapping (a b : ℝ) :
+    Nonoverlapping beta (twoSumHi beta prec choice a b) (twoSumLo beta prec choice a b) :=
+  round_residual_nonoverlapping beta prec hp choice (a + b)
+
+/-- Bridge: a `Separated` pair (the ½·ulp chain) is in particular nonoverlapping. -/
+theorem separated_pair_nonoverlapping {x y : ℝ}
+    (Fx : generic_format beta (FLX_exp prec) x)
+    (Hsep : Separated beta prec [x, y]) :
+    Nonoverlapping beta x y := by
+  simp only [Separated, SeparatedFrom, and_true] at Hsep
+  rcases eq_or_ne x 0 with hx | hx
+  · exact Or.inl hx
+  · have hupos : 0 < ulp beta (FLX_exp prec) x := by
+      rw [ulp_neq_0 beta (FLX_exp prec) hx]; exact bpow_gt_0 beta _
+    apply nonoverlapping_of_abs_lt_ulp beta prec Fx
+    linarith
+
 end
 
 end LeanFlocq
