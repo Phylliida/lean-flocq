@@ -4,9 +4,21 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `acf5611`+)
+## Status (as of commit `f461d58`+)
 
-> **Latest: got Shewchuk's paper (`lean-flocq/shewchuk.pdf`) and ported the grow-preservation
+> **Latest: committed to the faithful grow-preservation push — started residual localization.**
+> The Thm 10 inductive crux ("each residual `hᵢ` is nonoverlapping with the *later* residuals")
+> reduces to **residual localization** — when `Q`, `e`, `◦(Q+e)` share the `β^t` grid, the residual
+> `(Q+e)−◦(Q+e)` stays on it (doesn't slide below the grid of the value it came from). Ported the
+> algebra it rests on (0 sorries): `multipleOfPow_neg/_add/_sub` (closure), `multipleOfPow_mono`
+> (grid-coarsening via `IZR_Zpower`), `multipleOfPow_of_le_cexp`, and **`err_multipleOfPow`** (the
+> localization kernel — immediate from closure). **The known crux subtlety** (recorded for the next
+> step): whether `eᵢ₊₁` is below the carry `Qᵢ` *flips* with `|b|` — large `b` ⟹ `eᵢ₊₁` below `Qᵢ`
+> (residual localizes in `eᵢ₊₁`'s range), small `b` ⟹ `Qᵢ` below `eᵢ₊₁` (inverts). **Next:**
+> establish `◦(Q+e)` on the `2^lsb(e)` grid via a `cexp`/`mag` bound (regime 1), then the carry/input
+> regime analysis, then the `NOInc` list induction.
+
+> **Earlier: got Shewchuk's paper (`lean-flocq/shewchuk.pdf`) and ported the grow-preservation
 > building blocks (Shewchuk Theorem 10).** His `GROW-EXPANSION` proof rests on two facts, now in
 > (0 sorries): **Lemma 1** (`roundN_add_err_le_left/right`, `twoSumLo_abs_le`) — the round-nearest
 > error of `a+b` is `≤` either operand, straight from `round_N_pt` (the nearest float is no farther
