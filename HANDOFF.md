@@ -4,19 +4,22 @@ A working port of [Flocq](https://flocq.gitlabpages.inria.fr/) (Coq) to Lean 4 +
 This document is for whoever picks this up next — possibly future-me in a different
 session, possibly someone else.
 
-## Status (as of commit `f461d58`+)
+## Status (as of commit `b518351`+)
 
-> **Latest: committed to the faithful grow-preservation push — started residual localization.**
-> The Thm 10 inductive crux ("each residual `hᵢ` is nonoverlapping with the *later* residuals")
-> reduces to **residual localization** — when `Q`, `e`, `◦(Q+e)` share the `β^t` grid, the residual
-> `(Q+e)−◦(Q+e)` stays on it (doesn't slide below the grid of the value it came from). Ported the
-> algebra it rests on (0 sorries): `multipleOfPow_neg/_add/_sub` (closure), `multipleOfPow_mono`
-> (grid-coarsening via `IZR_Zpower`), `multipleOfPow_of_le_cexp`, and **`err_multipleOfPow`** (the
-> localization kernel — immediate from closure). **The known crux subtlety** (recorded for the next
-> step): whether `eᵢ₊₁` is below the carry `Qᵢ` *flips* with `|b|` — large `b` ⟹ `eᵢ₊₁` below `Qᵢ`
-> (residual localizes in `eᵢ₊₁`'s range), small `b` ⟹ `Qᵢ` below `eᵢ₊₁` (inverts). **Next:**
-> establish `◦(Q+e)` on the `2^lsb(e)` grid via a `cexp`/`mag` bound (regime 1), then the carry/input
-> regime analysis, then the `NOInc` list induction.
+> **Latest: the grow-preservation PER-STEP CRUX is proved (Shewchuk Thm 10 step c), 0 sorries.**
+> The feared `mag`/`cexp` regime-flip dissolved: **`round_repr_same_exp` makes grid-preservation
+> unconditional** — rounding a multiple of `β^t` is a multiple of `β^t`, full stop. So:
+> - `round_multipleOfPow` (rounding preserves the `β^t` grid) + `err_localizes` (the residual
+>   `(Q+e)−◦(Q+e)` stays on the grid shared by `Q` and `e` — **no magnitude side-condition**).
+> - **`residual_no_residual`** (the crux): a new residual `err(Qᵢ+eᵢ₊₁)` is nonoverlapping with the
+>   previous residual `hᵢ`, given `eᵢ₊₁` on the separation grid, `hᵢ` below it, **and the carry `Qᵢ`
+>   on that grid**. The new residual localizes to `β^t`; `hᵢ` sits below it; disjoint.
+>
+> **The regime-flip is now isolated into a SINGLE inductive-invariant hypothesis** — `MultipleOfPow t Qᵢ`
+> (the carry stays coarser than the separations it has already passed) — instead of being scattered
+> through magnitude arguments. (Foundation, also in: `multipleOfPow_neg/_add/_sub/_mono`,
+> `multipleOfPow_of_le_cexp`, `err_multipleOfPow`.) **Remaining: maintain that one invariant across the
+> sweep + the `NOInc` list induction** (then bridge to sign-readable, then EXPANSION-SUM/SCALE).
 
 > **Earlier: got Shewchuk's paper (`lean-flocq/shewchuk.pdf`) and ported the grow-preservation
 > building blocks (Shewchuk Theorem 10).** His `GROW-EXPANSION` proof rests on two facts, now in
