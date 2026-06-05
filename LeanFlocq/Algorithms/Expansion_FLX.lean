@@ -1013,24 +1013,24 @@ expansion keeps it packed, provided every component (and `y`) lies on a common g
 prefix sum is a multiple of `β^t` strictly below its witness power, hence `≤ β^s − β^t`,
 leaving exactly room for `|y| < β^t`. -/
 theorem dyadicSep_snoc :
-    ∀ (l : List ℝ) (y : ℝ) (t : ℤ),
+    ∀ (l : List ℝ) (y : ℝ) (t sy : ℤ),
       DyadicSep beta l → (∀ x ∈ l, MultipleOfPow beta t x) →
-      MultipleOfPow beta t y → |y| < bpow beta t →
+      MultipleOfPow beta sy y → |y| < bpow beta t →
       DyadicSep beta (l ++ [y]) := by
   intro l
   induction l with
   | nil =>
-      intro y t _ _ Hy _
-      refine ⟨⟨t, Hy, ?_⟩, trivial⟩
-      simpa using bpow_gt_0 beta t
+      intro y t sy _ _ Hy _
+      refine ⟨⟨sy, Hy, ?_⟩, trivial⟩
+      simpa using bpow_gt_0 beta sy
   | cons h tl ih =>
-      intro y t Hl Hgrid Hy Hylt
+      intro y t sy Hl Hgrid Hy Hylt
       simp only [DyadicSep] at Hl ⊢
       obtain ⟨⟨s, hmh, hsum⟩, Htl⟩ := Hl
       have Hgrid_h : MultipleOfPow beta t h := Hgrid h (by simp)
       have Hgrid_tl : ∀ x ∈ tl, MultipleOfPow beta t x :=
         fun x hx => Hgrid x (by simp [hx])
-      have Hrec : DyadicSep beta (tl ++ [y]) := ih y t Htl Hgrid_tl Hy Hylt
+      have Hrec : DyadicSep beta (tl ++ [y]) := ih y t sy Htl Hgrid_tl Hy Hylt
       have hnn : (0 : ℝ) ≤ (tl.map (fun x => |x|)).sum := by
         apply List.sum_nonneg; intro z hz
         obtain ⟨x, _, rfl⟩ := List.mem_map.mp hz; exact abs_nonneg x
