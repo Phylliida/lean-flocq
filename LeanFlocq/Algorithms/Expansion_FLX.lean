@@ -1078,6 +1078,38 @@ theorem residual_no_residual {Qi ei ei1 hi : ℝ} {t : ℤ}
   nonoverlapping_of_witness_le beta
     (err_localizes beta prec choice hQi_grid hei1_grid) hei_lt hhi
 
+/-- **Grid-preservation of the whole sweep (no regime condition).** If the carry `Q`
+and every input `eᵢ` are multiples of `β^t`, then *every* component of `growAux Q e`
+is a multiple of `β^t` — because each step only does a TwoSum: `twoSumHi = ◦(Q+x)`
+stays on grid (`round_multipleOfPow`) and `twoSumLo = (Q+x)−◦(Q+x)` stays on grid
+(`err_localizes`). This is what lets the induction pick `t = min(cexp Qᵢ, cexp eᵢ₊₁)`
+and have the recursive output land exactly on that grid, dissolving the carry/input
+magnitude regime-flip into a `min`. -/
+theorem growAux_all_multipleOfPow {t : ℤ} :
+    ∀ (e : List ℝ) (Q : ℝ), MultipleOfPow beta t Q →
+      (∀ x ∈ e, MultipleOfPow beta t x) →
+      ∀ y ∈ growAux beta prec choice Q e, MultipleOfPow beta t y := by
+  intro e
+  induction e with
+  | nil =>
+      intro Q hQ _ y hy
+      simp only [growAux, List.mem_singleton] at hy
+      rw [hy]; exact hQ
+  | cons x rest ih =>
+      intro Q hQ hxs y hy
+      have hx : MultipleOfPow beta t x := hxs x (by simp)
+      have hlo : MultipleOfPow beta t (twoSumLo beta prec choice Q x) := by
+        unfold twoSumLo twoSumHi
+        exact err_localizes beta prec choice hQ hx
+      have hhi : MultipleOfPow beta t (twoSumHi beta prec choice Q x) := by
+        unfold twoSumHi
+        exact round_multipleOfPow beta prec choice (multipleOfPow_add beta hQ hx)
+      simp only [growAux, List.mem_cons] at hy
+      rcases hy with h | h
+      · rw [h]; exact hlo
+      · exact ih (twoSumHi beta prec choice Q x) hhi
+          (fun z hz => hxs z (by simp [hz])) y h
+
 end
 
 end LeanFlocq
