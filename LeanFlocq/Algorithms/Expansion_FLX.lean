@@ -492,6 +492,124 @@ theorem twoSum_sign {a b : ℝ}
   have := (headDom_sign hH).2.1
   rwa [hsumeq] at this
 
+/-! ### The structural invariant: `Separated` (sorted ulp-separation chain)
+
+`HeadDom` (the sign-reading certificate) is *implied* by the structural invariant
+Shewchuk's operations are designed to maintain: a **sorted, largest-first chain in
+which each component is at most half the ulp of its predecessor**. This is the
+value-based form of "sorted + nonoverlapping". Here we (a) define it, (b) prove it
+implies `HeadDom` — so the keystone `headDom_sign` applies — and (c) discharge the
+base case (a single `TwoSum`/`TwoProduct` is `Separated`). *Preserving* `Separated`
+through `grow`/`fast_expansion_sum` (the bit-level sweep theorems) is the next arc. -/
+
+/-- `SeparatedFrom prev t`: the list `t`, read largest-first, is a ulp-separation
+chain whose first element is at most half the ulp of `prev`. -/
+def SeparatedFrom (prev : ℝ) : List ℝ → Prop
+  | [] => True
+  | h :: t => |h| ≤ (1 / 2) * ulp beta (FLX_exp prec) prev ∧ SeparatedFrom h t
+
+/-- `Separated e`: `e` is a sorted (largest-first) ulp-separation chain — each
+component at most half the ulp of the one before it. -/
+def Separated : List ℝ → Prop
+  | [] => True
+  | h :: t => SeparatedFrom beta prec h t
+
+include hp in
+/-- The technical heart: in a ulp-separation chain below `prev`, the total magnitude
+of the chain is at most `ulp prev` (geometric domination, summed exactly). -/
+theorem separatedFrom_abs_sum_le :
+    ∀ (t : List ℝ) (prev : ℝ), SeparatedFrom beta prec prev t →
+      (∀ x ∈ t, generic_format beta (FLX_exp prec) x) →
+      (t.map (fun x => |x|)).sum ≤ ulp beta (FLX_exp prec) prev := by
+  intro t
+  induction t with
+  | nil => intro prev _ _; simp only [List.map_nil, List.sum_nil]; exact ulp_ge_0 _ _ _
+  | cons e1 t' ih =>
+      intro prev Ht HF
+      simp only [SeparatedFrom] at Ht
+      obtain ⟨h1, h2⟩ := Ht
+      have Fe1 : generic_format beta (FLX_exp prec) e1 := HF e1 (by simp)
+      have HFt' : ∀ x ∈ t', generic_format beta (FLX_exp prec) x :=
+        fun x hx => HF x (List.mem_cons_of_mem _ hx)
+      have iht := ih e1 h2 HFt'
+      have hule : ulp beta (FLX_exp prec) e1 ≤ (1 / 2) * ulp beta (FLX_exp prec) prev := by
+        rcases eq_or_ne e1 0 with he | he
+        · rw [he, ulp_FLX_0 beta prec hp]
+          have := ulp_ge_0 beta (FLX_exp prec) prev
+          linarith
+        · exact le_trans (ulp_le_abs beta (FLX_exp prec) he Fe1) h1
+      have hsum : ((e1 :: t').map (fun x => |x|)).sum
+          = |e1| + (t'.map (fun x => |x|)).sum := by simp [List.sum_cons]
+      rw [hsum]
+      linarith [iht, h1, hule]
+
+/-- In FLX with `prec ≥ 2`, a nonzero float's ulp is strictly below its magnitude
+(`ulp x ≤ |x|·β^(1−prec) < |x|`). -/
+theorem ulp_lt_abs_FLX (hp2 : 2 ≤ prec) {h : ℝ} (hh : h ≠ 0) :
+    ulp beta (FLX_exp prec) h < |h| := by
+  have h1 : ulp beta (FLX_exp prec) h ≤ |h| * bpow beta (1 - prec) :=
+    ulp_FLX_le beta prec (by omega) h
+  have h2 : bpow beta (1 - prec) < 1 := by
+    have hlt : bpow beta (1 - prec) < bpow beta 0 := bpow_lt beta (by omega)
+    rwa [bpow_zero] at hlt
+  have h3 : 0 < |h| := abs_pos.mpr hh
+  calc ulp beta (FLX_exp prec) h ≤ |h| * bpow beta (1 - prec) := h1
+    _ < |h| * 1 := mul_lt_mul_of_pos_left h2 h3
+    _ = |h| := mul_one _
+
+include hp in
+/-- **Structure ⟹ sign-reading certificate.** A `Separated` expansion with a nonzero
+(hence leading) head satisfies `HeadDom`, so its sign is read off the head via
+`headDom_sign`. Needs `prec ≥ 2` and the tail in-format. -/
+theorem separated_headDom (hp2 : 2 ≤ prec) {h : ℝ} {t : List ℝ}
+    (Hsep : Separated beta prec (h :: t)) (hh : h ≠ 0)
+    (HF : ∀ x ∈ t, generic_format beta (FLX_exp prec) x) :
+    HeadDom h t := by
+  unfold Separated at Hsep
+  have hbound : (t.map (fun x => |x|)).sum ≤ ulp beta (FLX_exp prec) h :=
+    separatedFrom_abs_sum_le beta prec hp t h Hsep HF
+  have hult : ulp beta (FLX_exp prec) h < |h| := ulp_lt_abs_FLX beta prec hp2 hh
+  unfold HeadDom
+  linarith
+
+include hp in
+/-- **Sign of a `Separated` expansion.** Nonzero, and the sign is the head's. -/
+theorem separated_sign (hp2 : 2 ≤ prec) {h : ℝ} {t : List ℝ}
+    (Hsep : Separated beta prec (h :: t)) (hh : h ≠ 0)
+    (HF : ∀ x ∈ t, generic_format beta (FLX_exp prec) x) :
+    (h :: t).sum ≠ 0 ∧ (0 < (h :: t).sum ↔ 0 < h) ∧ ((h :: t).sum < 0 ↔ h < 0) :=
+  headDom_sign (separated_headDom beta prec hp hp2 Hsep hh HF)
+
+include hp in
+/-- **Base case of `Separated`:** the high/low words of a single rounding form a
+ulp-separation chain (`|x − ◦x| ≤ ½·ulp(◦x)`), unconditionally. -/
+theorem round_residual_separated {x : ℝ} :
+    Separated beta prec
+      [round beta (FLX_exp prec) (Znearest choice) x,
+       x - round beta (FLX_exp prec) (Znearest choice) x] := by
+  set hi := round beta (FLX_exp prec) (Znearest choice) x with hhi
+  have hValid := FLX_exp_valid prec hp
+  have hMon := FLX_exp_monotone prec
+  have hNF := monotone_exp_not_FTZ hValid hMon
+  have herr : |hi - x| ≤ (1 / 2) * ulp beta (FLX_exp prec) hi :=
+    error_le_half_ulp_round beta (FLX_exp prec) hValid hNF hMon choice x
+  unfold Separated
+  simp only [SeparatedFrom, and_true]
+  rw [show x - hi = -(hi - x) from by ring, abs_neg]
+  exact herr
+
+include hp in
+/-- The two words of a `TwoProduct` form a `Separated` 2-element expansion. -/
+theorem twoProd_separated (a b : ℝ) :
+    Separated beta prec [twoProdHi beta prec choice a b, twoProdLo beta prec choice a b] :=
+  round_residual_separated beta prec hp choice
+
+include hp in
+/-- The two words of a `TwoSum` form a `Separated` 2-element expansion. -/
+theorem twoSum_separated (a b : ℝ) :
+    Separated beta prec [twoSumHi beta prec choice a b, twoSumLo beta prec choice a b] :=
+  round_residual_separated beta prec hp choice
+
 end
 
 end LeanFlocq
