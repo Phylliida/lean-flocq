@@ -104,4 +104,87 @@ theorem ginv16_encG : ∀ a : Gain, ginv16 (encG a) = encG (ginv a) := by
 
 theorem negTau_encG (t : Fin 8) : negTau t.val = encG (t, true) := rfl
 
+/-! ## B3: the face equivalence and roots
+
+Faces of a decoration fall into gain-orbits: `g ~ h` iff some gain carries
+`d h` to `d g`. Each orbit's least face is its root; every face's
+decoration is a gain-image of its root's. This is the structure the census
+enumerates, realized semantically. -/
+
+/-- Two faces related by some gain. -/
+def related (K : ℕ) (d : Dec K) (g h : Fin 6) : Prop :=
+  ∃ w : Gain, d g = actF w (d h)
+
+instance (K : ℕ) (d : Dec K) (g h : Fin 6) :
+    Decidable (related K d g h) := by
+  unfold related; infer_instance
+
+theorem related_refl (K : ℕ) (d : Dec K) (g : Fin 6) : related K d g g :=
+  ⟨(0, false), (actF_one _).symm⟩
+
+theorem related_symm {K : ℕ} {d : Dec K} {g h : Fin 6}
+    (hr : related K d g h) : related K d h g := by
+  obtain ⟨w, hw⟩ := hr
+  exact ⟨ginv w, by rw [hw, actF_inv_actF]⟩
+
+theorem related_trans {K : ℕ} {d : Dec K} {g h k : Fin 6}
+    (h1 : related K d g h) (h2 : related K d h k) : related K d g k := by
+  obtain ⟨w1, hw1⟩ := h1
+  obtain ⟨w2, hw2⟩ := h2
+  exact ⟨gmul w1 w2, by rw [hw1, hw2, actF_actF]⟩
+
+/-- The gain-orbit of `g`, as a finset. -/
+def rootClass (K : ℕ) (d : Dec K) (g : Fin 6) : Finset (Fin 6) :=
+  Finset.univ.filter (fun h => related K d h g)
+
+theorem rootClass_nonempty (K : ℕ) (d : Dec K) (g : Fin 6) :
+    (rootClass K d g).Nonempty :=
+  ⟨g, by simp [rootClass, related_refl]⟩
+
+/-- The root of `g`'s orbit: its least member. -/
+def rootF (K : ℕ) (d : Dec K) (g : Fin 6) : Fin 6 :=
+  (rootClass K d g).min' (rootClass_nonempty K d g)
+
+theorem mem_rootClass {K : ℕ} {d : Dec K} {g h : Fin 6} :
+    h ∈ rootClass K d g ↔ related K d h g := by
+  simp [rootClass]
+
+theorem related_rootF (K : ℕ) (d : Dec K) (g : Fin 6) :
+    related K d (rootF K d g) g :=
+  mem_rootClass.mp ((rootClass K d g).min'_mem _)
+
+theorem rootF_le (K : ℕ) (d : Dec K) (g : Fin 6) : rootF K d g ≤ g :=
+  (rootClass K d g).min'_le g (mem_rootClass.mpr (related_refl K d g))
+
+theorem rootClass_eq_of_related {K : ℕ} {d : Dec K} {g h : Fin 6}
+    (hr : related K d g h) : rootClass K d g = rootClass K d h := by
+  ext x
+  simp only [mem_rootClass]
+  exact ⟨fun hx => related_trans hx hr,
+         fun hx => related_trans hx (related_symm hr)⟩
+
+theorem rootF_eq_of_related {K : ℕ} {d : Dec K} {g h : Fin 6}
+    (hr : related K d g h) : rootF K d g = rootF K d h := by
+  unfold rootF
+  congr 1
+  exact rootClass_eq_of_related hr
+
+theorem rootF_rootF (K : ℕ) (d : Dec K) (g : Fin 6) :
+    rootF K d (rootF K d g) = rootF K d g :=
+  rootF_eq_of_related (related_rootF K d g)
+
+/-- Roots agree exactly on related faces — the orbit invariant. -/
+theorem rootF_eq_iff_related {K : ℕ} {d : Dec K} {g h : Fin 6} :
+    rootF K d g = rootF K d h ↔ related K d g h := by
+  constructor
+  · intro he
+    exact related_trans (related_symm (related_rootF K d g))
+      (he ▸ related_rootF K d h)
+  · exact rootF_eq_of_related
+
+/-- Every face is a gain-image of its root: the B5 input. -/
+theorem exists_gain_from_root (K : ℕ) (d : Dec K) (g : Fin 6) :
+    ∃ w : Gain, d g = actF w (d (rootF K d g)) :=
+  related_symm (related_rootF K d g)
+
 end AnyK3D
