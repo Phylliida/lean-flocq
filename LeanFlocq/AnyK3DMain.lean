@@ -21,6 +21,14 @@ emptiness of the 3,405 maximal-empty frontier masks. Status:
     therefore STAYS as the trust surface, matching the K=3
     ConcreteTree profile: solver untrusted; every certificate
     re-checked by the CakeML-verified checker.
+  * UNIFIED EVIDENCE (2026-08-06, R6): all 3,371 cheap CNFs +
+    all 387 straggler leaves re-exported from the current proven
+    encoder (ExportEmptyCNF; the historical cheap CNFs were
+    byte-identical, the straggler bases matched up to clause order)
+    and re-verified through the R2 color pipeline — cadical --lrat →
+    cake_lpr, certs deleted after each check. Ledger:
+    monotile/bumpdent_frontier_verified.txt (3,371 + 387, 0 failures;
+    gen_bumpdent_certs.py).
 -/
 import Mathlib
 import LeanFlocq.AnyK3DComplete

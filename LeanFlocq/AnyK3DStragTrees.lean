@@ -4,7 +4,12 @@
    The 34 straggler maximal-empty masks' cube-and-conquer trees
    (phase-bit splits, leaves round-trip checked against the checkpoint).
    Per-leaf UNSAT is the cake_lpr-trusted axiom; covers are kernel-proven
-   (CubeCover.VTree.covers). -/
+   (CubeCover.VTree.covers). UNIFIED EVIDENCE (2026-08-06, R6): all 387
+   leaves re-exported from the current proven encoder (emptyCNFX bases
+   via ExportEmptyCNF + cube units) and re-verified through the R2 color
+   pipeline (cadical --lrat → cake_lpr, certs deleted after each check) —
+   monotile/bumpdent_frontier_verified.txt, 387/387, 0 failures
+   (gen_bumpdent_certs.py). -/
 import LeanFlocq.CubeCover
 import LeanFlocq.AnyK3DEmptyEnc
 
