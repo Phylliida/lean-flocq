@@ -16,9 +16,6 @@ assembly-facing decode `mem_censusFastC_covered`. This file has:
 * `sublistOf` — a greedy subsequence check with its membership
   soundness lemma (no sortedness needed: subsequence implies
   membership directly);
-* `canonOf` — the canonical rotation of a mask (min over the 24
-  `permMask`s), with `canonOf_mem` (the min is achieved by some
-  rotation);
 * the four tier subsequence checks (each tag class of the verdict table
   is a subsequence of the corresponding Lean-side tier data);
 * `colorVerdict_of_mem` — the unified verdict: every profile in the
@@ -66,70 +63,6 @@ theorem mem_of_sublistOf {a b : List ℕ} (h : sublistOf a b = true) {x : ℕ}
         · exact List.mem_cons_of_mem y (ih h hxs)
       · simp only [hxy, if_false] at h
         exact List.mem_cons_of_mem y (ih h hx)
-
-/-! ## canonOf: the canonical rotation of a mask -/
-
-/-- The ascending bit list of a mask (the lexicographic key matching
-Python's `sorted` equation lists). -/
-def lexKey (m : ℕ) : List ℕ := (List.range 84).filter fun i => m.testBit i
-
-/-- Lexicographic comparison of ascending bit lists (matching Python's
-tuple ordering: shorter proper prefix is smaller). -/
-def lexLt : List ℕ → List ℕ → Bool
-  | [], [] => false
-  | [], _ :: _ => true
-  | _ :: _, [] => false
-  | x :: xs, y :: ys =>
-    if x < y then true else if x == y then lexLt xs ys else false
-
-/-- The canonical form of a mask: the LEXICOGRAPHIC min over its 24
-rotations' ascending bit lists (matching `color_orbits.py`'s `min` over
-the sorted eqperm images — NOT the numeric min over masks; the orbit is
-the same set in either `permMask` direction, so the `permMask`-based
-computation agrees with the Python canonicalization, sampled 20k/20k in
-`monotile/check_color_coverage_sample.py`). -/
-def canonOf (m : ℕ) : ℕ :=
-  (List.range 24).foldl
-    (fun acc g =>
-      let pg := permMask g m
-      if lexLt (lexKey pg) (lexKey acc) then pg else acc)
-    (permMask 0 m)
-
-/-- The lex-min over the rotations is achieved by some rotation. -/
-theorem canonOf_mem (m : ℕ) : ∃ g < 24, permMask g m = canonOf m := by
-  unfold canonOf
-  have gen : ∀ (l : List ℕ) (g₀ : ℕ) (acc : ℕ), permMask g₀ m = acc →
-      ∃ g ∈ g₀ :: l, permMask g m =
-        (l.foldl (fun a g =>
-          let pg := permMask g m
-          if lexLt (lexKey pg) (lexKey a) then pg else a) acc) := by
-    intro l
-    induction l with
-    | nil => intro g₀ acc h; exact ⟨g₀, List.mem_cons_self, h⟩
-    | cons g' gs ih =>
-      intro g₀ acc h
-      simp only [List.foldl_cons]
-      have hstep : ∃ g'' ∈ [g₀, g'], permMask g'' m =
-          (if lexLt (lexKey (permMask g' m)) (lexKey acc) = true
-            then permMask g' m else acc) := by
-        by_cases hc : lexLt (lexKey (permMask g' m)) (lexKey acc)
-        · exact ⟨g', List.mem_cons_of_mem _ (List.mem_singleton_self _),
-            by rw [if_pos hc]⟩
-        · exact ⟨g₀, List.mem_cons_self, by rw [if_neg hc, h]⟩
-      obtain ⟨g'', hg'', hgm''⟩ := hstep
-      obtain ⟨g, hg, hgm⟩ := ih g'' _ hgm''
-      refine ⟨g, ?_, hgm⟩
-      rcases List.mem_cons.mp hg with rfl | hg'
-      · rcases List.mem_cons.mp hg'' with rfl | hg''
-        · exact List.mem_cons_self
-        · have he := List.mem_singleton.mp hg''
-          subst he
-          exact List.mem_cons_of_mem _ List.mem_cons_self
-      · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hg')
-  obtain ⟨g, hg, hgm⟩ := gen (List.range 24) 0 (permMask 0 m) rfl
-  rcases List.mem_cons.mp hg with rfl | hg'
-  · exact ⟨0, by norm_num, hgm⟩
-  · exact ⟨g, List.mem_range.mp hg', hgm⟩
 
 /-! ## The tier sources (Lean-side, already verified) -/
 

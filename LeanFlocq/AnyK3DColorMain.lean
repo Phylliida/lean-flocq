@@ -19,6 +19,7 @@ trust profile as the bump/dent track's `frontierEmptyFacts`. Everything
 else is kernel-checked (with `native_decide`'s accepted base).
 -/
 import LeanFlocq.AnyK3DColorCoverageCheck
+import LeanFlocq.AnyK3DColorCoverage
 
 set_option maxRecDepth 1000000
 
