@@ -32,6 +32,7 @@ import LeanFlocq.Corner3DEdge
 set_option maxRecDepth 1000000
 set_option maxHeartbeats 6400000
 set_option linter.unusedSimpArgs false
+set_option linter.unnecessarySeqFocus false
 
 namespace Corner3DDec10
 
@@ -134,6 +135,180 @@ theorem dec10_not_tileable : ¬ ∃ ℓ : Coloring (Fin 2), IsTiling dec10 ℓ :
   rw [htrue] at hfalse
   exact Bool.noConfusion hfalse
 
+/-! ## Rotation/mirror transport
+
+Tileability is invariant under the cube group: a tiling by `d ∘ rot o`
+(resp. `d ∘ mirror`) pulls back along the corresponding affine map of
+ℤ³ to a tiling by `d`. The 24 affine maps are exported from
+`monotile/corner3d.py` (`SIG`): `cornerVec (rot o p) = M_o·cornerVec p
++ t_o` with `M_o` a signed permutation matrix. -/
+
+/-- Linear part of rotation `o` (rows of the signed permutation matrix). -/
+def rotLinTab : Fin 24 → Fin 3 → Fin 3 → ℤ :=
+  ![ ![ ![1, 0, 0], ![0, 1, 0], ![0, 0, 1] ],
+     ![ ![1, 0, 0], ![0, -1, 0], ![0, 0, -1] ],
+     ![ ![ -1, 0, 0], ![0, 1, 0], ![0, 0, -1] ],
+     ![ ![ -1, 0, 0], ![0, -1, 0], ![0, 0, 1] ],
+     ![ ![1, 0, 0], ![0, 0, -1], ![0, 1, 0] ],
+     ![ ![1, 0, 0], ![0, 0, 1], ![0, -1, 0] ],
+     ![ ![ -1, 0, 0], ![0, 0, 1], ![0, 1, 0] ],
+     ![ ![ -1, 0, 0], ![0, 0, -1], ![0, -1, 0] ],
+     ![ ![0, 1, 0], ![1, 0, 0], ![0, 0, -1] ],
+     ![ ![0, -1, 0], ![1, 0, 0], ![0, 0, 1] ],
+     ![ ![0, 1, 0], ![ -1, 0, 0], ![0, 0, 1] ],
+     ![ ![0, -1, 0], ![ -1, 0, 0], ![0, 0, -1] ],
+     ![ ![0, 1, 0], ![0, 0, 1], ![1, 0, 0] ],
+     ![ ![0, -1, 0], ![0, 0, -1], ![1, 0, 0] ],
+     ![ ![0, 1, 0], ![0, 0, -1], ![ -1, 0, 0] ],
+     ![ ![0, -1, 0], ![0, 0, 1], ![ -1, 0, 0] ],
+     ![ ![0, 0, 1], ![1, 0, 0], ![0, 1, 0] ],
+     ![ ![0, 0, -1], ![1, 0, 0], ![0, -1, 0] ],
+     ![ ![0, 0, -1], ![ -1, 0, 0], ![0, 1, 0] ],
+     ![ ![0, 0, 1], ![ -1, 0, 0], ![0, -1, 0] ],
+     ![ ![0, 0, -1], ![0, 1, 0], ![1, 0, 0] ],
+     ![ ![0, 0, 1], ![0, -1, 0], ![1, 0, 0] ],
+     ![ ![0, 0, 1], ![0, 1, 0], ![ -1, 0, 0] ],
+     ![ ![0, 0, -1], ![0, -1, 0], ![ -1, 0, 0] ] ]
+
+/-- Translation part of rotation `o` (the maps fix the unit cube, so
+`t_o ∈ {0,1}³`). -/
+def rotShiftTab : Fin 24 → Fin 3 → ℤ :=
+  ![ ![0, 0, 0], ![0, 1, 1], ![1, 0, 1], ![1, 1, 0],
+     ![0, 1, 0], ![0, 0, 1], ![1, 0, 0], ![1, 1, 1],
+     ![0, 0, 1], ![1, 0, 0], ![0, 1, 0], ![1, 1, 1],
+     ![0, 0, 0], ![1, 1, 0], ![0, 1, 1], ![1, 0, 1],
+     ![0, 0, 0], ![1, 0, 1], ![1, 1, 0], ![0, 1, 1],
+     ![1, 0, 0], ![0, 1, 0], ![0, 0, 1], ![1, 1, 1] ]
+
+/-- The linear part applied to a lattice point. -/
+def rotLin (o : Fin 24) (v : ℤ × ℤ × ℤ) : ℤ × ℤ × ℤ :=
+  (rotLinTab o 0 0 * v.1 + rotLinTab o 0 1 * v.2.1 + rotLinTab o 0 2 * v.2.2,
+   rotLinTab o 1 0 * v.1 + rotLinTab o 1 1 * v.2.1 + rotLinTab o 1 2 * v.2.2,
+   rotLinTab o 2 0 * v.1 + rotLinTab o 2 1 * v.2.1 + rotLinTab o 2 2 * v.2.2)
+
+/-- The affine rotation map on ℤ³. -/
+def rotAff (o : Fin 24) (v : ℤ × ℤ × ℤ) : ℤ × ℤ × ℤ :=
+  ((rotLin o v).1 + rotShiftTab o 0,
+   (rotLin o v).2.1 + rotShiftTab o 1,
+   (rotLin o v).2.2 + rotShiftTab o 2)
+
+/-- The tables implement the corner permutations (kernel check). -/
+theorem cornerVec_rotAff : ∀ (o : Fin 24) (p : Fin 8),
+    cornerVec (rot o p) = rotAff o (cornerVec p) := by decide
+
+theorem rotLin_add (o : Fin 24) (v w : ℤ × ℤ × ℤ) :
+    rotLin o (v + w) = rotLin o v + rotLin o w := by
+  refine Prod.ext ?_ (Prod.ext ?_ ?_) <;> simp [rotLin] <;> ring
+
+theorem rotAff_add (o : Fin 24) (c e : ℤ × ℤ × ℤ) :
+    rotAff o (c + e) = rotLin o c + rotAff o e := by
+  refine Prod.ext ?_ (Prod.ext ?_ ?_) <;> simp [rotAff, rotLin_add] <;> ring
+
+/-- Pulling a coloring back along the affine rotation reads the rotated
+pattern on the linearly-moved cube. -/
+theorem cubePat_comp_rotAff (ℓ : Coloring (Fin 2)) (o : Fin 24)
+    (c : ℤ × ℤ × ℤ) (p : Fin 8) :
+    cubePat (fun v => ℓ (rotAff o v)) c p
+      = cubePat ℓ (rotLin o c) (rot o p) := by
+  simp only [cubePat, Function.comp_apply]
+  congr 1
+  rw [cornerVec_rotAff]
+  exact rotAff_add o c (cornerVec p)
+
+/-- Rotation transport: a tiling by `d ∘ rot o` pulls back to a tiling
+by `d`. -/
+theorem isTiling_of_comp_rot {d : Fin 8 → Fin 2} {o : Fin 24}
+    {ℓ : Coloring (Fin 2)} (h : IsTiling (d ∘ rot o) ℓ) :
+    IsTiling d (fun v => ℓ (rotAff o v)) := by
+  intro c
+  obtain ⟨o', ho'⟩ := h (rotLin o c)
+  refine ⟨rotCompTab (rotCompTab o o') o, ?_⟩
+  funext p
+  rw [cubePat_comp_rotAff]
+  simp only [Function.comp_apply]
+  have e := congrFun ho' (rot o p)
+  simp only [Function.comp_apply] at e
+  rw [e, ← rot_comp_tab, ← rot_comp_tab]
+
+/-- Linear/affine parts of the mirror `x ↦ 1 − x`. -/
+def mirrorLin (v : ℤ × ℤ × ℤ) : ℤ × ℤ × ℤ := (-v.1, v.2.1, v.2.2)
+def mirrorAff (v : ℤ × ℤ × ℤ) : ℤ × ℤ × ℤ := (1 - v.1, v.2.1, v.2.2)
+
+theorem mirrorAff_add (c e : ℤ × ℤ × ℤ) :
+    mirrorAff (c + e) = mirrorLin c + mirrorAff e := by
+  refine Prod.ext ?_ (Prod.ext ?_ ?_) <;> simp [mirrorAff, mirrorLin] <;> ring
+
+theorem cornerVec_mirrorAff : ∀ p : Fin 8,
+    cornerVec (mirror p) = mirrorAff (cornerVec p) := by decide
+
+theorem cubePat_comp_mirrorAff (ℓ : Coloring (Fin 2)) (c : ℤ × ℤ × ℤ)
+    (p : Fin 8) :
+    cubePat (fun v => ℓ (mirrorAff v)) c p
+      = cubePat ℓ (mirrorLin c) (mirror p) := by
+  simp only [cubePat, Function.comp_apply]
+  congr 1
+  rw [cornerVec_mirrorAff]
+  exact mirrorAff_add c (cornerVec p)
+
+/-- Mirror transport: a tiling by `d ∘ mirror` pulls back to a tiling
+by `d`. -/
+theorem isTiling_of_comp_mirror {d : Fin 8 → Fin 2} {ℓ : Coloring (Fin 2)}
+    (h : IsTiling (d ∘ mirror) ℓ) :
+    IsTiling d (fun v => ℓ (mirrorAff v)) := by
+  intro c
+  obtain ⟨o', ho'⟩ := h (mirrorLin c)
+  obtain ⟨r, hr⟩ := mirror_conj o'
+  refine ⟨r, ?_⟩
+  funext p
+  rw [cubePat_comp_mirrorAff]
+  simp only [Function.comp_apply]
+  have e := congrFun ho' (mirror p)
+  have e2 := congrFun hr p
+  simp only [Function.comp_apply] at e e2
+  rw [e, e2]
+
+/-! ## #11 and the T=2 assembly -/
+
+/-- #11 is the mirror of #10, up to rotation (witness 12, cf.
+`dec10_mirror_dec11`). -/
+theorem dec11_eq : dec11 = (dec10 ∘ mirror) ∘ rot 12 := by decide
+
+/-- **#11 does not tile ℤ³** (mirror-transported from #10). -/
+theorem dec11_not_tileable :
+    ¬ ∃ ℓ : Coloring (Fin 2), IsTiling dec11 ℓ := by
+  rintro ⟨ℓ, hT⟩
+  rw [dec11_eq] at hT
+  exact dec10_not_tileable ⟨_, isTiling_of_comp_mirror (isTiling_of_comp_rot hT)⟩
+
+/-- The only chiral T=2 decorations are the orbits of #10 and #11
+(kernel check over all 256 decorations). -/
+theorem chiral_T2_cases : ∀ d : Fin 8 → Fin 2,
+    Achiral d ∨ (∃ o : Fin 24, d = dec10 ∘ rot o)
+      ∨ (∃ o : Fin 24, d = dec11 ∘ rot o) := by
+  unfold Achiral
+  decide
+
+/-- **The T=2 hard direction**: tileable ⟹ achiral. -/
+theorem corner3d_tileable_achiral_T2 (d : Fin 8 → Fin 2)
+    (h : ∃ ℓ : Coloring (Fin 2), IsTiling d ℓ) : Achiral d := by
+  rcases chiral_T2_cases d with ha | ⟨o, ho⟩ | ⟨o, ho⟩
+  · exact ha
+  · obtain ⟨ℓ, hT⟩ := h
+    subst ho
+    exact (dec10_not_tileable ⟨_, isTiling_of_comp_rot hT⟩).elim
+  · obtain ⟨ℓ, hT⟩ := h
+    subst ho
+    exact (dec11_not_tileable ⟨_, isTiling_of_comp_rot hT⟩).elim
+
+/-- **The 3D corner chirality theorem at T=2** (both directions):
+a 2-color corner decoration tiles ℤ³ ⟺ it is achiral. -/
+theorem corner3d_T2_iff (d : Fin 8 → Fin 2) :
+    (∃ ℓ : Coloring (Fin 2), IsTiling d ℓ) ↔ Achiral d :=
+  ⟨corner3d_tileable_achiral_T2 d, corner3d_tileable_of_achiral d⟩
+
 end Corner3DDec10
 
 #print axioms Corner3DDec10.dec10_not_tileable
+#print axioms Corner3DDec10.dec11_not_tileable
+#print axioms Corner3DDec10.corner3d_tileable_achiral_T2
+#print axioms Corner3DDec10.corner3d_T2_iff
